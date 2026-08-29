@@ -145,6 +145,28 @@ select.sort{padding:10px 12px; border-radius:10px; border:1px solid var(--border
 .add-cost{align-self:flex-start; font-size:13px; color:var(--accent); background:none; border:none; font-weight:600; padding:4px 2px}
 .modal-ft{display:flex; justify-content:flex-end; gap:10px; padding:16px 20px; border-top:1px solid var(--border); position:sticky; bottom:0; background:var(--surface); flex-wrap:wrap}
 .modal-ft .left{margin-right:auto; display:flex; gap:8px}
+.bod-row{padding:10px 0; border-bottom:1px solid var(--border)}
+.bod-row:last-child{border-bottom:none}
+.bod-row-line{display:flex; align-items:center; gap:8px}
+.bod-row-line input{flex:1; padding:8px 10px; border-radius:8px; border:1px solid var(--border); background:var(--surface-2); color:var(--ink); font-size:14px; min-width:0}
+.wa-ic{color:var(--good); font-size:15px; flex-shrink:0}
+
+/* Botones de envío por bodega en el pedido */
+.wa-sends{padding:10px 18px 0; display:flex; flex-direction:column; gap:6px}
+.wa-btn{
+  display:flex; justify-content:space-between; align-items:center; gap:8px;
+  padding:10px 14px; border-radius:10px; border:1px solid #25D366;
+  background:transparent; color:var(--ink); font-size:13.5px; font-weight:600;
+  cursor:pointer; text-align:left; transition:.15s;
+}
+.wa-btn:hover{background:rgba(37,211,102,.08)}
+.wa-btn .wa-lbl{display:flex; align-items:center; gap:8px; min-width:0}
+.wa-btn .wa-lbl .icn{background:#25D366; color:#fff; width:24px; height:24px; border-radius:6px; display:inline-flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0}
+.wa-btn .wa-lbl .txt{white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.wa-btn .wa-info{font-size:12px; color:var(--muted); font-weight:500; flex-shrink:0}
+.wa-btn.notel .icn{background:var(--warn)}
+.wa-btn.notel{border-color:var(--warn); color:var(--warn)}
+
 .list-row{display:flex; align-items:center; gap:8px; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border)}
 .list-row:last-child{border-bottom:none}
 .list-row input{flex:1; padding:8px 10px; border-radius:8px; border:1px solid var(--border); background:var(--surface-2); color:var(--ink)}
@@ -345,7 +367,7 @@ select.sort{padding:10px 12px; border-radius:10px; border:1px solid var(--border
   "use strict";
 
   var CFG_KEY='bm-supabase', THEME_KEY='bm-theme', CACHE_KEY='bm-cache', ROW_ID='main';
-  var state={moneda:'COP', bodegas:[], productos:[], pedido:{items:[],cliente:{nombre:'',tel:''}}, pedidos:[]};
+  var state={moneda:'COP', bodegas:[], bodegaTels:{}, productos:[], pedido:{items:[],cliente:{nombre:'',tel:''}}, pedidos:[]};
   var cfg=null;              // {url,key}
   var GROUPS_KEY='bm-collapsed';
   var ui={q:'', sort:'marca', expanded:{}, collapsed:{}};
@@ -423,10 +445,20 @@ select.sort{padding:10px 12px; border-radius:10px; border:1px solid var(--border
     return {
       moneda:d.moneda||'COP',
       bodegas:Array.isArray(d.bodegas)?d.bodegas:[],
+      bodegaTels:(d.bodegaTels&&typeof d.bodegaTels==='object')?d.bodegaTels:{},
       productos:Array.isArray(d.productos)?d.productos:[],
       pedido:pedido,
       pedidos:Array.isArray(d.pedidos)?d.pedidos:[]
     };
+  }
+  // Normaliza un teléfono a formato "wa.me" (solo dígitos, con código de país por defecto Colombia 57)
+  function normTel(raw){
+    if(!raw) return '';
+    var d=String(raw).replace(/\D/g,'');
+    if(!d) return '';
+    // Si empieza con 57 o tiene 12-15 dígitos, dejarlo. Si tiene 10 dígitos (celular Colombia), prefijar 57.
+    if(d.length===10) d='57'+d;
+    return d;
   }
 
   function setConn(s){ conn=s; var el=document.getElementById('conn'); if(el) el.outerHTML=connHTML(); }
@@ -732,26 +764,63 @@ select.sort{padding:10px 12px; border-radius:10px; border:1px solid var(--border
 
   /* ---------- modal bodegas ---------- */
   function openBodegas(){
-    function rows(){ if(!state.bodegas.length) return '<p class="hint">No hay bodegas. Se crean solas cuando las escribes en un producto.</p>';
-      return state.bodegas.map(function(b,i){ var uses=state.productos.filter(function(p){ return (p.costos||[]).some(function(c){return c.bodega===b;}); }).length;
-        return '<div class="list-row" data-i="'+i+'"><input type="text" data-role="bname" value="'+esc(b)+'"><span class="hint">'+uses+' prod.</span><button class="mini del" data-role="bdel" title="Eliminar">🗑</button></div>'; }).join(''); }
-    host.innerHTML='<div class="scrim" data-role="scrim"><div class="modal" role="dialog" aria-modal="true" style="width:min(460px,100%)">'+
+    function rows(){
+      if(!state.bodegas.length) return '<p class="hint">No hay bodegas. Se crean solas cuando las escribes en un producto.</p>';
+      return state.bodegas.map(function(b,i){
+        var uses=state.productos.filter(function(p){ return (p.costos||[]).some(function(c){return c.bodega===b;}); }).length;
+        var tel=state.bodegaTels[b]||'';
+        return '<div class="bod-row" data-i="'+i+'">'+
+          '<div class="bod-row-line">'+
+            '<input type="text" data-role="bname" value="'+esc(b)+'" placeholder="Nombre de la bodega">'+
+            '<span class="hint">'+uses+' prod.</span>'+
+            '<button class="mini del" data-role="bdel" title="Eliminar">🗑</button>'+
+          '</div>'+
+          '<div class="bod-row-line" style="margin-top:6px">'+
+            '<span class="wa-ic" title="WhatsApp">📱</span>'+
+            '<input type="tel" data-role="btel" inputmode="tel" value="'+esc(tel)+'" placeholder="WhatsApp — ej: 3001234567">'+
+          '</div>'+
+        '</div>';
+      }).join('');
+    }
+    host.innerHTML='<div class="scrim" data-role="scrim"><div class="modal" role="dialog" aria-modal="true" style="width:min(480px,100%)">'+
       '<div class="modal-hd"><h2>Bodegas</h2><button class="mini" data-role="close">×</button></div>'+
-      '<div class="modal-bd"><p class="hint">Renombra una bodega y se actualiza en todos los productos. Eliminar solo funciona si ninguna la usa.</p>'+
+      '<div class="modal-bd">'+
+        '<p class="hint">Guarda el WhatsApp de cada bodega para enviarles el pedido con un solo toque. En Colombia basta con 10 dígitos (se agrega el 57 automático).</p>'+
         '<div data-role="blist">'+rows()+'</div>'+
-        '<div class="list-row" style="border:none;padding-top:10px"><input type="text" data-role="bnew" placeholder="Agregar bodega nueva…"><button class="btn ghost" data-role="badd">Agregar</button></div></div>'+
+        '<div class="list-row" style="border:none;padding-top:10px"><input type="text" data-role="bnew" placeholder="Agregar bodega nueva…"><button class="btn ghost" data-role="badd">Agregar</button></div>'+
+      '</div>'+
       '<div class="modal-ft"><button class="btn ghost" data-role="close">Cancelar</button><button class="btn primary" data-role="bsave">Guardar</button></div></div></div>';
     var modal=host.querySelector('.modal'), listEl=host.querySelector('[data-role="blist"]');
     function reRows(){ listEl.innerHTML=rows(); }
     host.querySelector('[data-role="badd"]').addEventListener('click',function(){ var inp=modal.querySelector('[data-role="bnew"]'); var v=inp.value.trim(); if(v&&state.bodegas.indexOf(v)<0){ state.bodegas.push(v); reRows(); } inp.value=''; inp.focus(); });
-    listEl.addEventListener('click',function(e){ if(e.target.matches('[data-role="bdel"]')){ var i=+e.target.closest('.list-row').getAttribute('data-i'); var name=state.bodegas[i]; var uses=state.productos.filter(function(p){ return (p.costos||[]).some(function(c){return c.bodega===name;}); }).length; if(uses>0){ showToast('“'+name+'” está en uso por '+uses+' producto(s)',false); return; } state.bodegas.splice(i,1); reRows(); } });
+    listEl.addEventListener('click',function(e){
+      if(e.target.matches('[data-role="bdel"]')){
+        var i=+e.target.closest('.bod-row').getAttribute('data-i'); var name=state.bodegas[i];
+        var uses=state.productos.filter(function(p){ return (p.costos||[]).some(function(c){return c.bodega===name;}); }).length;
+        if(uses>0){ showToast('“'+name+'” está en uso por '+uses+' producto(s)',false); return; }
+        state.bodegas.splice(i,1); delete state.bodegaTels[name]; reRows();
+      }
+    });
     function doClose(){ closeModal(); }
     host.querySelectorAll('[data-role="close"]').forEach(function(b){ b.addEventListener('click',doClose); });
     host.querySelector('[data-role="scrim"]').addEventListener('mousedown',function(e){ if(e.target===e.currentTarget) doClose(); });
     host.querySelector('[data-role="bsave"]').addEventListener('click',function(){
-      var inputs=listEl.querySelectorAll('[data-role="bname"]'); var newList=[];
-      inputs.forEach(function(inp){ var oldName=state.bodegas[+inp.closest('.list-row').getAttribute('data-i')]; var nv=inp.value.trim(); if(!nv){ newList.push(oldName); return; } if(nv!==oldName){ state.productos.forEach(function(p){ (p.costos||[]).forEach(function(c){ if(c.bodega===oldName) c.bodega=nv; }); }); } newList.push(nv); });
+      var rowsN=listEl.querySelectorAll('.bod-row');
+      var newList=[]; var newTels={};
+      rowsN.forEach(function(row){
+        var oldName=state.bodegas[+row.getAttribute('data-i')];
+        var nv=row.querySelector('[data-role="bname"]').value.trim();
+        var tel=row.querySelector('[data-role="btel"]').value.trim();
+        if(!nv){ newList.push(oldName); if(tel) newTels[oldName]=tel; return; }
+        if(nv!==oldName){
+          state.productos.forEach(function(p){ (p.costos||[]).forEach(function(c){ if(c.bodega===oldName) c.bodega=nv; }); });
+        }
+        newList.push(nv);
+        if(tel) newTels[nv]=tel;
+      });
+      // dedupe
       state.bodegas=newList.filter(function(v,i){ return newList.indexOf(v)===i; });
+      state.bodegaTels=newTels;
       closeModal(); render(); scheduleSave();
     });
   }
@@ -850,6 +919,7 @@ select.sort{padding:10px 12px; border-radius:10px; border:1px solid var(--border
     else if(a==='close-cart') closeCart();
     else if(a==='clear-cart') clearCart();
     else if(a==='copy-cart') copyCartSummary();
+    else if(a==='wa-send'){ var bod=act.getAttribute('data-bodega'); if(bod) sendWhatsApp(bod); }
     else if(a==='save-cart') saveCart();
     else if(a==='qplus'||a==='qminus'||a==='rmv'||a==='setbod'){
       var line=e.target.closest('.line'); if(!line) return;
@@ -1001,14 +1071,73 @@ select.sort{padding:10px 12px; border-radius:10px; border:1px solid var(--border
         '<input type="tel" data-cli="tel" placeholder="Teléfono / WhatsApp" value="'+esc(state.pedido.cliente.tel||'')+'">'+
       '</div>'+
       '<div class="side-bd" data-role="lines">'+body+'</div>'+
+      waSendsHTML()+
       totales+
       footer+
     '</div>';
   }
 
+  // Agrupa los items del pedido por bodega y arma un botón "Enviar a X" por cada una
+  function cartByBodega(){
+    var map={};
+    (state.pedido.items||[]).forEach(function(it){
+      var p=state.productos.find(function(x){return x.id===it.productId;}); if(!p) return;
+      var b=(p.costos||[]).find(function(c){return c.bodega===it.bodega;}) || best(p);
+      var bodega= b ? b.bodega : (it.bodega||'(sin bodega)');
+      if(!map[bodega]) map[bodega]={bodega:bodega, items:[], subCosto:0, unidades:0};
+      var costo=b?b.costo:0;
+      map[bodega].items.push({p:p, cantidad:it.cantidad, costo:costo});
+      map[bodega].subCosto += costo*it.cantidad;
+      map[bodega].unidades += it.cantidad;
+    });
+    return Object.keys(map).map(function(k){return map[k];});
+  }
+
+  function waSendsHTML(){
+    if(!state.pedido.items.length) return '';
+    var grupos=cartByBodega();
+    if(!grupos.length) return '';
+    return '<div class="wa-sends">'+ grupos.map(function(g){
+      var tel=state.bodegaTels[g.bodega]||'';
+      var hasTel=!!tel;
+      return '<button class="wa-btn'+(hasTel?'':' notel')+'" data-act="wa-send" data-bodega="'+esc(g.bodega)+'">'+
+        '<span class="wa-lbl"><span class="icn">'+(hasTel?'✓':'!')+'</span><span class="txt">Enviar a '+esc(g.bodega)+'</span></span>'+
+        '<span class="wa-info">'+g.unidades+' ud · '+fmt(g.subCosto)+(hasTel?'':' · sin número')+'</span>'+
+      '</button>';
+    }).join('') +'</div>';
+  }
+
   function openCart(){ host.innerHTML=cartHTML(); }
   function closeCart(){ host.innerHTML=''; }
   function renderCart(){ if(host.querySelector('.side-panel')) host.innerHTML=cartHTML(); }
+
+  function sendWhatsApp(bodega){
+    var grupos=cartByBodega();
+    var g=grupos.find(function(x){return x.bodega===bodega;});
+    if(!g){ showToast('No hay productos de esa bodega',false); return; }
+    var tel=state.bodegaTels[bodega]||'';
+    if(!tel){
+      var v=prompt('WhatsApp de la bodega "'+bodega+'" (10 dígitos si es Colombia, o completo con código de país):', '');
+      if(v==null) return;
+      v=v.trim(); if(!v) return;
+      state.bodegaTels[bodega]=v; tel=v; scheduleSave();
+      renderCart();
+    }
+    var num=normTel(tel);
+    if(!num || num.length<10){ showToast('Número inválido — revísalo en Bodegas',false); return; }
+    var lines=['Hola! Me gustaría hacer el siguiente pedido:',''];
+    g.items.forEach(function(it){
+      lines.push('• '+it.cantidad+'x '+it.p.nombre);
+    });
+    lines.push('');
+    lines.push('Total unidades: '+g.unidades);
+    if(g.subCosto>0) lines.push('Total aprox: '+fmt(g.subCosto));
+    lines.push('');
+    lines.push('¿Me confirmas disponibilidad y forma de pago? Gracias!');
+    var txt=lines.join('\n');
+    var url='https://wa.me/'+num+'?text='+encodeURIComponent(txt);
+    window.open(url,'_blank','noopener');
+  }
 
   function copyCartSummary(){
     var t=cartTotals(); if(!t.lineas){ showToast('Pedido vacío',false); return; }
