@@ -180,6 +180,38 @@ select.sort{padding:10px 12px; border-radius:10px; border:1px solid var(--border
 @keyframes sp{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion: reduce){ .spin,.status.saving .led{animation:none} .toast{transition:none} }
 
+/* Vista trabajador — oculta datos de negocio */
+body.role-trabajador .prow .pc,
+body.role-trabajador .prow .pm,
+body.role-trabajador .prow .pact,
+body.role-trabajador .pg-hdr .avg,
+body.role-trabajador .pexp{display:none !important}
+body.role-trabajador .prow{grid-template-columns:1fr 100px 44px}
+@media (max-width:640px){
+  body.role-trabajador .prow{grid-template-columns:1fr 84px 44px}
+}
+
+/* Login y panel de usuarios */
+.login-wrap{max-width:400px; margin:8vh auto 0; padding:0 18px}
+.login-card{background:var(--surface); border:1px solid var(--border); border-radius:18px; box-shadow:var(--shadow-lg); padding:28px 26px}
+.login-card h1{font-family:"Bricolage Grotesque",sans-serif; font-size:24px; margin:0 0 4px; letter-spacing:-.02em}
+.login-card .lead{color:var(--muted); margin:0 0 20px; font-size:14px}
+.who-chip{display:inline-flex; align-items:center; gap:8px; padding:5px 12px; border-radius:999px; background:var(--surface-2); border:1px solid var(--border); color:var(--muted); font-size:12.5px; font-weight:600}
+.who-chip .avat{width:20px; height:20px; border-radius:50%; background:var(--accent); color:#fff; display:inline-flex; align-items:center; justify-content:center; font-size:11px; font-weight:800}
+.who-chip.admin .avat{background:var(--warn)}
+.who-chip .role{color:var(--faint); font-weight:500}
+.user-row{display:grid; grid-template-columns:1fr auto auto; gap:8px; align-items:center; padding:10px 12px; border:1px solid var(--border); border-radius:10px; margin-bottom:8px; background:var(--surface-2)}
+.user-row .nm{font-weight:700}
+.user-row .rl{font-size:11.5px; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:.03em}
+.user-row .rl.a{color:var(--warn)}
+.user-row .acts{display:flex; gap:4px}
+.user-row .acts button{background:transparent; border:none; color:var(--muted); padding:6px 8px; border-radius:6px; font-size:12.5px; cursor:pointer}
+.user-row .acts button:hover{background:var(--border); color:var(--ink)}
+.user-row .acts button.del:hover{background:var(--bad-soft); color:var(--bad)}
+.tabsrow{display:flex; gap:4px; padding:4px; background:var(--surface-2); border:1px solid var(--border); border-radius:10px; margin-bottom:12px}
+.tabsrow button{flex:1; padding:8px 12px; background:transparent; border:none; color:var(--muted); font-weight:600; border-radius:8px; font-size:13px; cursor:pointer}
+.tabsrow button.on{background:var(--surface); color:var(--ink); box-shadow:0 1px 2px rgba(0,0,0,.06)}
+
 /* Pantalla de conexión inicial */
 .setup{max-width:560px; margin:6vh auto 0; padding:0 18px}
 .setup .card2{background:var(--surface); border:1px solid var(--border); border-radius:18px; box-shadow:var(--shadow-lg); padding:28px}
@@ -366,8 +398,9 @@ select.sort{padding:10px 12px; border-radius:10px; border:1px solid var(--border
 (function(){
   "use strict";
 
-  var CFG_KEY='bm-supabase', THEME_KEY='bm-theme', CACHE_KEY='bm-cache', ROW_ID='main';
-  var state={moneda:'COP', bodegas:[], bodegaTels:{}, productos:[], pedido:{items:[],cliente:{nombre:'',tel:''}}, pedidos:[]};
+  var CFG_KEY='bm-supabase', THEME_KEY='bm-theme', CACHE_KEY='bm-cache', ROW_ID='main', SESSION_KEY='bm-session';
+  var state={moneda:'COP', bodegas:[], bodegaTels:{}, productos:[], pedido:{items:[],cliente:{nombre:'',tel:''}}, pedidos:[], usuarios:[], carritos:{}};
+  var session=null; // {usuarioId, usuarioNombre, role}
   var cfg=null;              // {url,key}
   var GROUPS_KEY='bm-collapsed';
   var ui={q:'', sort:'marca', expanded:{}, collapsed:{}};
@@ -447,10 +480,49 @@ select.sort{padding:10px 12px; border-radius:10px; border:1px solid var(--border
       bodegas:Array.isArray(d.bodegas)?d.bodegas:[],
       bodegaTels:(d.bodegaTels&&typeof d.bodegaTels==='object')?d.bodegaTels:{},
       productos:Array.isArray(d.productos)?d.productos:[],
-      pedido:pedido,
-      pedidos:Array.isArray(d.pedidos)?d.pedidos:[]
+      pedido:pedido, // legado (compatibilidad)
+      pedidos:Array.isArray(d.pedidos)?d.pedidos:[],
+      usuarios:Array.isArray(d.usuarios)?d.usuarios:[],
+      carritos:(d.carritos&&typeof d.carritos==='object')?d.carritos:{}
     };
   }
+  /* ---------- usuarios / auth ---------- */
+  function b64(buf){ var b=new Uint8Array(buf), s=''; for(var i=0;i<b.length;i++) s+=String.fromCharCode(b[i]); return btoa(s); }
+  function unb64(s){ var raw=atob(s), b=new Uint8Array(raw.length); for(var i=0;i<raw.length;i++) b[i]=raw.charCodeAt(i); return b.buffer; }
+  function randSalt(){ var a=new Uint8Array(16); (window.crypto||window.msCrypto).getRandomValues(a); return b64(a.buffer); }
+  async function hashPwd(password, saltB64){
+    var enc=new TextEncoder();
+    var key=await crypto.subtle.importKey('raw', enc.encode(password), {name:'PBKDF2'}, false, ['deriveBits']);
+    var bits=await crypto.subtle.deriveBits({name:'PBKDF2', salt:unb64(saltB64), iterations:100000, hash:'SHA-256'}, key, 256);
+    return b64(bits);
+  }
+  async function verifyPwd(password, saltB64, hashB64){
+    var h=await hashPwd(password, saltB64);
+    return h===hashB64;
+  }
+  function uidUser(){ return 'u'+Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+  function normNombre(n){ return String(n||'').trim().toLowerCase(); }
+  function findUser(nombre){ var k=normNombre(nombre); return state.usuarios.find(function(u){return normNombre(u.nombre)===k;}); }
+  function loadSession(){ try{ var s=JSON.parse(localStorage.getItem(SESSION_KEY)); if(s && s.usuarioId) return s; }catch(e){} return null; }
+  function saveSession(s){ try{ localStorage.setItem(SESSION_KEY, JSON.stringify(s)); }catch(e){} }
+  function clearSession(){ try{ localStorage.removeItem(SESSION_KEY); }catch(e){} session=null; }
+  function isAdmin(){ return session && session.role==='admin'; }
+  function currentCart(){
+    if(!session) return state.pedido; // fallback
+    if(!state.carritos[session.usuarioId]) state.carritos[session.usuarioId]={items:[],cliente:{nombre:'',tel:''}};
+    if(!Array.isArray(state.carritos[session.usuarioId].items)) state.carritos[session.usuarioId].items=[];
+    if(!state.carritos[session.usuarioId].cliente) state.carritos[session.usuarioId].cliente={nombre:'',tel:''};
+    return state.carritos[session.usuarioId];
+  }
+  function resetCurrentCart(){
+    if(session) state.carritos[session.usuarioId]={items:[],cliente:{nombre:'',tel:''}};
+    else state.pedido={items:[],cliente:{nombre:'',tel:''}};
+  }
+  function setCurrentCart(c){
+    if(session) state.carritos[session.usuarioId]=c;
+    else state.pedido=c;
+  }
+
   // Normaliza un teléfono a formato "wa.me" (solo dígitos, con código de país por defecto Colombia 57)
   function normTel(raw){
     if(!raw) return '';
@@ -500,25 +572,36 @@ select.sort{padding:10px 12px; border-radius:10px; border:1px solid var(--border
   /* ---------- render principal ---------- */
   var app=document.getElementById('app');
 
+  function applyRoleClass(){
+    document.body.classList.remove('role-admin','role-trabajador');
+    if(session) document.body.classList.add('role-'+session.role);
+  }
   function render(){
+    applyRoleClass();
     if(!cfg){ renderSetup(); return; }
+    if(!session){ renderLogin(); return; }
+    // valida que el usuario sigue existiendo (por si otro admin lo borró)
+    if(!state.usuarios.find(function(u){return u.id===session.usuarioId;})){
+      clearSession(); renderLogin(); return;
+    }
     var s=summary();
+    var admin=isAdmin();
     app.innerHTML=
       '<div class="wrap">'+
         header(s)+
         '<div class="toolbar">'+
           '<div class="search"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/></svg>'+
             '<input type="search" id="q" placeholder="Buscar producto, SKU o bodega…" value="'+esc(ui.q)+'"></div>'+
-          '<select class="sort" id="sort">'+opt('marca','Agrupado por marca')+opt('nombre','Ordenar: Nombre A→Z')+opt('margen','Ordenar: Mejor margen')+opt('costo','Ordenar: Menor costo')+opt('precio','Ordenar: Mayor precio')+'</select>'+
-          '<button class="btn ghost" data-act="bodegas">🏬 Bodegas</button>'+
+          '<select class="sort" id="sort">'+opt('marca','Agrupado por marca')+opt('nombre','Ordenar: Nombre A→Z')+ (admin?(opt('margen','Ordenar: Mejor margen')+opt('costo','Ordenar: Menor costo')):'') +opt('precio','Ordenar: Mayor precio')+'</select>'+
+          (admin?'<button class="btn ghost" data-act="bodegas">🏬 Bodegas</button>':'')+
           '<button class="btn ghost" data-act="menu">⋯ Más</button>'+
-          '<button class="btn primary" data-act="new">＋ Producto</button>'+
+          (admin?'<button class="btn primary" data-act="new">＋ Producto</button>':'')+
         '</div>'+
         '<div id="prods">'+productsHTML()+'</div>'+
       '</div>'+ fabCartHTML();
   }
   function cartTotals(){
-    var items=(state.pedido.items||[]); var totC=0,totV=0,units=0;
+    var items=(currentCart().items||[]); var totC=0,totV=0,units=0;
     items.forEach(function(it){
       var p=state.productos.find(function(x){return x.id===it.productId;}); if(!p) return;
       var b=(p.costos||[]).find(function(c){return c.bodega===it.bodega;}) || best(p);
@@ -538,14 +621,32 @@ select.sort{padding:10px 12px; border-radius:10px; border:1px solid var(--border
 
   function header(s){
     var alertZero=s.low===0?' zero':'';
-    return '<div class="top">'+
-      '<div class="brand"><h1>Bodegas &amp; Márgenes</h1><p>Tus productos, en qué bodega están y a cómo te los da cada una — con tu ganancia calculada.</p></div>'+
-      '<div class="top-tools">'+connHTML()+
-        '<button class="icon-btn" data-act="toggle-moneda" title="Cambiar moneda">'+(state.moneda==='USD'?'US$':'COP')+'</button>'+
-        '<button class="icon-btn" data-act="toggle-theme" title="Tema claro/oscuro" aria-label="Cambiar tema">◐</button>'+
-      '</div></div>'+
-      '<div class="stats">'+stat('Productos',s.nprod)+stat('Bodegas',s.nbod)+stat('Margen prom.',s.avg==null?'—':pct(s.avg))+
+    var admin=isAdmin();
+    var whoIni=(session && session.usuarioNombre) ? session.usuarioNombre.charAt(0).toUpperCase() : '?';
+    var whoLine='<button class="who-chip'+(admin?' admin':'')+'" data-act="who" title="Cerrar sesión">'+
+      '<span class="avat">'+esc(whoIni)+'</span>'+esc(session?session.usuarioNombre:'')+
+      ' <span class="role">'+(admin?'admin':'trabajador')+'</span>'+
+    '</button>';
+    var lead = admin
+      ? 'Tus productos, en qué bodega están y a cómo te los da cada una — con tu ganancia calculada.'
+      : 'Arma tus pedidos y envíalos por WhatsApp a cada bodega.';
+    var statsHTML;
+    if(admin){
+      statsHTML='<div class="stats">'+stat('Productos',s.nprod)+stat('Bodegas',s.nbod)+stat('Margen prom.',s.avg==null?'—':pct(s.avg))+
         '<div class="stat alert'+alertZero+'"><div class="rail"></div><div class="k">Margen bajo</div><div class="v num">'+s.low+'</div></div></div>';
+    }else{
+      // trabajador: sin datos financieros; solo cuántos hay y su propio historial
+      var mine=state.pedidos.filter(function(o){return o.usuarioId===session.usuarioId;});
+      var hoy=new Date().toISOString().slice(0,10);
+      var hoyN=mine.filter(function(o){return (o.fecha||'').slice(0,10)===hoy;}).length;
+      statsHTML='<div class="stats">'+stat('Productos',s.nprod)+stat('Mis pedidos hoy',hoyN)+stat('Total mis pedidos',mine.length)+'</div>';
+    }
+    return '<div class="top">'+
+      '<div class="brand"><h1>Bodegas &amp; Márgenes</h1><p>'+esc(lead)+'</p></div>'+
+      '<div class="top-tools">'+whoLine+connHTML()+
+        (admin?'<button class="icon-btn" data-act="toggle-moneda" title="Cambiar moneda">'+(state.moneda==='USD'?'US$':'COP')+'</button>':'')+
+        '<button class="icon-btn" data-act="toggle-theme" title="Tema claro/oscuro" aria-label="Cambiar tema">◐</button>'+
+      '</div></div>'+ statsHTML;
   }
   function stat(k,v){ return '<div class="stat"><div class="rail"></div><div class="k">'+esc(k)+'</div><div class="v num">'+esc(v)+'</div></div>'; }
   function opt(v,label){ return '<option value="'+v+'"'+(ui.sort===v?' selected':'')+'>'+esc(label)+'</option>'; }
@@ -599,7 +700,7 @@ select.sort{padding:10px 12px; border-radius:10px; border:1px solid var(--border
   function rowHTML(p){
     var b=best(p);
     var mg=b?marginPct(p.precioVenta,b.costo):null;
-    var inCart=(state.pedido.items||[]).some(function(it){return it.productId===p.id;});
+    var inCart=(currentCart().items||[]).some(function(it){return it.productId===p.id;});
     var expanded=!!ui.expanded[p.id];
     var costCell = b
       ? '<div class="pc">'+fmt(b.costo)+'<span class="bod">'+esc(b.bodega)+'</span></div>'
@@ -689,6 +790,121 @@ select.sort{padding:10px 12px; border-radius:10px; border:1px solid var(--border
       cacheState(); setConn('ok'); render(); startPolling();
       showToast('¡Conectado! Sincronización activa', false);
     }catch(e){ msg.innerHTML='<div class="callout warn">No pude conectar. Revisa tu internet y que la URL sea correcta.</div>'; }
+  }
+
+  /* ---------- login ---------- */
+  function renderLogin(){
+    var needsAdmin = !state.usuarios.length;
+    app.innerHTML='<div class="login-wrap"><div class="login-card">'+
+      (needsAdmin
+        ? '<h1>Crea tu cuenta de administrador</h1><p class="lead">Este es el primer usuario de la plataforma. Podrás crear más trabajadores después.</p>'
+        : '<h1>Inicia sesión</h1><p class="lead">Ingresa con tu nombre y contraseña.</p>'
+      )+
+      '<div class="field"><label>Nombre de usuario</label><input type="text" id="lg-name" autocomplete="username" placeholder="Ej: Brayder"></div>'+
+      '<div class="field" style="margin-top:12px"><label>Contraseña</label><input type="password" id="lg-pwd" autocomplete="'+(needsAdmin?'new-password':'current-password')+'" placeholder="••••••"></div>'+
+      (needsAdmin ? '<div class="field" style="margin-top:12px"><label>Repetir contraseña</label><input type="password" id="lg-pwd2" autocomplete="new-password"></div>' : '')+
+      '<div id="lg-msg" style="margin-top:12px"></div>'+
+      '<div style="display:flex; gap:10px; margin-top:16px">'+
+        '<button class="btn primary" id="lg-btn" style="flex:1;justify-content:center">'+(needsAdmin?'Crear administrador':'Entrar')+'</button>'+
+      '</div>'+
+    '</div></div>';
+    var doLogin=function(){ if(needsAdmin) tryCreateFirstAdmin(); else tryLogin(); };
+    document.getElementById('lg-btn').addEventListener('click', doLogin);
+    var focusEl=document.getElementById('lg-name'); if(focusEl) focusEl.focus();
+    ['lg-name','lg-pwd','lg-pwd2'].forEach(function(id){
+      var el=document.getElementById(id); if(el) el.addEventListener('keydown', function(e){ if(e.key==='Enter') doLogin(); });
+    });
+  }
+  async function tryLogin(){
+    var name=(document.getElementById('lg-name').value||'').trim();
+    var pwd=(document.getElementById('lg-pwd').value||'');
+    var msg=document.getElementById('lg-msg');
+    if(!name||!pwd){ msg.innerHTML='<div class="callout warn">Escribe usuario y contraseña.</div>'; return; }
+    msg.innerHTML='<div class="callout"><span class="spin" style="display:inline-block;vertical-align:-2px"></span> Verificando…</div>';
+    // sincroniza el estado antes de validar (para respetar cambios recientes del admin)
+    try{ await pullFromServer(false); }catch(e){}
+    var u=findUser(name);
+    if(!u){ msg.innerHTML='<div class="callout warn">Usuario o contraseña incorrectos.</div>'; return; }
+    var ok=await verifyPwd(pwd, u.salt, u.hash);
+    if(!ok){ msg.innerHTML='<div class="callout warn">Usuario o contraseña incorrectos.</div>'; return; }
+    session={usuarioId:u.id, usuarioNombre:u.nombre, role:u.role};
+    saveSession(session);
+    render(); startPolling();
+    showToast('Bienvenido, '+u.nombre, false);
+  }
+  async function tryCreateFirstAdmin(){
+    var name=(document.getElementById('lg-name').value||'').trim();
+    var pwd=(document.getElementById('lg-pwd').value||'');
+    var pwd2=(document.getElementById('lg-pwd2').value||'');
+    var msg=document.getElementById('lg-msg');
+    if(!name||name.length<2){ msg.innerHTML='<div class="callout warn">Escribe un nombre de usuario (mínimo 2 letras).</div>'; return; }
+    if(pwd.length<4){ msg.innerHTML='<div class="callout warn">La contraseña debe tener al menos 4 caracteres.</div>'; return; }
+    if(pwd!==pwd2){ msg.innerHTML='<div class="callout warn">Las contraseñas no coinciden.</div>'; return; }
+    msg.innerHTML='<div class="callout"><span class="spin" style="display:inline-block;vertical-align:-2px"></span> Creando…</div>';
+    var salt=randSalt(); var hash=await hashPwd(pwd, salt);
+    var u={id:uidUser(), nombre:name, salt:salt, hash:hash, role:'admin', createdAt:new Date().toISOString()};
+    state.usuarios.push(u);
+    session={usuarioId:u.id, usuarioNombre:u.nombre, role:u.role};
+    saveSession(session);
+    await commit();
+    render(); startPolling();
+    showToast('¡Cuenta creada! Bienvenido, '+u.nombre, false);
+  }
+
+  /* ---------- panel de usuarios (admin) ---------- */
+  function openUsers(){
+    if(!isAdmin()){ showToast('Solo el admin puede ver esto', false); return; }
+    var body='<div class="modal-bd" style="gap:10px">';
+    body+='<p class="hint">Crea trabajadores con su contraseña. Cuando entren, verán la plataforma sin costos ni márgenes — solo podrán armar y enviar pedidos.</p>';
+    if(state.usuarios.length){
+      body+= state.usuarios.slice().sort(function(a,b){return (a.nombre||"").localeCompare(b.nombre||"","es");}).map(function(u){
+        var mine=state.pedidos.filter(function(o){return o.usuarioId===u.id;});
+        var isMe = session && session.usuarioId===u.id;
+        return '<div class="user-row" data-uid="'+esc(u.id)+'">'+
+          '<div><div class="nm">'+esc(u.nombre)+ (isMe?' <span class="hint">(tú)</span>':'')+'</div>'+
+            '<div class="rl '+(u.role==='admin'?'a':'')+'">'+esc(u.role)+' · '+mine.length+' pedidos</div></div>'+
+          '<div class="acts">'+
+            '<button data-act="us-pwd">🔑 Contraseña</button>'+
+            (u.role!=='admin'?'<button data-act="us-mkadmin">Hacer admin</button>':(state.usuarios.filter(function(x){return x.role==='admin';}).length>1?'<button data-act="us-mkuser">Quitar admin</button>':''))+
+            (!isMe?'<button class="del" data-act="us-del">🗑</button>':'')+
+          '</div>'+
+        '</div>';
+      }).join('');
+    }
+    body+='<hr style="border:none;border-top:1px solid var(--border);margin:6px 0">';
+    body+='<div class="sub" style="margin-top:0">Nuevo trabajador</div>';
+    body+='<div class="f2"><div class="field"><label>Nombre</label><input type="text" id="nu-name" placeholder="Ej: María"></div>'+
+      '<div class="field"><label>Contraseña</label><input type="text" id="nu-pwd" placeholder="Al menos 4 caracteres"></div></div>';
+    body+='<div style="display:flex; gap:8px; align-items:center"><label style="display:inline-flex;gap:6px;align-items:center;font-size:13px;color:var(--muted)"><input type="checkbox" id="nu-admin"> Crear como admin</label>'+
+      '<button class="btn primary" data-act="us-create" style="margin-left:auto">＋ Añadir</button></div>';
+    body+='</div>';
+    host.innerHTML='<div class="scrim" data-role="scrim"><div class="modal" role="dialog" aria-modal="true" style="width:min(560px,100%)">'+
+      '<div class="modal-hd"><h2>👥 Trabajadores</h2><button class="mini" data-role="close">×</button></div>'+
+      body+
+      '<div class="modal-ft"><button class="btn ghost" data-role="close" style="margin-left:auto">Cerrar</button></div>'+
+    '</div></div>';
+  }
+  async function createUser(){
+    var name=(document.getElementById('nu-name').value||'').trim();
+    var pwd=(document.getElementById('nu-pwd').value||'');
+    var asAdmin=document.getElementById('nu-admin').checked;
+    if(name.length<2){ showToast('Nombre muy corto',false); return; }
+    if(pwd.length<4){ showToast('La contraseña debe tener 4+ caracteres',false); return; }
+    if(findUser(name)){ showToast('Ya existe un usuario con ese nombre',false); return; }
+    var salt=randSalt(); var hash=await hashPwd(pwd, salt);
+    state.usuarios.push({id:uidUser(), nombre:name, salt:salt, hash:hash, role:asAdmin?'admin':'trabajador', createdAt:new Date().toISOString()});
+    scheduleSave(); openUsers();
+    showToast('Trabajador "'+name+'" creado',false);
+  }
+  async function changeUserPwd(uid){
+    var u=state.usuarios.find(function(x){return x.id===uid;}); if(!u) return;
+    var np=prompt('Nueva contraseña para "'+u.nombre+'" (mínimo 4 caracteres):', '');
+    if(np==null) return;
+    np=String(np);
+    if(np.length<4){ showToast('Contraseña muy corta',false); return; }
+    u.salt=randSalt(); u.hash=await hashPwd(np, u.salt);
+    scheduleSave();
+    showToast('Contraseña actualizada',false);
   }
 
   /* ---------- polling / sync al volver ---------- */
@@ -830,13 +1046,21 @@ select.sort{padding:10px 12px; border-radius:10px; border:1px solid var(--border
     host.innerHTML='<div class="scrim" data-role="scrim"><div class="modal" role="dialog" aria-modal="true" style="width:min(440px,100%)">'+
       '<div class="modal-hd"><h2>Más opciones</h2><button class="mini" data-role="close">×</button></div>'+
       '<div class="modal-bd">'+
-        '<button class="btn ghost" data-act="history" style="justify-content:flex-start">📋 Pedidos guardados ('+state.pedidos.length+')</button>'+
-        '<button class="btn ghost" data-act="export" style="justify-content:flex-start">⬇ Exportar a CSV (Excel)</button>'+
-        '<button class="btn ghost" data-act="backup" style="justify-content:flex-start">💾 Descargar respaldo (JSON)</button>'+
-        '<button class="btn ghost" data-act="import" style="justify-content:flex-start">📂 Restaurar respaldo</button>'+
-        '<hr style="border:none;border-top:1px solid var(--border);margin:4px 0">'+
-        '<button class="btn ghost" data-act="config" style="justify-content:flex-start">🔌 Datos de conexión (Supabase)</button>'+
-        '<button class="btn ghost" data-act="disconnect" style="justify-content:flex-start;color:var(--bad)">Desconectar este dispositivo</button>'+
+        (function(){
+          var admin=isAdmin();
+          var mine=session?state.pedidos.filter(function(o){return o.usuarioId===session.usuarioId;}).length:0;
+          var pedCount = admin ? state.pedidos.length : mine;
+          var pedLabel = admin ? 'Pedidos guardados' : 'Mis pedidos';
+          return '<button class="btn ghost" data-act="history" style="justify-content:flex-start">📋 '+pedLabel+' ('+pedCount+')</button>'+
+          (admin?'<button class="btn ghost" data-act="users" style="justify-content:flex-start">👥 Trabajadores ('+state.usuarios.length+')</button>':'')+
+          (admin?'<button class="btn ghost" data-act="export" style="justify-content:flex-start">⬇ Exportar a CSV (Excel)</button>':'')+
+          (admin?'<button class="btn ghost" data-act="backup" style="justify-content:flex-start">💾 Descargar respaldo (JSON)</button>':'')+
+          (admin?'<button class="btn ghost" data-act="import" style="justify-content:flex-start">📂 Restaurar respaldo</button>':'')+
+          '<hr style="border:none;border-top:1px solid var(--border);margin:4px 0">'+
+          '<button class="btn ghost" data-act="logout" style="justify-content:flex-start">🚪 Cerrar sesión</button>'+
+          (admin?'<button class="btn ghost" data-act="config" style="justify-content:flex-start">🔌 Datos de conexión (Supabase)</button>':'')+
+          (admin?'<button class="btn ghost" data-act="disconnect" style="justify-content:flex-start;color:var(--bad)">Desconectar este dispositivo</button>':'');
+        })()+
         '<p class="hint" style="margin-top:6px">El respaldo JSON es tu copia de seguridad: guárdalo de vez en cuando. La conexión se guarda solo en este dispositivo.</p>'+
       '</div></div></div>';
     host.querySelectorAll('[data-role="close"]').forEach(function(b){ b.addEventListener('click',closeModal); });
@@ -929,6 +1153,26 @@ select.sort{padding:10px 12px; border-radius:10px; border:1px solid var(--border
       else if(a==='rmv') removeLine(pid);
     }
     else if(a==='history'){ closeModal(); openHistory(); }
+    else if(a==='users'){ closeModal(); openUsers(); }
+    else if(a==='logout'){ closeModal(); if(confirm('¿Cerrar sesión?')){ clearSession(); render(); } }
+    else if(a==='who'){ if(confirm('¿Cerrar sesión de '+(session?session.usuarioNombre:'')+'?')){ clearSession(); render(); } }
+    else if(a==='us-create'){ createUser(); }
+    else if(a==='us-del'||a==='us-mkadmin'||a==='us-mkuser'||a==='us-pwd'){
+      var ur=e.target.closest('.user-row'); if(!ur) return;
+      var uid=ur.getAttribute('data-uid'); var u=state.usuarios.find(function(x){return x.id===uid;}); if(!u) return;
+      if(a==='us-del'){
+        var mine=state.pedidos.filter(function(o){return o.usuarioId===u.id;}).length;
+        if(!confirm('¿Eliminar a "'+u.nombre+'"? '+(mine?'Tiene '+mine+' pedido(s) que se conservarán con su nombre pero perderán al usuario.':''))) return;
+        state.usuarios=state.usuarios.filter(function(x){return x.id!==u.id;});
+        delete state.carritos[u.id];
+        openUsers(); scheduleSave();
+      }else if(a==='us-mkadmin'){ u.role='admin'; openUsers(); scheduleSave(); }
+      else if(a==='us-mkuser'){
+        if(state.usuarios.filter(function(x){return x.role==='admin';}).length<=1){ showToast('Debe quedar al menos un admin',false); return; }
+        u.role='trabajador'; openUsers(); scheduleSave();
+      }
+      else if(a==='us-pwd'){ changeUserPwd(u.id); }
+    }
     else if(a==='hist-view'||a==='hist-reopen'||a==='hist-del'){
       var hi=e.target.closest('.hist-item'); if(!hi) return;
       var oid=hi.getAttribute('data-oid');
@@ -941,8 +1185,8 @@ select.sort{padding:10px 12px; border-radius:10px; border:1px solid var(--border
       }
       else if(a==='hist-reopen'){
         var o=state.pedidos.find(function(x){return x.id===oid;}); if(!o) return;
-        if(state.pedido.items.length && !confirm('Tienes un pedido en curso. ¿Reemplazarlo con este?')) return;
-        state.pedido={items:o.items.map(function(it){return {productId:it.productId, bodega:it.bodega, cantidad:it.cantidad};}), cliente:{nombre:(o.cliente||{}).nombre||'', tel:(o.cliente||{}).tel||''}};
+        if(currentCart().items.length && !confirm('Tienes un pedido en curso. ¿Reemplazarlo con este?')) return;
+        setCurrentCart({items:o.items.map(function(it){return {productId:it.productId, bodega:it.bodega, cantidad:it.cantidad};}), cliente:{nombre:(o.cliente||{}).nombre||'', tel:(o.cliente||{}).tel||''}});
         closeModal(); render(); openCart(); scheduleSave();
       }
     }
@@ -951,7 +1195,7 @@ select.sort{padding:10px 12px; border-radius:10px; border:1px solid var(--border
     if(e.target.id==='q'){ ui.q=e.target.value; refreshProds(); }
     else if(e.target.matches('[data-cli]')){
       var k=e.target.getAttribute('data-cli');
-      state.pedido.cliente[k]=e.target.value; scheduleSave();
+      currentCart().cliente[k]=e.target.value; scheduleSave();
     }
   });
   document.addEventListener('change',function(e){
@@ -969,35 +1213,35 @@ select.sort{padding:10px 12px; border-radius:10px; border:1px solid var(--border
   /* ---------- carrito / pedido ---------- */
   function addToCart(pid){
     var p=state.productos.find(function(x){return x.id===pid;}); if(!p) return;
-    var it=state.pedido.items.find(function(x){return x.productId===pid;});
+    var it=currentCart().items.find(function(x){return x.productId===pid;});
     if(it){ it.cantidad++; }
     else {
       var b=best(p);
-      state.pedido.items.push({productId:pid, bodega:b?b.bodega:'', cantidad:1});
+      currentCart().items.push({productId:pid, bodega:b?b.bodega:'', cantidad:1});
     }
     showToast('Añadido al pedido',false);
     render(); scheduleSave();
   }
   function changeQty(pid, delta){
-    var it=state.pedido.items.find(function(x){return x.productId===pid;});
+    var it=currentCart().items.find(function(x){return x.productId===pid;});
     if(!it) return;
     it.cantidad+=delta;
-    if(it.cantidad<=0) state.pedido.items=state.pedido.items.filter(function(x){return x.productId!==pid;});
+    if(it.cantidad<=0) currentCart().items=currentCart().items.filter(function(x){return x.productId!==pid;});
     renderCart(); refreshProds(); updateFab(); scheduleSave();
   }
   function setLineBodega(pid, bodega){
-    var it=state.pedido.items.find(function(x){return x.productId===pid;});
+    var it=currentCart().items.find(function(x){return x.productId===pid;});
     if(!it) return;
     it.bodega=bodega; renderCart(); scheduleSave();
   }
   function removeLine(pid){
-    state.pedido.items=state.pedido.items.filter(function(x){return x.productId!==pid;});
+    currentCart().items=currentCart().items.filter(function(x){return x.productId!==pid;});
     renderCart(); refreshProds(); updateFab(); scheduleSave();
   }
   function clearCart(){
-    if(!state.pedido.items.length){ closeCart(); return; }
+    if(!currentCart().items.length){ closeCart(); return; }
     if(!confirm('¿Vaciar el pedido? Se perderán los productos añadidos.')) return;
-    state.pedido={items:[],cliente:{nombre:'',tel:''}};
+    resetCurrentCart();
     closeCart(); render(); scheduleSave();
   }
   function updateFab(){
@@ -1037,10 +1281,10 @@ select.sort{padding:10px 12px; border-radius:10px; border:1px solid var(--border
   function cartHTML(){
     var t=cartTotals();
     var body;
-    if(!state.pedido.items.length){
+    if(!currentCart().items.length){
       body='<div class="side-empty"><div class="em">🛒</div><div style="font-weight:700;color:var(--ink);margin-bottom:4px">Tu pedido está vacío</div><p style="font-size:13.5px">Añade productos con el botón <b>＋ Al pedido</b> de cada tarjeta. Verás los totales aquí.</p></div>';
     }else{
-      body=state.pedido.items.map(cartLineHTML).join('');
+      body=currentCart().items.map(cartLineHTML).join('');
     }
     var mg=t.venta?Math.round(t.ganancia/t.venta*100):0;
     var totales= t.lineas ? (
@@ -1067,8 +1311,8 @@ select.sort{padding:10px 12px; border-radius:10px; border:1px solid var(--border
         '<button class="mini" data-act="close-cart" aria-label="Cerrar">×</button>'+
       '</div>'+
       '<div class="side-cli">'+
-        '<input type="text" data-cli="nombre" placeholder="Nombre del cliente" value="'+esc(state.pedido.cliente.nombre||'')+'">'+
-        '<input type="tel" data-cli="tel" placeholder="Teléfono / WhatsApp" value="'+esc(state.pedido.cliente.tel||'')+'">'+
+        '<input type="text" data-cli="nombre" placeholder="Nombre del cliente" value="'+esc(currentCart().cliente.nombre||'')+'">'+
+        '<input type="tel" data-cli="tel" placeholder="Teléfono / WhatsApp" value="'+esc(currentCart().cliente.tel||'')+'">'+
       '</div>'+
       '<div class="side-bd" data-role="lines">'+body+'</div>'+
       waSendsHTML()+
@@ -1080,7 +1324,7 @@ select.sort{padding:10px 12px; border-radius:10px; border:1px solid var(--border
   // Agrupa los items del pedido por bodega y arma un botón "Enviar a X" por cada una
   function cartByBodega(){
     var map={};
-    (state.pedido.items||[]).forEach(function(it){
+    (currentCart().items||[]).forEach(function(it){
       var p=state.productos.find(function(x){return x.id===it.productId;}); if(!p) return;
       var b=(p.costos||[]).find(function(c){return c.bodega===it.bodega;}) || best(p);
       var bodega= b ? b.bodega : (it.bodega||'(sin bodega)');
@@ -1094,7 +1338,7 @@ select.sort{padding:10px 12px; border-radius:10px; border:1px solid var(--border
   }
 
   function waSendsHTML(){
-    if(!state.pedido.items.length) return '';
+    if(!currentCart().items.length) return '';
     var grupos=cartByBodega();
     if(!grupos.length) return '';
     return '<div class="wa-sends">'+ grupos.map(function(g){
@@ -1147,9 +1391,9 @@ select.sort{padding:10px 12px; border-radius:10px; border:1px solid var(--border
   function copyCartSummary(){
     var t=cartTotals(); if(!t.lineas){ showToast('Pedido vacío',false); return; }
     var lines=['*Pedido VELORA*'];
-    if(state.pedido.cliente.nombre) lines.push('Cliente: '+state.pedido.cliente.nombre);
+    if(currentCart().cliente.nombre) lines.push('Cliente: '+currentCart().cliente.nombre);
     lines.push('');
-    state.pedido.items.forEach(function(it){
+    currentCart().items.forEach(function(it){
       var p=state.productos.find(function(x){return x.id===it.productId;}); if(!p) return;
       lines.push('• '+it.cantidad+'x '+p.nombre+' — '+fmt((p.precioVenta||0)*it.cantidad));
     });
@@ -1168,7 +1412,7 @@ select.sort{padding:10px 12px; border-radius:10px; border:1px solid var(--border
 
   function saveCart(){
     var t=cartTotals(); if(!t.lineas){ return; }
-    var items=state.pedido.items.map(function(it){
+    var items=currentCart().items.map(function(it){
       var p=state.productos.find(function(x){return x.id===it.productId;}) || {};
       var b=(p.costos||[]).find(function(c){return c.bodega===it.bodega;}) || best(p) || {};
       return {
@@ -1183,78 +1427,102 @@ select.sort{padding:10px 12px; border-radius:10px; border:1px solid var(--border
     var order={
       id:'o'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),
       fecha:new Date().toISOString(),
-      cliente:{nombre:(state.pedido.cliente.nombre||'').trim(), tel:(state.pedido.cliente.tel||'').trim()},
+      cliente:{nombre:(currentCart().cliente.nombre||'').trim(), tel:(currentCart().cliente.tel||'').trim()},
       items:items,
-      costoTotal:t.costo, ventaTotal:t.venta, ganancia:t.ganancia, unidades:t.unidades
+      costoTotal:t.costo, ventaTotal:t.venta, ganancia:t.ganancia, unidades:t.unidades,
+      usuarioId: session?session.usuarioId:'', usuarioNombre: session?session.usuarioNombre:''
     };
     state.pedidos.unshift(order);
-    state.pedido={items:[],cliente:{nombre:'',tel:''}};
+    resetCurrentCart();
     closeCart(); render(); scheduleSave();
     showToast('Pedido guardado ✓',false);
   }
 
   /* ---------- historial ---------- */
+  var histFilter='__all__'; // '__all__' | usuarioId
   function openHistory(){
-    var list=state.pedidos.slice();
-    var totalVentas=list.reduce(function(a,o){return a+(o.ventaTotal||0);},0);
-    var totalGanancia=list.reduce(function(a,o){return a+(o.ganancia||0);},0);
+    var admin=isAdmin();
+    // El trabajador solo ve los suyos
+    var list = admin ? state.pedidos.slice() : state.pedidos.filter(function(o){return o.usuarioId===session.usuarioId;});
+    if(admin && histFilter!=='__all__') list=list.filter(function(o){return o.usuarioId===histFilter;});
     var hoy=new Date().toISOString().slice(0,10);
-    var hoyList=list.filter(function(o){return (o.fecha||'').slice(0,10)===hoy;});
     var mes=hoy.slice(0,7);
+    var hoyList=list.filter(function(o){return (o.fecha||'').slice(0,10)===hoy;});
     var mesList=list.filter(function(o){return (o.fecha||'').slice(0,7)===mes;});
     function sumV(a){return a.reduce(function(x,o){return x+(o.ventaTotal||0);},0);}
     function sumG(a){return a.reduce(function(x,o){return x+(o.ganancia||0);},0);}
-    var head='<div class="modal-bd" style="gap:10px">'+
-      '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">'+
-        '<div class="stat"><div class="rail"></div><div class="k">Pedidos</div><div class="v num">'+list.length+'</div></div>'+
-        '<div class="stat"><div class="rail"></div><div class="k">Ventas mes</div><div class="v num" style="font-size:19px">'+fmt(sumV(mesList))+'</div></div>'+
-        '<div class="stat"><div class="rail"></div><div class="k">Ganancia mes</div><div class="v num" style="font-size:19px">'+fmt(sumG(mesList))+'</div></div>'+
-      '</div>'+
-      '<div class="hint">Hoy: '+hoyList.length+' pedido(s) · '+fmt(sumV(hoyList))+' en ventas · '+fmt(sumG(hoyList))+' de ganancia</div>';
+    var head='<div class="modal-bd" style="gap:10px">';
+    // Selector de usuario (solo admin) — solo si hay más de un usuario o filtro activo
+    if(admin && state.usuarios.length>1){
+      var opts='<option value="__all__">Todos los usuarios</option>'+
+        state.usuarios.slice().sort(function(a,b){return (a.nombre||"").localeCompare(b.nombre||"","es");}).map(function(u){
+          var n=state.pedidos.filter(function(o){return o.usuarioId===u.id;}).length;
+          return '<option value="'+esc(u.id)+'"'+(histFilter===u.id?' selected':'')+'>'+esc(u.nombre)+' ('+n+')</option>';
+        }).join('');
+      head+='<div class="tabsrow" style="margin-bottom:0">'+
+        '<span style="align-self:center; padding:0 8px; color:var(--muted); font-size:12.5px; font-weight:600">Filtrar por:</span>'+
+        '<select id="hist-user" style="flex:1; padding:6px 10px; border-radius:8px; border:1px solid var(--border); background:var(--surface); color:var(--ink)">'+opts+'</select>'+
+      '</div>';
+    }
+    head+='<div style="display:grid;grid-template-columns:1fr 1fr'+(admin?' 1fr':'')+';gap:8px">'+
+      '<div class="stat"><div class="rail"></div><div class="k">Pedidos</div><div class="v num">'+list.length+'</div></div>'+
+      '<div class="stat"><div class="rail"></div><div class="k">Ventas mes</div><div class="v num" style="font-size:19px">'+fmt(sumV(mesList))+'</div></div>'+
+      (admin?'<div class="stat"><div class="rail"></div><div class="k">Ganancia mes</div><div class="v num" style="font-size:19px">'+fmt(sumG(mesList))+'</div></div>':'')+
+    '</div>';
+    head+='<div class="hint">Hoy: '+hoyList.length+' pedido(s) · '+fmt(sumV(hoyList))+' en ventas'+(admin?' · '+fmt(sumG(hoyList))+' de ganancia':'')+'</div>';
     var body;
     if(!list.length){
-      body='<div class="side-empty" style="padding:36px 8px"><div class="em">📋</div><div style="font-weight:700;color:var(--ink)">Aún no has guardado pedidos</div><p style="font-size:13.5px">Cuando guardes tu primer pedido aparecerá aquí con toda su información.</p></div>';
+      body='<div class="side-empty" style="padding:36px 8px"><div class="em">📋</div><div style="font-weight:700;color:var(--ink)">Aún no hay pedidos</div><p style="font-size:13.5px">Cuando guardes tu primer pedido aparecerá aquí con toda su información.</p></div>';
     }else{
       body=list.map(function(o){
         var mg=o.ventaTotal?Math.round(o.ganancia/o.ventaTotal*100):0;
         var fec=new Date(o.fecha||Date.now());
         var fs=fec.toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric'})+' '+fec.toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'});
+        var who = o.usuarioNombre ? ' · <span style="color:var(--accent);font-weight:700">👤 '+esc(o.usuarioNombre)+'</span>' : '';
         return '<div class="hist-item" data-oid="'+esc(o.id)+'">'+
           '<div class="hd"><span class="cli">'+esc(o.cliente&&o.cliente.nombre?o.cliente.nombre:'(sin cliente)')+'</span><span class="fec">'+esc(fs)+'</span></div>'+
-          '<div class="tt">'+fmt(o.ventaTotal)+'<div class="mini">Ganancia '+fmt(o.ganancia)+' · <span class="mg '+mgClass(mg)+'">'+pct(mg)+'</span></div></div>'+
-          '<div class="sm">'+o.unidades+' unidad(es) · '+o.items.length+' producto(s)'+(o.cliente&&o.cliente.tel?' · '+esc(o.cliente.tel):'')+'</div>'+
+          '<div class="tt">'+fmt(o.ventaTotal)+ (admin?'<div class="mini">Ganancia '+fmt(o.ganancia)+' · <span class="mg '+mgClass(mg)+'">'+pct(mg)+'</span></div>':'') +'</div>'+
+          '<div class="sm">'+o.unidades+' unidad(es) · '+o.items.length+' producto(s)'+(o.cliente&&o.cliente.tel?' · '+esc(o.cliente.tel):'')+who+'</div>'+
           '<div class="acts">'+
             '<button class="btn ghost" data-act="hist-view">Ver detalle</button>'+
             '<button class="btn ghost" data-act="hist-reopen">Reabrir</button>'+
-            '<button class="btn ghost" data-act="hist-del" style="color:var(--bad)">Eliminar</button>'+
+            (admin||(session&&o.usuarioId===session.usuarioId)?'<button class="btn ghost" data-act="hist-del" style="color:var(--bad)">Eliminar</button>':'')+
           '</div>'+
         '</div>';
       }).join('');
     }
+    head+='</div>';
     host.innerHTML='<div class="scrim" data-role="scrim"><div class="modal" role="dialog" aria-modal="true" style="width:min(620px,100%)">'+
-      '<div class="modal-hd"><h2>📋 Pedidos guardados</h2><button class="mini" data-role="close">×</button></div>'+
+      '<div class="modal-hd"><h2>📋 '+(admin?'Pedidos guardados':'Mis pedidos')+'</h2><button class="mini" data-role="close">×</button></div>'+
       head+
       '<div style="padding:0 20px 8px">'+body+'</div>'+
       '<div class="modal-ft"><button class="btn ghost" data-role="close" style="margin-left:auto">Cerrar</button></div>'+
     '</div></div>';
+    var sel=document.getElementById('hist-user');
+    if(sel){ sel.addEventListener('change', function(){ histFilter=sel.value; openHistory(); }); }
   }
 
   function historyDetail(oid){
     var o=state.pedidos.find(function(x){return x.id===oid;}); if(!o) return;
+    var admin=isAdmin();
     var mg=o.ventaTotal?Math.round(o.ganancia/o.ventaTotal*100):0;
     var lines=o.items.map(function(it){
-      return '<tr><td>'+esc(it.nombre)+'</td><td class="r num">'+it.cantidad+'</td><td class="r num">'+fmt(it.precio)+'</td><td class="r num">'+fmt(it.costo)+'</td><td class="r num">'+fmt((it.precio-it.costo)*it.cantidad)+'</td></tr>';
+      return '<tr><td>'+esc(it.nombre)+'</td><td class="r num">'+it.cantidad+'</td><td class="r num">'+fmt(it.precio)+'</td>'+
+        (admin?'<td class="r num">'+fmt(it.costo)+'</td><td class="r num">'+fmt((it.precio-it.costo)*it.cantidad)+'</td>':'')+
+      '</tr>';
     }).join('');
     var fec=new Date(o.fecha||Date.now());
     host.innerHTML='<div class="scrim" data-role="scrim"><div class="modal" role="dialog" aria-modal="true" style="width:min(680px,100%)">'+
       '<div class="modal-hd"><h2>Pedido</h2><button class="mini" data-role="close">×</button></div>'+
       '<div class="modal-bd">'+
-        '<div><b>'+esc(o.cliente&&o.cliente.nombre?o.cliente.nombre:'(sin cliente)')+'</b>'+(o.cliente&&o.cliente.tel?' · '+esc(o.cliente.tel):'')+'<div class="hint">'+fec.toLocaleString('es-CO')+'</div></div>'+
-        '<div style="overflow-x:auto"><table class="btable" style="min-width:520px"><thead><tr><th>Producto</th><th class="r">Cant.</th><th class="r">Precio</th><th class="r">Costo</th><th class="r">Ganancia</th></tr></thead><tbody>'+lines+'</tbody></table></div>'+
+        '<div><b>'+esc(o.cliente&&o.cliente.nombre?o.cliente.nombre:'(sin cliente)')+'</b>'+(o.cliente&&o.cliente.tel?' · '+esc(o.cliente.tel):'')+
+          (o.usuarioNombre?' <span class="hint">· realizado por 👤 '+esc(o.usuarioNombre)+'</span>':'')+
+          '<div class="hint">'+fec.toLocaleString('es-CO')+'</div></div>'+
+        '<div style="overflow-x:auto"><table class="btable" style="min-width:'+(admin?520:360)+'px"><thead><tr><th>Producto</th><th class="r">Cant.</th><th class="r">Precio</th>'+(admin?'<th class="r">Costo</th><th class="r">Ganancia</th>':'')+'</tr></thead><tbody>'+lines+'</tbody></table></div>'+
         '<div class="side-tot" style="border-radius:10px">'+
-          '<div class="r"><span>Costo total</span><b class="num">'+fmt(o.costoTotal)+'</b></div>'+
+          (admin?'<div class="r"><span>Costo total</span><b class="num">'+fmt(o.costoTotal)+'</b></div>':'')+
           '<div class="r"><span>Venta total</span><b class="num">'+fmt(o.ventaTotal)+'</b></div>'+
-          '<div class="r gain"><span>Ganancia</span><span class="val '+mgClass(mg)+'">'+fmt(o.ganancia)+' ('+pct(mg)+')</span></div>'+
+          (admin?'<div class="r gain"><span>Ganancia</span><span class="val '+mgClass(mg)+'">'+fmt(o.ganancia)+' ('+pct(mg)+')</span></div>':'')+
         '</div>'+
       '</div>'+
       '<div class="modal-ft"><button class="btn ghost" data-role="close">Cerrar</button></div>'+
@@ -1263,7 +1531,8 @@ select.sort{padding:10px 12px; border-radius:10px; border:1px solid var(--border
 
   /* ---------- init ---------- */
   cfg=loadCfg();
-  var cached=loadCache(); if(cached) state=cached;
+  session=loadSession();
+  var cached=loadCache(); if(cached) state=sanitize(cached);
   if(!cfg){ render(); }
   else{
     setConn('connecting'); render();
