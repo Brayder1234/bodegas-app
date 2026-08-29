@@ -406,7 +406,7 @@ body.role-trabajador .pexp{display:none !important}
   "use strict";
 
   var CFG_KEY='bm-supabase', THEME_KEY='bm-theme', CACHE_KEY='bm-cache', ROW_ID='main', SESSION_KEY='bm-session';
-  var state={moneda:'COP', bodegas:[], bodegaTels:{}, productos:[], pedido:{items:[],cliente:{nombre:'',tel:''}}, pedidos:[], usuarios:[], carritos:{}};
+  var state={moneda:'COP', bodegas:[], bodegaTels:{}, productos:[], pedido:{items:[],cliente:{nombre:'',tel:''}}, pedidos:[], usuarios:[], carritos:{}, notifEmail:{enabled:true, accessKey:'', destinatario:'', extras:[]}};
   var session=null; // {usuarioId, usuarioNombre, role}
   var cfg=null;              // {url,key}
   var GROUPS_KEY='bm-collapsed';
@@ -486,6 +486,7 @@ body.role-trabajador .pexp{display:none !important}
     if(pedido.cliente.direccion==null) pedido.cliente.direccion='';
     if(pedido.cliente.ciudad==null) pedido.cliente.ciudad='';
     if(pedido.cliente.notas==null) pedido.cliente.notas='';
+    var ne=d.notifEmail && typeof d.notifEmail==='object' ? d.notifEmail : {};
     return {
       moneda:d.moneda||'COP',
       bodegas:Array.isArray(d.bodegas)?d.bodegas:[],
@@ -494,7 +495,13 @@ body.role-trabajador .pexp{display:none !important}
       pedido:pedido, // legado (compatibilidad)
       pedidos:Array.isArray(d.pedidos)?d.pedidos:[],
       usuarios:Array.isArray(d.usuarios)?d.usuarios:[],
-      carritos:(d.carritos&&typeof d.carritos==='object')?d.carritos:{}
+      carritos:(d.carritos&&typeof d.carritos==='object')?d.carritos:{},
+      notifEmail:{
+        enabled: ne.enabled!==false,
+        accessKey: ne.accessKey || '',
+        destinatario: ne.destinatario || '',
+        extras: Array.isArray(ne.extras) ? ne.extras : []
+      }
     };
   }
   /* ---------- usuarios / auth ---------- */
@@ -1108,6 +1115,7 @@ body.role-trabajador .pexp{display:none !important}
           var pedLabel = admin ? 'Pedidos guardados' : 'Mis pedidos';
           return '<button class="btn ghost" data-act="history" style="justify-content:flex-start">📋 '+pedLabel+' ('+pedCount+')</button>'+
           (admin?'<button class="btn ghost" data-act="users" style="justify-content:flex-start">👥 Trabajadores ('+state.usuarios.length+')</button>':'')+
+          (admin?'<button class="btn ghost" data-act="notifs" style="justify-content:flex-start">🔔 Notificaciones por email'+(state.notifEmail&&state.notifEmail.accessKey?' <span style="color:var(--good);font-size:11px;margin-left:auto">activas</span>':' <span style="color:var(--warn);font-size:11px;margin-left:auto">sin configurar</span>')+'</button>':'')+
           (admin?'<button class="btn ghost" data-act="export" style="justify-content:flex-start">⬇ Exportar a CSV (Excel)</button>':'')+
           (admin?'<button class="btn ghost" data-act="backup" style="justify-content:flex-start">💾 Descargar respaldo (JSON)</button>':'')+
           (admin?'<button class="btn ghost" data-act="import" style="justify-content:flex-start">📂 Restaurar respaldo</button>':'')+
@@ -1209,6 +1217,9 @@ body.role-trabajador .pexp{display:none !important}
     }
     else if(a==='history'){ closeModal(); openHistory(); }
     else if(a==='users'){ closeModal(); openUsers(); }
+    else if(a==='notifs'){ closeModal(); openNotifs(); }
+    else if(a==='ne-test'){ testNotif(); }
+    else if(a==='ne-save'){ saveNotifs(); }
     else if(a==='logout'){ closeModal(); if(confirm('¿Cerrar sesión?')){ clearSession(); render(); } }
     else if(a==='who'){ if(confirm('¿Cerrar sesión de '+(session?session.usuarioNombre:'')+'?')){ clearSession(); render(); } }
     else if(a==='us-create'){ createUser(); }
@@ -1272,6 +1283,114 @@ body.role-trabajador .pexp{display:none !important}
   document.addEventListener('click',function(e){ if(!e.target.closest('.pact')) document.querySelectorAll('.pact.open').forEach(function(el){el.classList.remove('open');}); }, true);
 
   function toggleTheme(){ var cur=document.documentElement.getAttribute('data-theme'); var next; if(cur==='dark') next='light'; else if(cur==='light') next='dark'; else next=window.matchMedia('(prefers-color-scheme: dark)').matches?'light':'dark'; document.documentElement.setAttribute('data-theme',next); try{ localStorage.setItem(THEME_KEY,next); }catch(e){} }
+
+  /* ---------- notificaciones por email (Web3Forms) ---------- */
+  function pedidoToEmailText(order){
+    var lines=[];
+    lines.push('🛍️ NUEVO PEDIDO');
+    lines.push('');
+    lines.push('👤 Cliente: '+(order.cliente&&order.cliente.nombre||'(sin nombre)'));
+    if(order.cliente&&order.cliente.tel) lines.push('📱 Tel: '+order.cliente.tel);
+    if(order.cliente&&order.cliente.direccion) lines.push('📍 Dirección: '+order.cliente.direccion+(order.cliente.ciudad?', '+order.cliente.ciudad:''));
+    if(order.cliente&&order.cliente.notas) lines.push('📝 Notas: '+order.cliente.notas);
+    if(order.usuarioNombre) lines.push('');
+    if(order.usuarioNombre) lines.push('Realizado por: '+order.usuarioNombre);
+    lines.push('');
+    lines.push('PRODUCTOS:');
+    (order.items||[]).forEach(function(it){
+      lines.push('  • '+it.cantidad+'x '+it.nombre+' — '+fmt(it.precio)+' c/u = '+fmt(it.precio*it.cantidad));
+    });
+    lines.push('');
+    lines.push('Unidades: '+order.unidades);
+    if(order.mayoristaTotal) lines.push('Mayorista total: '+fmt(order.mayoristaTotal));
+    lines.push('TOTAL AL CLIENTE: '+fmt(order.ventaTotal));
+    if(order.costoTotal!=null) lines.push('Costo bodegas: '+fmt(order.costoTotal));
+    if(order.gananciaTotal!=null) lines.push('Ganancia total: '+fmt(order.gananciaTotal));
+    lines.push('');
+    lines.push('Fecha: '+new Date(order.fecha||Date.now()).toLocaleString('es-CO'));
+    return lines.join('\n');
+  }
+
+  async function enviarEmailPedido(order){
+    var ne=state.notifEmail||{};
+    if(!ne.enabled || !ne.accessKey){ return {skipped:true}; }
+    var extras=(ne.extras||[]).filter(function(x){return x && x.trim();}).join(',');
+    var subject='🛍️ Nuevo pedido — '+((order.cliente&&order.cliente.nombre)||'sin cliente')+' — '+fmt(order.ventaTotal);
+    var body={
+      access_key: ne.accessKey,
+      subject: subject,
+      from_name: 'Bodegas & Márgenes',
+      message: pedidoToEmailText(order)
+    };
+    if(extras) body.cc = extras;
+    try{
+      var r=await fetch('https://api.web3forms.com/submit', {
+        method:'POST',
+        headers:{'Content-Type':'application/json', 'Accept':'application/json'},
+        body: JSON.stringify(body)
+      });
+      var j=await r.json().catch(function(){return {};});
+      return {ok: r.ok && j.success!==false, response:j};
+    }catch(e){ return {ok:false, error:String(e)}; }
+  }
+
+  /* ---------- panel de notificaciones (admin) ---------- */
+  function openNotifs(){
+    if(!isAdmin()){ showToast('Solo el admin puede configurar esto', false); return; }
+    var ne=state.notifEmail||{enabled:true, accessKey:'', extras:[]};
+    var extrasStr=(ne.extras||[]).join(', ');
+    host.innerHTML='<div class="scrim" data-role="scrim"><div class="modal" role="dialog" aria-modal="true" style="width:min(520px,100%)">'+
+      '<div class="modal-hd"><h2>🔔 Notificaciones por email</h2><button class="mini" data-role="close">×</button></div>'+
+      '<div class="modal-bd">'+
+        '<p class="hint">Cada pedido guardado envía un email con el detalle al correo con el que registraste tu Access Key en Web3Forms. Puedes agregar copias para otros admins.</p>'+
+        '<div class="field"><label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="ne-on"'+(ne.enabled?' checked':'')+'> Enviar email por cada pedido</label></div>'+
+        '<div class="field"><label>Access Key de Web3Forms</label><input type="text" id="ne-key" value="'+esc(ne.accessKey||'')+'" placeholder="ej: 70942b0b-..."><span class="help">La consigues gratis en <b>web3forms.com</b>. Se guarda en la nube (compartida entre admins).</span></div>'+
+        '<div class="field"><label>Emails adicionales para copia (opcional)</label><input type="text" id="ne-extras" value="'+esc(extrasStr)+'" placeholder="socio@ejemplo.com, asistente@ejemplo.com"><span class="help">Separados por coma. El email principal se maneja en tu cuenta de Web3Forms.</span></div>'+
+        '<div id="ne-msg"></div>'+
+      '</div>'+
+      '<div class="modal-ft">'+
+        '<button class="btn ghost" data-act="ne-test" style="margin-right:auto">✉️ Enviar prueba</button>'+
+        '<button class="btn ghost" data-role="close">Cancelar</button>'+
+        '<button class="btn primary" data-act="ne-save">Guardar</button>'+
+      '</div>'+
+    '</div></div>';
+  }
+
+  async function testNotif(){
+    var ne={
+      enabled:true,
+      accessKey:(document.getElementById('ne-key').value||'').trim(),
+      extras:(document.getElementById('ne-extras').value||'').split(',').map(function(s){return s.trim();}).filter(Boolean)
+    };
+    if(!ne.accessKey){ document.getElementById('ne-msg').innerHTML='<div class="callout warn">Pega primero la Access Key.</div>'; return; }
+    var prev=state.notifEmail;
+    state.notifEmail=ne;
+    var fake={
+      fecha:new Date().toISOString(), unidades:1, ventaTotal:50000, costoTotal:32000, mayoristaTotal:38000, gananciaTotal:18000,
+      cliente:{nombre:'Cliente de prueba', tel:'3001234567', direccion:'Calle Prueba 123', ciudad:'Barranquilla', notas:''},
+      usuarioNombre: session?session.usuarioNombre:'',
+      items:[{cantidad:1, nombre:'Producto de prueba', precio:50000, costo:32000, mayorista:38000}]
+    };
+    document.getElementById('ne-msg').innerHTML='<div class="callout"><span class="spin" style="display:inline-block;vertical-align:-2px"></span> Enviando prueba…</div>';
+    var res=await enviarEmailPedido(fake);
+    state.notifEmail=prev;
+    if(res.ok){
+      document.getElementById('ne-msg').innerHTML='<div class="callout">✅ ¡Prueba enviada! Revisa tu bandeja (y la carpeta de spam). Si no llega, verifica el email en Web3Forms primero.</div>';
+    } else {
+      var err=res.response&&res.response.message?res.response.message:(res.error||'error desconocido');
+      document.getElementById('ne-msg').innerHTML='<div class="callout warn">No se pudo enviar: '+esc(err)+'</div>';
+    }
+  }
+  function saveNotifs(){
+    var ne={
+      enabled: document.getElementById('ne-on').checked,
+      accessKey: (document.getElementById('ne-key').value||'').trim(),
+      extras: (document.getElementById('ne-extras').value||'').split(',').map(function(s){return s.trim();}).filter(Boolean)
+    };
+    state.notifEmail=Object.assign({destinatario:''}, ne);
+    closeModal(); scheduleSave();
+    showToast('Notificaciones guardadas',false);
+  }
 
   /* ---------- carrito / pedido ---------- */
   function addToCart(pid){
@@ -1565,6 +1684,13 @@ body.role-trabajador .pexp{display:none !important}
     resetCurrentCart();
     closeCart(); render(); scheduleSave();
     showToast('Pedido guardado ✓',false);
+    // Notificar por email (fire and forget — no bloquea al usuario)
+    (function(){
+      enviarEmailPedido(order).then(function(res){
+        if(res && res.ok) showToast('📧 Notificación enviada',false);
+        // Si falla silenciosamente: el pedido igual quedó guardado
+      });
+    })();
   }
 
   /* ---------- historial ---------- */
