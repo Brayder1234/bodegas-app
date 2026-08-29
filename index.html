@@ -1127,11 +1127,16 @@ select.sort{padding:10px 12px; border-radius:10px; border:1px solid var(--border
     if(!num || num.length<10){ showToast('Número inválido — revísalo en Bodegas',false); return; }
     var lines=['Hola! Me gustaría hacer el siguiente pedido:',''];
     g.items.forEach(function(it){
-      lines.push('• '+it.cantidad+'x '+it.p.nombre);
+      var sub=(it.costo||0)*it.cantidad;
+      var linea='• '+it.cantidad+'x '+it.p.nombre;
+      if(it.costo>0){
+        linea += ' — '+fmt(it.costo)+ (it.cantidad>1 ? ' c/u ('+fmt(sub)+')' : '');
+      }
+      lines.push(linea);
     });
     lines.push('');
     lines.push('Total unidades: '+g.unidades);
-    if(g.subCosto>0) lines.push('Total aprox: '+fmt(g.subCosto));
+    if(g.subCosto>0) lines.push('*Total: '+fmt(g.subCosto)+'*');
     lines.push('');
     lines.push('¿Me confirmas disponibilidad y forma de pago? Gracias!');
     var txt=lines.join('\n');
