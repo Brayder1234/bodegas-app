@@ -408,6 +408,7 @@ body.role-trabajador .prow{grid-template-columns:1fr 100px 44px}
   var conn='off';            // off | connecting | ok | saving | err
   var lastServerStamp=null;  // updated_at conocido del servidor
   var dirty=false, saveTimer=null, pollTimer=null;
+  var bootstrapping=false;   // esperando el primer pull del servidor
 
   /* tema */
   try{ var t=localStorage.getItem(THEME_KEY); if(t) document.documentElement.setAttribute('data-theme', t); }catch(e){}
@@ -579,6 +580,7 @@ body.role-trabajador .prow{grid-template-columns:1fr 100px 44px}
   function render(){
     applyRoleClass();
     if(!cfg){ renderSetup(); return; }
+    if(bootstrapping){ renderBootSplash(); return; }
     if(!session){ renderLogin(); return; }
     // valida que el usuario sigue existiendo (por si otro admin lo borró)
     if(!state.usuarios.find(function(u){return u.id===session.usuarioId;})){
@@ -793,6 +795,13 @@ body.role-trabajador .prow{grid-template-columns:1fr 100px 44px}
   }
 
   /* ---------- login ---------- */
+  function renderBootSplash(){
+    app.innerHTML='<div class="login-wrap"><div class="login-card" style="text-align:center; padding:40px 26px">'+
+      '<div class="spin" style="width:24px; height:24px; margin:0 auto 14px; color:var(--accent)"></div>'+
+      '<h1 style="font-size:19px; margin:0 0 4px">Cargando…</h1>'+
+      '<p class="lead" style="margin:0">Descargando la información de la plataforma.</p>'+
+    '</div></div>';
+  }
   function renderLogin(){
     var needsAdmin = !state.usuarios.length;
     app.innerHTML='<div class="login-wrap"><div class="login-card">'+
@@ -840,6 +849,17 @@ body.role-trabajador .prow{grid-template-columns:1fr 100px 44px}
     if(!name||name.length<2){ msg.innerHTML='<div class="callout warn">Escribe un nombre de usuario (mínimo 2 letras).</div>'; return; }
     if(pwd.length<4){ msg.innerHTML='<div class="callout warn">La contraseña debe tener al menos 4 caracteres.</div>'; return; }
     if(pwd!==pwd2){ msg.innerHTML='<div class="callout warn">Las contraseñas no coinciden.</div>'; return; }
+    msg.innerHTML='<div class="callout"><span class="spin" style="display:inline-block;vertical-align:-2px"></span> Verificando…</div>';
+    // Anti-race: pull antes de crear para no pisar usuarios existentes
+    try{ await pullFromServer(false); }catch(e){}
+    if(state.usuarios.length){
+      // Ya hay usuarios registrados — pasar a modo login
+      renderLogin();
+      var m2=document.getElementById('lg-msg');
+      if(m2) m2.innerHTML='<div class="callout warn">Ya existe una cuenta creada. Inicia sesión con tu usuario y contraseña.</div>';
+      var n=document.getElementById('lg-name'); if(n){ n.value=name; var p=document.getElementById('lg-pwd'); if(p){ p.value=pwd; p.focus(); } }
+      return;
+    }
     msg.innerHTML='<div class="callout"><span class="spin" style="display:inline-block;vertical-align:-2px"></span> Creando…</div>';
     var salt=randSalt(); var hash=await hashPwd(pwd, salt);
     var u={id:uidUser(), nombre:name, salt:salt, hash:hash, role:'admin', createdAt:new Date().toISOString()};
@@ -1543,10 +1563,17 @@ body.role-trabajador .prow{grid-template-columns:1fr 100px 44px}
   var cached=loadCache(); if(cached) state=sanitize(cached);
   if(!cfg){ render(); }
   else{
+    // Sólo mostrar el splash si NO hay datos locales confiables aún
+    // (sin usuarios cargados y sin sesión previa). Si ya hay cache con usuarios,
+    // dejamos que la app abra al instante y el pull sincroniza en background.
+    var needsBootstrap = !state.usuarios.length && !session;
+    if(needsBootstrap) bootstrapping=true;
     setConn('connecting'); render();
     (async function(){
-      try{ await pullFromServer(false); setConn('ok'); render(); startPolling(); }
-      catch(e){ setConn('err'); showToast('Sin conexión — usando copia local',false); render(); startPolling(); }
+      try{ await pullFromServer(false); setConn('ok'); }
+      catch(e){ setConn('err'); showToast('Sin conexión — usando copia local',false); }
+      bootstrapping=false;
+      render(); startPolling();
     })();
   }
 })();
