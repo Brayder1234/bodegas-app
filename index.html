@@ -1206,6 +1206,14 @@ body.role-trabajador .prow{grid-template-columns:1fr 100px 44px}
     }
   });
   document.addEventListener('keydown',function(e){ if(e.key==='Escape'){ closeModal(); closeCart(); document.querySelectorAll('.pact.open').forEach(function(el){el.classList.remove('open');}); } });
+  // Cierre global de modales: cualquier [data-role="close"] o click en scrim
+  document.addEventListener('click', function(e){
+    var closer = e.target.closest('[data-role="close"]');
+    if(closer){ closeModal(); return; }
+  });
+  document.addEventListener('mousedown', function(e){
+    if(e.target && e.target.matches && e.target.matches('.scrim[data-role="scrim"]')) closeModal();
+  });
   document.addEventListener('click',function(e){ if(!e.target.closest('.pact')) document.querySelectorAll('.pact.open').forEach(function(el){el.classList.remove('open');}); }, true);
 
   function toggleTheme(){ var cur=document.documentElement.getAttribute('data-theme'); var next; if(cur==='dark') next='light'; else if(cur==='light') next='dark'; else next=window.matchMedia('(prefers-color-scheme: dark)').matches?'light':'dark'; document.documentElement.setAttribute('data-theme',next); try{ localStorage.setItem(THEME_KEY,next); }catch(e){} }
