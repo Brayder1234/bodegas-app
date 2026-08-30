@@ -584,6 +584,22 @@ body.role-trabajador .pexp{display:none !important}
     }
   }
 
+  /* ---------- ganancia real del admin ---------- */
+  // Cuánto gana el DUEÑO (admin) por un pedido:
+  //  · si lo hizo un admin → gana todo (venta cliente - costo bodega)
+  //  · si lo hizo un trabajador → gana solo la empresa (mayorista - costo bodega)
+  function gananciaAdminDe(o){
+    var u=state.usuarios.find(function(x){return x.id===o.usuarioId;});
+    var esAdmin = u && u.role==='admin';
+    if(esAdmin){
+      return (o.gananciaTotal!=null) ? o.gananciaTotal : ((o.ventaTotal||0)-(o.costoTotal||0));
+    }
+    // Trabajador o usuario desconocido → solo la ganancia de la empresa
+    if(o.gananciaEmpresa!=null) return o.gananciaEmpresa;
+    return (o.mayoristaTotal||0) - (o.costoTotal||0);
+  }
+  function gananciaAdminAll(list){ return list.reduce(function(a,o){return a+gananciaAdminDe(o);},0); }
+
   /* ---------- resumen ---------- */
   function summary(){
     var margins=[], low=0;
@@ -665,8 +681,26 @@ body.role-trabajador .pexp{display:none !important}
       : 'Arma tus pedidos y envíalos por WhatsApp a cada bodega.';
     var statsHTML;
     if(admin){
-      statsHTML='<div class="stats">'+stat('Productos',s.nprod)+stat('Bodegas',s.nbod)+stat('Margen prom.',s.avg==null?'—':pct(s.avg))+
-        '<div class="stat alert'+alertZero+'"><div class="rail"></div><div class="k">Margen bajo</div><div class="v num">'+s.low+'</div></div></div>';
+      var mes=new Date().toISOString().slice(0,7);
+      var pedMes=state.pedidos.filter(function(o){return (o.fecha||'').slice(0,7)===mes;});
+      var gMes=gananciaAdminAll(pedMes);
+      var gTot=gananciaAdminAll(state.pedidos);
+      function bigStat(k,v,cls){
+        return '<div class="stat '+(cls||'')+'"><div class="rail" style="background:var(--good)"></div>'+
+          '<div class="k">'+esc(k)+'</div>'+
+          '<div class="v num" style="color:var(--good); font-size:22px">'+esc(v)+'</div></div>';
+      }
+      statsHTML='<div class="stats">'+
+        stat('Productos',s.nprod)+
+        stat('Pedidos ('+pedMes.length+' mes)', state.pedidos.length)+
+        bigStat('Mi ganancia (mes)', fmt(gMes))+
+        bigStat('Mi ganancia total', fmt(gTot))+
+      '</div>'+
+      '<div class="hint" style="margin:-8px 2px 16px; display:flex; gap:14px; flex-wrap:wrap">'+
+        '<span>🏬 '+s.nbod+' bodegas</span>'+
+        (s.avg!=null?'<span>margen prom. '+pct(s.avg)+'</span>':'')+
+        (s.low>0?'<span style="color:var(--bad)">⚠ '+s.low+' con margen bajo</span>':'<span style="color:var(--good)">✓ sin productos con margen bajo</span>')+
+      '</div>';
     }else{
       // trabajador: sin datos financieros; solo cuántos hay y su propio historial
       var mine=state.pedidos.filter(function(o){return o.usuarioId===session.usuarioId;});
@@ -1760,7 +1794,7 @@ body.role-trabajador .pexp{display:none !important}
     var mesList=list.filter(function(o){return (o.fecha||'').slice(0,7)===mes;});
     function sumV(a){return a.reduce(function(x,o){return x+(o.ventaTotal||0);},0);}
     function sumG(a){return a.reduce(function(x,o){
-      if(admin) return x+(o.gananciaTotal||o.ganancia||0);
+      if(admin) return x + gananciaAdminDe(o);
       var mT=o.mayoristaTotal||0;
       var g=(o.gananciaTrabajador!=null)?o.gananciaTrabajador:((o.ventaTotal||0)-mT);
       return x+g;
@@ -1791,7 +1825,7 @@ body.role-trabajador .pexp{display:none !important}
       body=list.map(function(o){
         var mayoT=o.mayoristaTotal||0;
         var gTrab=(o.gananciaTrabajador!=null)?o.gananciaTrabajador:((o.ventaTotal||0)-mayoT);
-        var gShown = admin ? (o.gananciaTotal||o.ganancia||0) : gTrab;
+        var gShown = admin ? gananciaAdminDe(o) : gTrab;
         var mg=o.ventaTotal?Math.round(gShown/o.ventaTotal*100):0;
         var fec=new Date(o.fecha||Date.now());
         var fs=fec.toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric'})+' '+fec.toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'});
@@ -1856,10 +1890,16 @@ body.role-trabajador .pexp{display:none !important}
         '<div style="overflow-x:auto"><table class="btable" style="min-width:'+(admin?560:420)+'px"><thead><tr>'+head+'</tr></thead><tbody>'+lines+'</tbody></table></div>'+
         '<div class="side-tot" style="border-radius:10px">'+
           (admin
-            ? '<div class="r"><span>Costo (bodegas)</span><b class="num">'+fmt(o.costoTotal)+'</b></div>'+
-              '<div class="r"><span>Mayorista</span><b class="num">'+fmt(mayoT)+'</b></div>'+
-              '<div class="r"><span>Al cliente</span><b class="num">'+fmt(o.ventaTotal)+'</b></div>'+
-              '<div class="r gain"><span>Ganancia total</span><span class="val '+mgClass(mgT)+'">'+fmt(o.gananciaTotal||o.ganancia||0)+' ('+pct(mgT)+')</span></div>'
+            ? (function(){
+                var gAdm=gananciaAdminDe(o);
+                var mgAdm=o.ventaTotal?Math.round(gAdm/o.ventaTotal*100):0;
+                var hechoTrab = o.usuarioNombre && (function(){var u=state.usuarios.find(function(x){return x.id===o.usuarioId;}); return u && u.role==='trabajador';})();
+                return '<div class="r"><span>Costo (bodegas)</span><b class="num">'+fmt(o.costoTotal)+'</b></div>'+
+                  '<div class="r"><span>Mayorista</span><b class="num">'+fmt(mayoT)+'</b></div>'+
+                  '<div class="r"><span>Al cliente</span><b class="num">'+fmt(o.ventaTotal)+'</b></div>'+
+                  (hechoTrab?'<div class="r" style="color:var(--muted);font-size:12.5px"><span>↳ Ganancia trabajador</span><b class="num">'+fmt(gTrab)+'</b></div>':'')+
+                  '<div class="r gain"><span>Mi ganancia</span><span class="val '+mgClass(mgAdm)+'">'+fmt(gAdm)+' ('+pct(mgAdm)+')</span></div>';
+              })()
             : '<div class="r"><span>Mi costo (mayorista)</span><b class="num">'+fmt(mayoT)+'</b></div>'+
               '<div class="r"><span>Al cliente</span><b class="num">'+fmt(o.ventaTotal)+'</b></div>'+
               '<div class="r gain"><span>Mi ganancia</span><span class="val '+mgClass(mgTr)+'">'+fmt(gTrab)+' ('+pct(mgTr)+')</span></div>'
