@@ -683,8 +683,8 @@ body.role-trabajador .pexp{display:none !important}
     if(admin){
       var mes=new Date().toISOString().slice(0,7);
       var pedMes=state.pedidos.filter(function(o){return (o.fecha||'').slice(0,7)===mes;});
-      var gMes=gananciaAdminAll(pedMes);
       var gTot=gananciaAdminAll(state.pedidos);
+      var nTrab=state.usuarios.filter(function(u){return u.role==='trabajador';}).length;
       function bigStat(k,v,cls){
         return '<div class="stat '+(cls||'')+'"><div class="rail" style="background:var(--good)"></div>'+
           '<div class="k">'+esc(k)+'</div>'+
@@ -693,7 +693,7 @@ body.role-trabajador .pexp{display:none !important}
       statsHTML='<div class="stats">'+
         stat('Productos',s.nprod)+
         stat('Pedidos ('+pedMes.length+' mes)', state.pedidos.length)+
-        bigStat('Mi ganancia (mes)', fmt(gMes))+
+        stat('Trabajadores', nTrab)+
         bigStat('Mi ganancia total', fmt(gTot))+
       '</div>'+
       '<div class="hint" style="margin:-8px 2px 16px; display:flex; gap:14px; flex-wrap:wrap">'+
