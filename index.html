@@ -365,6 +365,37 @@ body.role-trabajador .pexp{display:none !important}
 .mini-add.in{background:var(--accent); color:#fff}
 .mini-add.in::before{content:"✓ "}
 
+/* Chips de estado (etapas del pedido/venta) */
+.estado-row{display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-top:4px}
+.est-chip{
+  display:inline-flex; align-items:center; gap:5px; font-size:11.5px; font-weight:700;
+  padding:4px 9px; border-radius:999px; border:1px solid var(--border);
+  background:var(--surface-2); color:var(--muted); cursor:default; transition:.15s;
+  text-transform:uppercase; letter-spacing:.02em;
+}
+.est-chip .dot{width:7px; height:7px; border-radius:50%; background:var(--faint); flex-shrink:0}
+.est-chip.done{background:var(--good-soft); color:var(--good); border-color:var(--good)}
+.est-chip.done .dot{background:var(--good)}
+.est-chip.pending{background:var(--surface); color:var(--faint)}
+.est-chip.action{background:var(--warn-soft); color:var(--warn); border-color:var(--warn); cursor:pointer}
+.est-chip.action:hover{filter:brightness(1.05)}
+.est-chip.action .dot{background:var(--warn); animation:pulse 1.4s ease-in-out infinite}
+.est-arrow{color:var(--faint); font-size:12px; padding:0 1px}
+
+/* Estado en detalle: timeline compacto con fechas */
+.est-timeline{background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:12px 14px; font-size:13px}
+.est-timeline .row{display:flex; align-items:center; gap:10px; padding:5px 0}
+.est-timeline .row.done .icon{background:var(--good); color:#fff}
+.est-timeline .row.pending .icon{background:var(--surface); color:var(--faint); border:1px dashed var(--border-strong)}
+.est-timeline .icon{width:22px; height:22px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:12px; font-weight:800; flex-shrink:0}
+.est-timeline .label{flex:1; color:var(--muted)}
+.est-timeline .row.done .label{color:var(--ink); font-weight:600}
+.est-timeline .when{color:var(--faint); font-size:12px}
+.est-timeline .act{margin-left:auto}
+.est-timeline .act button{background:var(--warn); color:#fff; border:none; padding:5px 10px; border-radius:7px; font-size:12px; font-weight:700; cursor:pointer}
+.est-timeline .act button:hover{filter:brightness(1.08)}
+.est-timeline .undo{background:transparent!important; color:var(--faint)!important; border:1px solid var(--border)!important; font-weight:600!important}
+
 /* Historial */
 .hist-item{
   display:grid; grid-template-columns:1fr auto; gap:6px 12px; padding:12px 14px;
@@ -584,6 +615,60 @@ body.role-trabajador .pexp{display:none !important}
     }
   }
 
+  /* ---------- estados del pedido/venta ---------- */
+  function ensureEstado(o){
+    if(!o.estado || typeof o.estado!=='object'){
+      o.estado={ realizado:{at:o.fecha||new Date().toISOString(), by:o.usuarioNombre||''}, envio:null, venta:null };
+    }
+    if(!o.estado.realizado) o.estado.realizado={at:o.fecha||new Date().toISOString(), by:o.usuarioNombre||''};
+    if(o.estado.envio===undefined) o.estado.envio=null;
+    if(o.estado.venta===undefined) o.estado.venta=null;
+    return o.estado;
+  }
+  function estadoStage(o){
+    // Devuelve 0..2: 0=solo realizado, 1=envio, 2=venta (todo hecho)
+    ensureEstado(o);
+    if(o.estado.venta) return 2;
+    if(o.estado.envio) return 1;
+    return 0;
+  }
+  function toggleEtapa(o, etapa){
+    ensureEstado(o);
+    var now=new Date().toISOString();
+    var by=session ? session.usuarioNombre : '';
+    if(etapa==='envio'){
+      if(o.estado.envio){
+        // Solo se puede desmarcar si venta no está confirmada
+        if(o.estado.venta){ showToast('Primero desmarca "Venta realizada"',false); return; }
+        o.estado.envio=null;
+      } else {
+        o.estado.envio={at:now, by:by};
+      }
+    } else if(etapa==='venta'){
+      if(o.estado.venta){
+        o.estado.venta=null;
+      } else {
+        // Confirmar venta requiere envío confirmado
+        if(!o.estado.envio) o.estado.envio={at:now, by:by};
+        o.estado.venta={at:now, by:by};
+      }
+    }
+    scheduleSave();
+  }
+
+  /* ---------- terminología según rol ---------- */
+  // Admin ve "Ventas", trabajador ve "Pedidos". Uso consistente en la UI.
+  function tPed(kind){
+    var admin=isAdmin();
+    switch(kind){
+      case 'SG': return admin ? 'Venta' : 'Pedido';
+      case 'PL': return admin ? 'Ventas' : 'Pedidos';
+      case 'sg': return admin ? 'venta' : 'pedido';
+      case 'pl': return admin ? 'ventas' : 'pedidos';
+    }
+    return 'Pedido';
+  }
+
   /* ---------- ganancia real del admin ---------- */
   // Cuánto gana el DUEÑO (admin) por un pedido:
   //  · si lo hizo un admin → gana todo (venta cliente - costo bodega)
@@ -692,7 +777,7 @@ body.role-trabajador .pexp{display:none !important}
       }
       statsHTML='<div class="stats">'+
         stat('Productos',s.nprod)+
-        stat('Pedidos ('+pedMes.length+' mes)', state.pedidos.length)+
+        stat('Ventas ('+pedMes.length+' mes)', state.pedidos.length)+
         stat('Trabajadores', nTrab)+
         bigStat('Mi ganancia total', fmt(gTot))+
       '</div>'+
@@ -1148,7 +1233,7 @@ body.role-trabajador .pexp{display:none !important}
           var admin=isAdmin();
           var mine=session?state.pedidos.filter(function(o){return o.usuarioId===session.usuarioId;}).length:0;
           var pedCount = admin ? state.pedidos.length : mine;
-          var pedLabel = admin ? 'Pedidos guardados' : 'Mis pedidos';
+          var pedLabel = admin ? 'Ventas guardadas' : 'Mis pedidos';
           return '<button class="btn ghost" data-act="history" style="justify-content:flex-start">📋 '+pedLabel+' ('+pedCount+')</button>'+
           (admin?'<button class="btn ghost" data-act="users" style="justify-content:flex-start">👥 Trabajadores ('+state.usuarios.length+')</button>':'')+
           (admin?'<button class="btn ghost" data-act="notifs" style="justify-content:flex-start">🔔 Notificaciones por email'+(state.notifEmail&&state.notifEmail.accessKey?' <span style="color:var(--good);font-size:11px;margin-left:auto">activas</span>':' <span style="color:var(--warn);font-size:11px;margin-left:auto">sin configurar</span>')+'</button>':'')+
@@ -1276,12 +1361,30 @@ body.role-trabajador .pexp{display:none !important}
       }
       else if(a==='us-pwd'){ changeUserPwd(u.id); }
     }
+    else if(a==='est-envio'||a==='est-venta'){
+      if(!isAdmin()) return;
+      var hi=e.target.closest('.hist-item'); if(!hi) return;
+      var oid=hi.getAttribute('data-oid');
+      var o=state.pedidos.find(function(x){return x.id===oid;}); if(!o) return;
+      toggleEtapa(o, a==='est-envio'?'envio':'venta');
+      openHistory();
+    }
+    else if(a==='est-envio-on'||a==='est-envio-off'||a==='est-venta-on'||a==='est-venta-off'){
+      if(!isAdmin()) return;
+      var modalOid=(document.querySelector('.modal [data-role="close"]')||{}).__oid;
+      // buscar el pedido por el título del modal: alternativa — guardar oid en un data-attr
+      var oid2=host.querySelector('.modal')?host.querySelector('.modal').getAttribute('data-oid'):null;
+      if(!oid2) return;
+      var oo=state.pedidos.find(function(x){return x.id===oid2;}); if(!oo) return;
+      toggleEtapa(oo, (a.indexOf('venta')>=0)?'venta':'envio');
+      historyDetail(oid2);
+    }
     else if(a==='hist-view'||a==='hist-reopen'||a==='hist-del'){
       var hi=e.target.closest('.hist-item'); if(!hi) return;
       var oid=hi.getAttribute('data-oid');
       if(a==='hist-view'){ historyDetail(oid); }
       else if(a==='hist-del'){
-        if(confirm('¿Eliminar este pedido del historial?')){
+        if(confirm('¿Eliminar esta '+tPed('sg')+' del historial?')){
           state.pedidos=state.pedidos.filter(function(x){return x.id!==oid;});
           openHistory(); scheduleSave();
         }
@@ -1757,21 +1860,24 @@ body.role-trabajador .pexp{display:none !important}
         cantidad:it.cantidad
       };
     });
+    var now=new Date().toISOString();
+    var byName = session ? session.usuarioNombre : '';
     var order={
       id:'o'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),
-      fecha:new Date().toISOString(),
+      fecha:now,
       cliente:{nombre:nom, tel:tel, direccion:dir, ciudad:ciu, notas:notas},
       items:items,
       costoTotal:t.costo, mayoristaTotal:t.mayorista, ventaTotal:t.venta,
       gananciaEmpresa:t.gananciaEmpresa, gananciaTrabajador:t.gananciaTrabajador, gananciaTotal:t.gananciaTotal,
       ganancia:t.gananciaTotal, // legacy
       unidades:t.unidades,
-      usuarioId: session?session.usuarioId:'', usuarioNombre: session?session.usuarioNombre:''
+      usuarioId: session?session.usuarioId:'', usuarioNombre: byName,
+      estado: { realizado:{at:now, by:byName}, envio:null, venta:null }
     };
     state.pedidos.unshift(order);
     resetCurrentCart();
     closeCart(); render(); scheduleSave();
-    showToast('Pedido guardado ✓',false);
+    showToast(tPed('SG')+' guardad'+(isAdmin()?'a':'o')+' ✓',false);
     // Notificar por email (fire and forget — no bloquea al usuario)
     (function(){
       enviarEmailPedido(order).then(function(res){
@@ -1813,16 +1919,17 @@ body.role-trabajador .pexp{display:none !important}
       '</div>';
     }
     head+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">'+
-      '<div class="stat"><div class="rail"></div><div class="k">Pedidos</div><div class="v num">'+list.length+'</div></div>'+
+      '<div class="stat"><div class="rail"></div><div class="k">'+(admin?'Ventas':'Pedidos')+'</div><div class="v num">'+list.length+'</div></div>'+
       '<div class="stat"><div class="rail"></div><div class="k">'+(admin?'Ventas mes':'Mis ventas mes')+'</div><div class="v num" style="font-size:19px">'+fmt(sumV(mesList))+'</div></div>'+
       '<div class="stat"><div class="rail"></div><div class="k">'+(admin?'Ganancia mes':'Mi ganancia mes')+'</div><div class="v num" style="font-size:19px">'+fmt(sumG(mesList))+'</div></div>'+
     '</div>';
     head+='<div class="hint">Hoy: '+hoyList.length+' pedido(s) · '+fmt(sumV(hoyList))+' en ventas · '+fmt(sumG(hoyList))+(admin?' de ganancia':' de tu ganancia')+'</div>';
     var body;
     if(!list.length){
-      body='<div class="side-empty" style="padding:36px 8px"><div class="em">📋</div><div style="font-weight:700;color:var(--ink)">Aún no hay pedidos</div><p style="font-size:13.5px">Cuando guardes tu primer pedido aparecerá aquí con toda su información.</p></div>';
+      body='<div class="side-empty" style="padding:36px 8px"><div class="em">📋</div><div style="font-weight:700;color:var(--ink)">Aún no hay '+tPed('pl')+'</div><p style="font-size:13.5px">Cuando guardes tu primera '+tPed('sg')+' aparecerá aquí con toda su información.</p></div>';
     }else{
       body=list.map(function(o){
+        ensureEstado(o);
         var mayoT=o.mayoristaTotal||0;
         var gTrab=(o.gananciaTrabajador!=null)?o.gananciaTrabajador:((o.ventaTotal||0)-mayoT);
         var gShown = admin ? gananciaAdminDe(o) : gTrab;
@@ -1832,10 +1939,20 @@ body.role-trabajador .pexp{display:none !important}
         var who = o.usuarioNombre ? ' · <span style="color:var(--accent);font-weight:700">👤 '+esc(o.usuarioNombre)+'</span>' : '';
         var ciudad = (o.cliente&&o.cliente.ciudad)?' · '+esc(o.cliente.ciudad):'';
         var gLabel = admin?'Ganancia':'Mi ganancia';
+        // Chips de estado (3 etapas)
+        var e1 = 'done', e2 = o.estado.envio ? 'done' : (admin?'action':'pending'), e3 = o.estado.venta ? 'done' : (admin && o.estado.envio ? 'action' : 'pending');
+        var chips = '<div class="estado-row">'+
+          '<span class="est-chip done"><span class="dot"></span>Realizado</span>'+
+          '<span class="est-arrow">›</span>'+
+          '<span class="est-chip '+e2+'"'+(admin?' data-act="est-envio"':'')+'><span class="dot"></span>Envío '+(o.estado.envio?'✓':(admin?'confirmar':'pendiente'))+'</span>'+
+          '<span class="est-arrow">›</span>'+
+          '<span class="est-chip '+e3+'"'+(admin?' data-act="est-venta"':'')+'><span class="dot"></span>'+(admin?'Venta':'Pedido')+' '+(o.estado.venta?'✓':(admin?'confirmar':'pendiente'))+'</span>'+
+        '</div>';
         return '<div class="hist-item" data-oid="'+esc(o.id)+'">'+
           '<div class="hd"><span class="cli">'+esc(o.cliente&&o.cliente.nombre?o.cliente.nombre:'(sin cliente)')+'</span><span class="fec">'+esc(fs)+'</span></div>'+
           '<div class="tt">'+fmt(o.ventaTotal)+'<div class="mini">'+gLabel+' '+fmt(gShown)+' · <span class="mg '+mgClass(mg)+'">'+pct(mg)+'</span></div></div>'+
           '<div class="sm">'+o.unidades+' unidad(es) · '+o.items.length+' producto(s)'+(o.cliente&&o.cliente.tel?' · '+esc(o.cliente.tel):'')+ciudad+who+'</div>'+
+          chips+
           '<div class="acts">'+
             '<button class="btn ghost" data-act="hist-view">Ver detalle</button>'+
             '<button class="btn ghost" data-act="hist-reopen">Reabrir</button>'+
@@ -1846,7 +1963,7 @@ body.role-trabajador .pexp{display:none !important}
     }
     head+='</div>';
     host.innerHTML='<div class="scrim" data-role="scrim"><div class="modal" role="dialog" aria-modal="true" style="width:min(620px,100%)">'+
-      '<div class="modal-hd"><h2>📋 '+(admin?'Pedidos guardados':'Mis pedidos')+'</h2><button class="mini" data-role="close">×</button></div>'+
+      '<div class="modal-hd"><h2>📋 '+(admin?'Ventas guardadas':'Mis pedidos')+'</h2><button class="mini" data-role="close">×</button></div>'+
       head+
       '<div style="padding:0 20px 8px">'+body+'</div>'+
       '<div class="modal-ft"><button class="btn ghost" data-role="close" style="margin-left:auto">Cerrar</button></div>'+
@@ -1876,17 +1993,34 @@ body.role-trabajador .pexp{display:none !important}
       (cli.tel?'<br>📱 '+esc(cli.tel):'')+
       (cli.notas?'<br>📝 '+esc(cli.notas):'')+
     '</div>';
+    // Timeline de estado
+    ensureEstado(o);
+    function fmtWhen(iso){ if(!iso) return ''; var d=new Date(iso); return d.toLocaleDateString('es-CO',{day:'2-digit',month:'short'})+' '+d.toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'}); }
+    var lbl2=admin?'Venta realizada':'Pedido realizado';
+    var envioBtn = admin ? (o.estado.envio
+      ? '<button class="undo" data-act="est-envio-off">Deshacer</button>'
+      : '<button data-act="est-envio-on">Confirmar envío</button>') : '';
+    var ventaBtn = admin ? (o.estado.venta
+      ? '<button class="undo" data-act="est-venta-off">Deshacer</button>'
+      : (o.estado.envio ? '<button data-act="est-venta-on">Confirmar '+(admin?'venta':'entrega')+'</button>' : '')) : '';
+    var timeline=
+      '<div class="est-timeline">'+
+        '<div class="row done"><span class="icon">✓</span><span class="label">'+tPed('SG')+' realizada</span><span class="when">'+esc(fmtWhen(o.estado.realizado.at))+(o.estado.realizado.by?' · '+esc(o.estado.realizado.by):'')+'</span></div>'+
+        '<div class="row '+(o.estado.envio?'done':'pending')+'"><span class="icon">'+(o.estado.envio?'✓':'2')+'</span><span class="label">Envío confirmado</span><span class="when">'+esc(o.estado.envio?fmtWhen(o.estado.envio.at)+(o.estado.envio.by?' · '+esc(o.estado.envio.by):''):'pendiente')+'</span>'+(envioBtn?'<span class="act">'+envioBtn+'</span>':'')+'</div>'+
+        '<div class="row '+(o.estado.venta?'done':'pending')+'"><span class="icon">'+(o.estado.venta?'✓':'3')+'</span><span class="label">'+esc(lbl2)+'</span><span class="when">'+esc(o.estado.venta?fmtWhen(o.estado.venta.at)+(o.estado.venta.by?' · '+esc(o.estado.venta.by):''):'pendiente')+'</span>'+(ventaBtn?'<span class="act">'+ventaBtn+'</span>':'')+'</div>'+
+      '</div>';
     var mgT=o.ventaTotal?Math.round((o.gananciaTotal||o.ganancia||0)/o.ventaTotal*100):0;
     var mgTr=o.ventaTotal?Math.round(gTrab/o.ventaTotal*100):0;
     var head=admin?'<th>Producto</th><th class="r">Cant.</th><th class="r">Costo</th><th class="r">Mayor.</th><th class="r">Cliente</th><th class="r">Ganancia</th>'
                  :'<th>Producto</th><th class="r">Cant.</th><th class="r">Mi costo</th><th class="r">Al cliente</th><th class="r">Mi ganancia</th>';
-    host.innerHTML='<div class="scrim" data-role="scrim"><div class="modal" role="dialog" aria-modal="true" style="width:min(700px,100%)">'+
-      '<div class="modal-hd"><h2>Pedido</h2><button class="mini" data-role="close">×</button></div>'+
+    host.innerHTML='<div class="scrim" data-role="scrim"><div class="modal" role="dialog" aria-modal="true" data-oid="'+esc(o.id)+'" style="width:min(700px,100%)">'+
+      '<div class="modal-hd"><h2>'+tPed('SG')+'</h2><button class="mini" data-role="close">×</button></div>'+
       '<div class="modal-bd">'+
         '<div><b>'+esc(cli.nombre||'(sin cliente)')+'</b>'+
           (o.usuarioNombre?' <span class="hint">· realizado por 👤 '+esc(o.usuarioNombre)+'</span>':'')+
           '<div class="hint">'+fec.toLocaleString('es-CO')+'</div></div>'+
         envioBlock+
+        timeline+
         '<div style="overflow-x:auto"><table class="btable" style="min-width:'+(admin?560:420)+'px"><thead><tr>'+head+'</tr></thead><tbody>'+lines+'</tbody></table></div>'+
         '<div class="side-tot" style="border-radius:10px">'+
           (admin
