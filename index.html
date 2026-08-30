@@ -501,7 +501,8 @@ body.role-trabajador .pexp{display:none !important}
         accessKey: ne.accessKey || '',
         destinatario: ne.destinatario || '',
         fromName: ne.fromName || 'VELORA',
-        extras: Array.isArray(ne.extras) ? ne.extras : []
+        extras: Array.isArray(ne.extras) ? ne.extras : [],
+        keys: Array.isArray(ne.keys) ? ne.keys : []  // lista de {label, key} para múltiples destinatarios
       }
     };
   }
@@ -1322,55 +1323,61 @@ body.role-trabajador .pexp{display:none !important}
 
   async function enviarEmailPedido(order){
     var ne=state.notifEmail||{};
-    if(!ne.enabled || !ne.accessKey){ return {skipped:true}; }
+    if(!ne.enabled){ return {skipped:true}; }
     var fromName=(ne.fromName||'VELORA').trim() || 'VELORA';
-    var extras=(ne.extras||[]).map(function(s){return String(s||'').trim();}).filter(function(s){return s && s.indexOf('@')>0;});
+    // Junto todas las keys: la principal + las adicionales del array keys[]
+    var allKeys=[];
+    if(ne.accessKey) allKeys.push({label:'principal', key:ne.accessKey});
+    (ne.keys||[]).forEach(function(k){
+      if(k && k.key && String(k.key).trim()) allKeys.push({label:(k.label||'admin').trim(), key:String(k.key).trim()});
+    });
+    if(!allKeys.length){ return {skipped:true, reason:'no-keys'}; }
     var subject='🛍️ '+fromName+' — Nuevo pedido — '+((order.cliente&&order.cliente.nombre)||'sin cliente')+' — '+fmt(order.ventaTotal);
-    var body={
-      access_key: ne.accessKey,
-      subject: subject,
-      from_name: fromName,
-      message: pedidoToEmailText(order)
-    };
-    if(extras.length){ body.cc = extras.join(','); body.bcc = extras.join(','); }
-    try{
-      var r=await fetch('https://api.web3forms.com/submit', {
-        method:'POST',
-        headers:{'Content-Type':'application/json', 'Accept':'application/json'},
-        body: JSON.stringify(body)
-      });
-      var j=await r.json().catch(function(){return {};});
-      return {ok: r.ok && j.success!==false, response:j, cc:extras};
-    }catch(e){ return {ok:false, error:String(e)}; }
+    var results=[];
+    for(var i=0;i<allKeys.length;i++){
+      var body={access_key: allKeys[i].key, subject: subject, from_name: fromName, message: pedidoToEmailText(order)};
+      try{
+        var r=await fetch('https://api.web3forms.com/submit', {
+          method:'POST',
+          headers:{'Content-Type':'application/json', 'Accept':'application/json'},
+          body: JSON.stringify(body)
+        });
+        var j=await r.json().catch(function(){return {};});
+        results.push({label:allKeys[i].label, ok:r.ok && j.success!==false, response:j});
+      }catch(e){ results.push({label:allKeys[i].label, ok:false, error:String(e)}); }
+    }
+    var allOk=results.every(function(x){return x.ok;});
+    return {ok:allOk, results:results, count:allKeys.length};
   }
 
   /* ---------- panel de notificaciones (admin) ---------- */
   function openNotifs(){
     if(!isAdmin()){ showToast('Solo el admin puede configurar esto', false); return; }
-    var ne=state.notifEmail||{enabled:true, accessKey:'', extras:[], fromName:'VELORA'};
-    var extrasList = (ne.extras||[]).filter(function(x){return x && String(x).trim();});
-    var extrasHtml = extrasList.length
-      ? extrasList.map(function(em,i){
-          return '<div class="list-row" data-i="'+i+'"><span style="flex:1; font-size:14px">📧 '+esc(em)+'</span><button class="mini del" data-role="ne-del" title="Quitar">🗑</button></div>';
+    var ne=state.notifEmail||{enabled:true, accessKey:'', keys:[], fromName:'VELORA'};
+    var keys=(ne.keys||[]).filter(function(k){return k && k.key;});
+    var keysHtml = keys.length
+      ? keys.map(function(k,i){
+          return '<div class="list-row" data-i="'+i+'" style="flex-direction:column;align-items:stretch;gap:6px">'+
+            '<div style="display:flex;align-items:center;gap:8px"><span style="flex:1;font-weight:700;font-size:14px">📧 '+esc(k.label||'admin')+'</span><button class="mini del" data-role="ne-del" title="Quitar">🗑</button></div>'+
+            '<code style="font-size:11px;color:var(--faint);word-break:break-all;font-family:monospace">'+esc(k.key.substring(0,8))+'…'+esc(k.key.substring(k.key.length-6))+'</code>'+
+          '</div>';
         }).join('')
-      : '<p class="hint" style="margin:4px 0">Aún no hay copias configuradas. Agrega abajo el email de otros admins.</p>';
-    host.innerHTML='<div class="scrim" data-role="scrim"><div class="modal" role="dialog" aria-modal="true" style="width:min(540px,100%)">'+
+      : '<p class="hint" style="margin:4px 0">Aún no hay admins adicionales. Añade abajo la Access Key de otro admin (cada uno crea su propia key gratis en web3forms.com).</p>';
+    host.innerHTML='<div class="scrim" data-role="scrim"><div class="modal" role="dialog" aria-modal="true" style="width:min(560px,100%)">'+
       '<div class="modal-hd"><h2>🔔 Notificaciones por email</h2><button class="mini" data-role="close">×</button></div>'+
       '<div class="modal-bd">'+
-        '<p class="hint">Cada pedido guardado envía un email con el detalle al correo con el que registraste la Access Key en Web3Forms.</p>'+
-        '<div class="callout" style="background:var(--warn-soft);color:var(--warn);border:1px solid var(--warn);border-radius:8px;padding:9px 12px;font-size:12.5px;line-height:1.5;margin-bottom:6px">'+
-          '<b>💡 Para varios admins</b> es más confiable agregarlos en <a href="https://app.web3forms.com" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">app.web3forms.com</a> → Settings → Notification Emails. Los CC de aquí abajo pueden fallar en plan free.'+
-        '</div>'+
+        '<p class="hint">Cada pedido guardado envía un email a cada Access Key configurada. Añade una key por cada admin (cada uno la crea con su email en <a href="https://web3forms.com" target="_blank" rel="noopener" style="color:var(--accent)">web3forms.com</a>).</p>'+
         '<div class="field"><label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="ne-on"'+(ne.enabled?' checked':'')+'> Enviar email por cada pedido</label></div>'+
         '<div class="f2">'+
           '<div class="field"><label>Nombre remitente</label><input type="text" id="ne-from" value="'+esc(ne.fromName||'VELORA')+'" placeholder="VELORA"><span class="help">Aparece como "De: [nombre]"</span></div>'+
-          '<div class="field"><label>Access Key de Web3Forms</label><input type="text" id="ne-key" value="'+esc(ne.accessKey||'')+'" placeholder="ej: 70942b0b-..."><span class="help">Se guarda en la nube</span></div>'+
+          '<div class="field"><label>Access Key principal</label><input type="text" id="ne-key" value="'+esc(ne.accessKey||'')+'" placeholder="ej: 70942b0b-..."><span class="help">Tu email registrado en Web3Forms</span></div>'+
         '</div>'+
-        '<div class="sub" style="margin-top:8px">Admins que reciben cada pedido</div>'+
-        '<div data-role="ne-list">'+extrasHtml+'</div>'+
-        '<div class="list-row" style="border:none;padding-top:8px">'+
-          '<input type="email" id="ne-new" placeholder="nuevo-admin@ejemplo.com" style="flex:1;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface-2);color:var(--ink);font-size:14px">'+
-          '<button class="btn ghost" data-act="ne-add">＋ Añadir</button>'+
+        '<div class="sub" style="margin-top:8px">Admins adicionales que reciben cada pedido</div>'+
+        '<div data-role="ne-list">'+keysHtml+'</div>'+
+        '<div style="display:flex;flex-direction:column;gap:6px;padding-top:8px;border-top:1px solid var(--border)">'+
+          '<input type="text" id="ne-new-label" placeholder="Nombre del admin (ej: Camila)" style="padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface-2);color:var(--ink);font-size:14px">'+
+          '<input type="text" id="ne-new-key" placeholder="Su Access Key (ej: 62f6bcf7-...)" style="padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface-2);color:var(--ink);font-size:14px">'+
+          '<button class="btn ghost" data-act="ne-add" style="align-self:flex-end">＋ Añadir admin</button>'+
         '</div>'+
         '<div id="ne-msg"></div>'+
       '</div>'+
@@ -1381,27 +1388,21 @@ body.role-trabajador .pexp{display:none !important}
       '</div>'+
     '</div></div>';
   }
-  function neCollectExtras(){
-    var rows=document.querySelectorAll('[data-role="ne-list"] .list-row');
-    var out=[];
-    rows.forEach(function(r){ var t=r.querySelector('span')?r.querySelector('span').innerText.replace(/^📧\s*/,'').trim():''; if(t) out.push(t); });
-    return out;
-  }
   function neAddExtra(){
-    var inp=document.getElementById('ne-new'); var v=(inp.value||'').trim();
-    if(!v || v.indexOf('@')<1){ showToast('Email inválido',false); return; }
-    var extras=neCollectExtras();
-    if(extras.indexOf(v)>=0){ showToast('Ya está en la lista',false); return; }
-    extras.push(v);
-    state.notifEmail = Object.assign({enabled:true, accessKey:'', fromName:'VELORA'}, state.notifEmail||{}, {extras:extras});
-    inp.value='';
-    // re-render solo la lista sin cerrar el modal
+    var lbl=(document.getElementById('ne-new-label').value||'').trim();
+    var key=(document.getElementById('ne-new-key').value||'').trim();
+    if(!key){ showToast('Pega la Access Key',false); return; }
+    if(key.length<20){ showToast('La Access Key parece incompleta',false); return; }
+    var keys=(state.notifEmail && state.notifEmail.keys || []).slice();
+    if(keys.some(function(k){return k.key===key;})){ showToast('Esa key ya está agregada',false); return; }
+    keys.push({label: lbl||'admin', key:key});
+    state.notifEmail = Object.assign({enabled:true, accessKey:'', fromName:'VELORA'}, state.notifEmail||{}, {keys:keys});
     openNotifs();
   }
   function neDelExtra(idx){
-    var extras=(state.notifEmail && state.notifEmail.extras || []).slice();
-    extras.splice(idx,1);
-    state.notifEmail = Object.assign({enabled:true, accessKey:'', fromName:'VELORA'}, state.notifEmail||{}, {extras:extras});
+    var keys=(state.notifEmail && state.notifEmail.keys || []).slice();
+    keys.splice(idx,1);
+    state.notifEmail = Object.assign({enabled:true, accessKey:'', fromName:'VELORA'}, state.notifEmail||{}, {keys:keys});
     openNotifs();
   }
 
@@ -1431,11 +1432,14 @@ body.role-trabajador .pexp{display:none !important}
     }
   }
   function saveNotifs(){
+    // El array de keys ya se mantiene en state.notifEmail.keys por las funciones neAddExtra/neDelExtra
+    var current=state.notifEmail||{};
     var ne={
       enabled: document.getElementById('ne-on').checked,
       accessKey: (document.getElementById('ne-key').value||'').trim(),
       fromName: (document.getElementById('ne-from').value||'VELORA').trim() || 'VELORA',
-      extras: neCollectExtras()
+      keys: current.keys||[],
+      extras: current.extras||[]  // conservado por compatibilidad
     };
     state.notifEmail=Object.assign({destinatario:''}, ne);
     closeModal(); scheduleSave();
