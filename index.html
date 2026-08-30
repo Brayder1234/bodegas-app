@@ -500,6 +500,7 @@ body.role-trabajador .pexp{display:none !important}
         enabled: ne.enabled!==false,
         accessKey: ne.accessKey || '',
         destinatario: ne.destinatario || '',
+        fromName: ne.fromName || 'VELORA',
         extras: Array.isArray(ne.extras) ? ne.extras : []
       }
     };
@@ -1220,6 +1221,7 @@ body.role-trabajador .pexp{display:none !important}
     else if(a==='notifs'){ closeModal(); openNotifs(); }
     else if(a==='ne-test'){ testNotif(); }
     else if(a==='ne-save'){ saveNotifs(); }
+    else if(a==='ne-add'){ neAddExtra(); }
     else if(a==='logout'){ closeModal(); if(confirm('¿Cerrar sesión?')){ clearSession(); render(); } }
     else if(a==='who'){ if(confirm('¿Cerrar sesión de '+(session?session.usuarioNombre:'')+'?')){ clearSession(); render(); } }
     else if(a==='us-create'){ createUser(); }
@@ -1276,6 +1278,13 @@ body.role-trabajador .pexp{display:none !important}
   document.addEventListener('click', function(e){
     var closer = e.target.closest('[data-role="close"]');
     if(closer){ closeModal(); return; }
+    // Eliminar admin en el panel de notificaciones
+    var neDel = e.target.closest('[data-role="ne-del"]');
+    if(neDel){
+      var row=neDel.closest('.list-row'); if(!row) return;
+      neDelExtra(+row.getAttribute('data-i'));
+      return;
+    }
   });
   document.addEventListener('mousedown', function(e){
     if(e.target && e.target.matches && e.target.matches('.scrim[data-role="scrim"]')) closeModal();
@@ -1314,15 +1323,16 @@ body.role-trabajador .pexp{display:none !important}
   async function enviarEmailPedido(order){
     var ne=state.notifEmail||{};
     if(!ne.enabled || !ne.accessKey){ return {skipped:true}; }
-    var extras=(ne.extras||[]).filter(function(x){return x && x.trim();}).join(',');
-    var subject='🛍️ Nuevo pedido — '+((order.cliente&&order.cliente.nombre)||'sin cliente')+' — '+fmt(order.ventaTotal);
+    var fromName=(ne.fromName||'VELORA').trim() || 'VELORA';
+    var extras=(ne.extras||[]).map(function(s){return String(s||'').trim();}).filter(function(s){return s && s.indexOf('@')>0;});
+    var subject='🛍️ '+fromName+' — Nuevo pedido — '+((order.cliente&&order.cliente.nombre)||'sin cliente')+' — '+fmt(order.ventaTotal);
     var body={
       access_key: ne.accessKey,
       subject: subject,
-      from_name: 'Bodegas & Márgenes',
+      from_name: fromName,
       message: pedidoToEmailText(order)
     };
-    if(extras) body.cc = extras;
+    if(extras.length) body.cc = extras.join(',');
     try{
       var r=await fetch('https://api.web3forms.com/submit', {
         method:'POST',
@@ -1330,22 +1340,35 @@ body.role-trabajador .pexp{display:none !important}
         body: JSON.stringify(body)
       });
       var j=await r.json().catch(function(){return {};});
-      return {ok: r.ok && j.success!==false, response:j};
+      return {ok: r.ok && j.success!==false, response:j, cc:extras};
     }catch(e){ return {ok:false, error:String(e)}; }
   }
 
   /* ---------- panel de notificaciones (admin) ---------- */
   function openNotifs(){
     if(!isAdmin()){ showToast('Solo el admin puede configurar esto', false); return; }
-    var ne=state.notifEmail||{enabled:true, accessKey:'', extras:[]};
-    var extrasStr=(ne.extras||[]).join(', ');
-    host.innerHTML='<div class="scrim" data-role="scrim"><div class="modal" role="dialog" aria-modal="true" style="width:min(520px,100%)">'+
+    var ne=state.notifEmail||{enabled:true, accessKey:'', extras:[], fromName:'VELORA'};
+    var extrasList = (ne.extras||[]).filter(function(x){return x && String(x).trim();});
+    var extrasHtml = extrasList.length
+      ? extrasList.map(function(em,i){
+          return '<div class="list-row" data-i="'+i+'"><span style="flex:1; font-size:14px">📧 '+esc(em)+'</span><button class="mini del" data-role="ne-del" title="Quitar">🗑</button></div>';
+        }).join('')
+      : '<p class="hint" style="margin:4px 0">Aún no hay copias configuradas. Agrega abajo el email de otros admins.</p>';
+    host.innerHTML='<div class="scrim" data-role="scrim"><div class="modal" role="dialog" aria-modal="true" style="width:min(540px,100%)">'+
       '<div class="modal-hd"><h2>🔔 Notificaciones por email</h2><button class="mini" data-role="close">×</button></div>'+
       '<div class="modal-bd">'+
-        '<p class="hint">Cada pedido guardado envía un email con el detalle al correo con el que registraste tu Access Key en Web3Forms. Puedes agregar copias para otros admins.</p>'+
+        '<p class="hint">Cada pedido guardado envía un email con el detalle al correo con el que registraste la Access Key en Web3Forms. Todos los emails que agregues abajo recibirán una copia (CC).</p>'+
         '<div class="field"><label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="ne-on"'+(ne.enabled?' checked':'')+'> Enviar email por cada pedido</label></div>'+
-        '<div class="field"><label>Access Key de Web3Forms</label><input type="text" id="ne-key" value="'+esc(ne.accessKey||'')+'" placeholder="ej: 70942b0b-..."><span class="help">La consigues gratis en <b>web3forms.com</b>. Se guarda en la nube (compartida entre admins).</span></div>'+
-        '<div class="field"><label>Emails adicionales para copia (opcional)</label><input type="text" id="ne-extras" value="'+esc(extrasStr)+'" placeholder="socio@ejemplo.com, asistente@ejemplo.com"><span class="help">Separados por coma. El email principal se maneja en tu cuenta de Web3Forms.</span></div>'+
+        '<div class="f2">'+
+          '<div class="field"><label>Nombre remitente</label><input type="text" id="ne-from" value="'+esc(ne.fromName||'VELORA')+'" placeholder="VELORA"><span class="help">Aparece como "De: [nombre]"</span></div>'+
+          '<div class="field"><label>Access Key de Web3Forms</label><input type="text" id="ne-key" value="'+esc(ne.accessKey||'')+'" placeholder="ej: 70942b0b-..."><span class="help">Se guarda en la nube</span></div>'+
+        '</div>'+
+        '<div class="sub" style="margin-top:8px">Admins que reciben cada pedido</div>'+
+        '<div data-role="ne-list">'+extrasHtml+'</div>'+
+        '<div class="list-row" style="border:none;padding-top:8px">'+
+          '<input type="email" id="ne-new" placeholder="nuevo-admin@ejemplo.com" style="flex:1;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface-2);color:var(--ink);font-size:14px">'+
+          '<button class="btn ghost" data-act="ne-add">＋ Añadir</button>'+
+        '</div>'+
         '<div id="ne-msg"></div>'+
       '</div>'+
       '<div class="modal-ft">'+
@@ -1354,6 +1377,29 @@ body.role-trabajador .pexp{display:none !important}
         '<button class="btn primary" data-act="ne-save">Guardar</button>'+
       '</div>'+
     '</div></div>';
+  }
+  function neCollectExtras(){
+    var rows=document.querySelectorAll('[data-role="ne-list"] .list-row');
+    var out=[];
+    rows.forEach(function(r){ var t=r.querySelector('span')?r.querySelector('span').innerText.replace(/^📧\s*/,'').trim():''; if(t) out.push(t); });
+    return out;
+  }
+  function neAddExtra(){
+    var inp=document.getElementById('ne-new'); var v=(inp.value||'').trim();
+    if(!v || v.indexOf('@')<1){ showToast('Email inválido',false); return; }
+    var extras=neCollectExtras();
+    if(extras.indexOf(v)>=0){ showToast('Ya está en la lista',false); return; }
+    extras.push(v);
+    state.notifEmail = Object.assign({enabled:true, accessKey:'', fromName:'VELORA'}, state.notifEmail||{}, {extras:extras});
+    inp.value='';
+    // re-render solo la lista sin cerrar el modal
+    openNotifs();
+  }
+  function neDelExtra(idx){
+    var extras=(state.notifEmail && state.notifEmail.extras || []).slice();
+    extras.splice(idx,1);
+    state.notifEmail = Object.assign({enabled:true, accessKey:'', fromName:'VELORA'}, state.notifEmail||{}, {extras:extras});
+    openNotifs();
   }
 
   async function testNotif(){
@@ -1385,7 +1431,8 @@ body.role-trabajador .pexp{display:none !important}
     var ne={
       enabled: document.getElementById('ne-on').checked,
       accessKey: (document.getElementById('ne-key').value||'').trim(),
-      extras: (document.getElementById('ne-extras').value||'').split(',').map(function(s){return s.trim();}).filter(Boolean)
+      fromName: (document.getElementById('ne-from').value||'VELORA').trim() || 'VELORA',
+      extras: neCollectExtras()
     };
     state.notifEmail=Object.assign({destinatario:''}, ne);
     closeModal(); scheduleSave();
