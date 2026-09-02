@@ -180,6 +180,29 @@ select.sort{padding:10px 12px; border-radius:10px; border:1px solid var(--border
 @keyframes sp{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion: reduce){ .spin,.status.saving .led{animation:none} .toast{transition:none} }
 
+/* Widget de meta mensual */
+.meta-card{
+  background:var(--surface); border:1px solid var(--border); border-radius:14px;
+  padding:12px 16px; box-shadow:var(--shadow); margin-bottom:16px;
+  display:flex; flex-direction:column; gap:8px;
+}
+.meta-hd{display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap}
+.meta-hd .ttl{font-weight:700; font-size:13px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); display:flex; align-items:center; gap:6px}
+.meta-hd .pct{font-family:"Poppins",sans-serif; font-weight:700; font-size:22px; letter-spacing:-.02em}
+.meta-hd .pct.done{color:var(--good)}
+.meta-hd .pct.warn{color:var(--warn)}
+.meta-bar{height:10px; background:var(--surface-2); border-radius:999px; overflow:hidden; position:relative}
+.meta-bar .fill{
+  height:100%; border-radius:999px; transition:width .35s ease;
+  background:linear-gradient(90deg, var(--accent), var(--good));
+}
+.meta-bar .fill.done{background:var(--good)}
+.meta-bar .fill.warn{background:linear-gradient(90deg, var(--warn), var(--bad))}
+.meta-ft{display:flex; justify-content:space-between; gap:8px; font-size:12.5px; color:var(--muted); flex-wrap:wrap}
+.meta-ft b{color:var(--ink); font-family:"JetBrains Mono",monospace; font-variant-numeric:tabular-nums; font-weight:700}
+.meta-ft .edit{color:var(--accent); font-weight:600; cursor:pointer; background:none; border:none; font-size:12.5px}
+.meta-ft .edit:hover{text-decoration:underline}
+
 /* Banner de perfil incompleto */
 .perfil-alert{
   display:flex; align-items:center; justify-content:space-between; gap:12px;
@@ -446,7 +469,7 @@ body.role-trabajador .pexp{display:none !important}
   "use strict";
 
   var CFG_KEY='bm-supabase', THEME_KEY='bm-theme', CACHE_KEY='bm-cache', ROW_ID='main', SESSION_KEY='bm-session';
-  var state={moneda:'COP', bodegas:[], bodegaTels:{}, productos:[], pedido:{items:[],cliente:{nombre:'',tel:''}}, pedidos:[], usuarios:[], carritos:{}, notifEmail:{enabled:true, accessKey:'', destinatario:'', extras:[]}};
+  var state={moneda:'COP', bodegas:[], bodegaTels:{}, productos:[], pedido:{items:[],cliente:{nombre:'',tel:''}}, pedidos:[], usuarios:[], carritos:{}, notifEmail:{enabled:true, accessKey:'', destinatario:'', extras:[]}, metaMensual:600000};
   var session=null; // {usuarioId, usuarioNombre, role}
   var cfg=null;              // {url,key}
   var GROUPS_KEY='bm-collapsed';
@@ -542,6 +565,7 @@ body.role-trabajador .pexp{display:none !important}
         return u;
       }),
       carritos:(d.carritos&&typeof d.carritos==='object')?d.carritos:{},
+      metaMensual: (typeof d.metaMensual==='number' && d.metaMensual>0) ? d.metaMensual : 600000,
       notifEmail:{
         enabled: ne.enabled!==false,
         accessKey: ne.accessKey || '',
@@ -671,6 +695,44 @@ body.role-trabajador .pexp{display:none !important}
     scheduleSave();
   }
 
+  /* ---------- meta mensual ---------- */
+  // Solo Brayder01 (nombre exacto) puede editar la meta
+  function puedeEditarMeta(){
+    return session && session.role==='admin' && normNombre(session.usuarioNombre)==='brayder01';
+  }
+  function metaWidgetHTML(){
+    if(!session) return '';
+    var meta = (typeof state.metaMensual==='number' && state.metaMensual>0) ? state.metaMensual : 600000;
+    var mesKey = new Date().toISOString().slice(0,7);
+    // Ventas totales del mes: si es trabajador, solo las suyas; si es admin, todas
+    var admin = session.role==='admin';
+    var mesPed = state.pedidos.filter(function(o){
+      if((o.fecha||'').slice(0,7)!==mesKey) return false;
+      if(admin) return true;
+      return o.usuarioId===session.usuarioId;
+    });
+    var ventasMes = mesPed.reduce(function(a,o){return a+(o.ventaTotal||0);},0);
+    var cobradas = mesPed.filter(function(o){ ensureEstado(o); return !!o.estado.venta; })
+                          .reduce(function(a,o){return a+(o.ventaTotal||0);},0);
+    var pct = meta>0 ? Math.min(200, Math.round(ventasMes/meta*100)) : 0;
+    var barW = Math.min(100, pct);
+    var barCls = pct>=100 ? 'done' : (pct>=60 ? '' : 'warn');
+    var mesNombre = new Date().toLocaleDateString('es-CO',{month:'long',year:'numeric'});
+    var editBtn = puedeEditarMeta() ? '<button class="edit" data-act="edit-meta">Editar meta</button>' : '';
+    var falta = Math.max(0, meta-ventasMes);
+    return '<div class="meta-card">'+
+      '<div class="meta-hd">'+
+        '<span class="ttl">🎯 '+(admin?'Meta del equipo':'Mi meta')+' · '+esc(mesNombre)+'</span>'+
+        '<span class="pct '+barCls+'">'+pct+'%</span>'+
+      '</div>'+
+      '<div class="meta-bar"><div class="fill '+barCls+'" style="width:'+barW+'%"></div></div>'+
+      '<div class="meta-ft">'+
+        '<span>Vendido: <b>'+fmt(ventasMes)+'</b> de <b>'+fmt(meta)+'</b>'+(cobradas!==ventasMes?' · <span style="color:var(--good)">Cobrado: '+fmt(cobradas)+'</span>':'')+'</span>'+
+        '<span>'+ (pct>=100 ? '<span style="color:var(--good);font-weight:700">✓ Meta alcanzada</span>' : 'Falta <b>'+fmt(falta)+'</b>') +' '+editBtn+'</span>'+
+      '</div>'+
+    '</div>';
+  }
+
   /* ---------- terminología según rol ---------- */
   // Admin ve "Ventas", trabajador ve "Pedidos". Uso consistente en la UI.
   function tPed(kind){
@@ -746,6 +808,7 @@ body.role-trabajador .pexp{display:none !important}
             '<span style="font-size:12.5px;font-weight:700">Completar ›</span>'+
           '</div>';
         })()+
+        metaWidgetHTML()+
         '<div class="toolbar">'+
           '<div class="search"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/></svg>'+
             '<input type="search" id="q" placeholder="Buscar producto, SKU o bodega…" value="'+esc(ui.q)+'"></div>'+
@@ -1469,6 +1532,16 @@ body.role-trabajador .pexp{display:none !important}
     else if(a==='who'){ if(confirm('¿Cerrar sesión de '+(session?session.usuarioNombre:'')+'?')){ clearSession(); render(); } }
     else if(a==='us-create'){ createUser(); }
     else if(a==='mi-perfil'){ closeModal(); openMiPerfil(); }
+    else if(a==='edit-meta'){
+      if(!puedeEditarMeta()){ showToast('Solo Brayder01 puede cambiar la meta',false); return; }
+      var actual=state.metaMensual||600000;
+      var nueva=prompt('Meta mensual de ventas totales (COP):\n\nEjemplo: 600000 = $600.000\n\nSe aplica a cada trabajador (individual) y al equipo.', String(actual));
+      if(nueva==null) return;
+      var n=parseInt(String(nueva).replace(/[^0-9]/g,''),10);
+      if(!n || n<10000){ showToast('Monto inválido (mínimo $10.000)',false); return; }
+      state.metaMensual=n; scheduleSave(); render();
+      showToast('Meta actualizada a '+fmt(n),false);
+    }
     else if(a==='us-view'){ var ur=e.target.closest('.user-row'); if(!ur) return; viewUser(ur.getAttribute('data-uid')); }
     else if(a==='us-edit'){ var uid1=act.getAttribute('data-uid'); if(uid1) editUserData(uid1); }
     else if(a==='us-savedata'){ var uid2=act.getAttribute('data-uid'); if(uid2) saveUserData(uid2); }
