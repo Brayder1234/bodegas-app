@@ -203,6 +203,36 @@ select.sort{padding:10px 12px; border-radius:10px; border:1px solid var(--border
 .meta-ft .edit{color:var(--accent); font-weight:600; cursor:pointer; background:none; border:none; font-size:12.5px}
 .meta-ft .edit:hover{text-decoration:underline}
 
+/* Selector de sección */
+.sect-wrap{max-width:1080px; margin:0 auto; padding:32px 24px}
+.sect-hero{text-align:center; padding:32px 20px 40px}
+.sect-hero h1{font-family:"Poppins",sans-serif; font-size:clamp(28px,4.6vw,44px); font-weight:700; letter-spacing:-.02em; margin:0 0 8px; text-wrap:balance}
+.sect-hero p{color:var(--muted); font-size:15px; margin:0}
+.sect-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:18px; margin-top:18px}
+@media (max-width:820px){ .sect-grid{grid-template-columns:1fr; max-width:420px; margin-left:auto; margin-right:auto} }
+.sect-card{
+  background:var(--surface); border:1px solid var(--border); border-radius:18px;
+  padding:26px 22px; text-align:center; cursor:pointer; transition:all .18s ease;
+  display:flex; flex-direction:column; align-items:center; gap:10px; position:relative; overflow:hidden;
+  min-height:220px; justify-content:center; box-shadow:var(--shadow);
+}
+.sect-card:hover:not(.disabled){transform:translateY(-3px); border-color:var(--accent); box-shadow:0 6px 24px rgba(13,122,110,.15)}
+.sect-card .ico{font-size:44px; line-height:1; margin-bottom:4px}
+.sect-card h3{font-family:"Poppins",sans-serif; font-size:20px; font-weight:700; letter-spacing:-.01em; margin:0}
+.sect-card p{margin:0; font-size:13.5px; color:var(--muted); line-height:1.45; max-width:220px}
+.sect-card .rail{position:absolute; top:0; left:0; right:0; height:3px; background:linear-gradient(90deg, var(--accent), transparent)}
+.sect-card .badge{display:inline-block; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; padding:3px 10px; border-radius:999px; background:var(--accent-soft); color:var(--accent); margin-top:4px}
+.sect-card.disabled{opacity:.55; cursor:not-allowed; background:var(--surface-2)}
+.sect-card.disabled .rail{background:linear-gradient(90deg, var(--faint), transparent)}
+.sect-card.disabled .badge{background:var(--surface); color:var(--muted); border:1px solid var(--border)}
+.sect-topbar{display:flex; justify-content:space-between; align-items:center; margin-bottom:6px}
+.sect-topbar .link{background:none; border:none; color:var(--muted); font-size:13px; cursor:pointer; padding:4px 8px; border-radius:6px; font-family:inherit}
+.sect-topbar .link:hover{color:var(--ink); background:var(--surface-2)}
+
+/* Enlace "cambiar sección" en el brand */
+.change-sect{background:none; border:none; color:var(--muted); font-size:11.5px; cursor:pointer; padding:2px 8px; border-radius:6px; margin-left:6px; font-family:inherit; letter-spacing:.03em}
+.change-sect:hover{color:var(--accent); background:var(--accent-soft)}
+
 /* Tutorial / Onboarding */
 .tut-overlay{
   position:fixed; inset:0; z-index:90; pointer-events:auto;
@@ -513,7 +543,7 @@ body.role-trabajador .pexp{display:none !important}
 (function(){
   "use strict";
 
-  var CFG_KEY='bm-supabase', THEME_KEY='bm-theme', CACHE_KEY='bm-cache', ROW_ID='main', SESSION_KEY='bm-session';
+  var CFG_KEY='bm-supabase', THEME_KEY='bm-theme', CACHE_KEY='bm-cache', ROW_ID='main', SESSION_KEY='bm-session', SECTION_KEY='bm-section';
   // Configuración fija de VELORA — así los trabajadores no tienen que pegar nada al entrar
   var DEFAULT_CFG={
     url:'https://ubiingxrbjpiqlgqrewe.supabase.co',
@@ -532,6 +562,13 @@ body.role-trabajador .pexp{display:none !important}
 
   /* tema */
   try{ var t=localStorage.getItem(THEME_KEY); if(t) document.documentElement.setAttribute('data-theme', t); }catch(e){}
+  // Sección activa (se elige después del login)
+  var activeSection=null;
+  try{ activeSection=localStorage.getItem(SECTION_KEY) || null; }catch(e){}
+  function setActiveSection(s){
+    activeSection=s;
+    try{ if(s) localStorage.setItem(SECTION_KEY, s); else localStorage.removeItem(SECTION_KEY); }catch(e){}
+  }
 
   /* ---------- utils ---------- */
   function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
@@ -847,6 +884,7 @@ body.role-trabajador .pexp{display:none !important}
     if(!cfg){ renderSetup(); return; }
     if(bootstrapping){ renderBootSplash(); return; }
     if(!session){ renderLogin(); return; }
+    if(!activeSection){ renderSectionPicker(); return; }
     // valida que el usuario sigue existiendo (por si otro admin lo borró)
     if(!state.usuarios.find(function(u){return u.id===session.usuarioId;})){
       clearSession(); renderLogin(); return;
@@ -958,7 +996,7 @@ body.role-trabajador .pexp{display:none !important}
       }
     }
     return '<div class="top">'+
-      '<div class="brand"><h1>VELORA <span style="font-weight:400;color:var(--muted);letter-spacing:0">Cosmetic</span></h1><p>'+esc(lead)+'</p></div>'+
+      '<div class="brand"><h1>VELORA <span style="font-weight:400;color:var(--muted);letter-spacing:0">Cosmetic</span></h1><p>'+esc(lead)+' <button class="change-sect" data-act="change-section" title="Cambiar de sección">Cambiar</button></p></div>'+
       '<div class="top-tools">'+whoLine+connHTML()+
         (admin?'<button class="icon-btn" data-act="toggle-moneda" title="Cambiar moneda">'+(state.moneda==='USD'?'US$':'COP')+'</button>':'')+
         '<button class="icon-btn" data-act="toggle-theme" title="Tema claro/oscuro" aria-label="Cambiar tema">◐</button>'+
@@ -1126,6 +1164,44 @@ body.role-trabajador .pexp{display:none !important}
       '<p class="lead" style="margin:0">Descargando la información de la plataforma.</p>'+
     '</div></div>';
   }
+  function renderSectionPicker(){
+    var nombre = session ? session.usuarioNombre : '';
+    var admin = isAdmin();
+    app.innerHTML='<div class="sect-wrap">'+
+      '<div class="sect-topbar">'+
+        '<div class="who-chip'+(admin?' admin':'')+'"><span class="avat">'+esc((nombre||'?').charAt(0).toUpperCase())+'</span>'+esc(nombre)+' <span class="role">'+(admin?'admin':'trabajador')+'</span></div>'+
+        '<button class="link" data-act="logout">🚪 Cerrar sesión</button>'+
+      '</div>'+
+      '<div class="sect-hero">'+
+        '<h1>Bienvenido a VELORA</h1>'+
+        '<p>Elige la sección con la que vas a trabajar</p>'+
+      '</div>'+
+      '<div class="sect-grid">'+
+        '<button class="sect-card" data-act="pick-section" data-section="maquillaje">'+
+          '<div class="rail"></div>'+
+          '<div class="ico">💄</div>'+
+          '<h3>Maquillaje</h3>'+
+          '<p>Bases, labiales, sombras y todos los productos de belleza.</p>'+
+          '<span class="badge">Disponible</span>'+
+        '</button>'+
+        '<button class="sect-card disabled">'+
+          '<div class="rail"></div>'+
+          '<div class="ico">👟</div>'+
+          '<h3>Calzado</h3>'+
+          '<p>Tenis, sandalias y zapatos de temporada.</p>'+
+          '<span class="badge">Próximamente</span>'+
+        '</button>'+
+        '<button class="sect-card disabled">'+
+          '<div class="rail"></div>'+
+          '<div class="ico">🌸</div>'+
+          '<h3>Perfumería</h3>'+
+          '<p>Perfumes, colonias y esencias importadas.</p>'+
+          '<span class="badge">Próximamente</span>'+
+        '</button>'+
+      '</div>'+
+    '</div>';
+  }
+
   function renderLogin(){
     var needsAdmin = !state.usuarios.length;
     app.innerHTML='<div class="login-wrap"><div class="login-card">'+
@@ -1602,6 +1678,11 @@ body.role-trabajador .pexp{display:none !important}
     else if(a==='us-create'){ createUser(); }
     else if(a==='mi-perfil'){ closeModal(); openMiPerfil(); }
     else if(a==='tutorial'){ closeModal(); startTutorial(); }
+    else if(a==='pick-section'){
+      var s=act.getAttribute('data-section');
+      if(s){ setActiveSection(s); render(); showToast('Sección: '+s, false); }
+    }
+    else if(a==='change-section'){ setActiveSection(null); render(); }
     else if(a==='edit-meta'){
       if(!puedeEditarMeta()){ showToast('Solo Brayder01 puede cambiar la meta',false); return; }
       closeModal();
