@@ -1139,13 +1139,23 @@ body.role-trabajador .pexp{display:none !important}
     var body='<div class="modal-bd" style="gap:10px">';
     body+='<p class="hint">Crea trabajadores con su contraseña y datos personales. Ellos podrán actualizar sus datos desde "Mi perfil". Solo verán la plataforma para armar y enviar pedidos.</p>';
     if(state.usuarios.length){
-      body+= state.usuarios.slice().sort(function(a,b){return (a.nombre||"").localeCompare(b.nombre||"","es");}).map(function(u){
+      var mesKey=new Date().toISOString().slice(0,7);
+      body+= state.usuarios.slice().sort(function(a,b){
+        // Ordenar por vendido total DESC, tú primero
+        var av=state.pedidos.filter(function(o){return o.usuarioId===a.id;}).reduce(function(x,o){return x+(o.ventaTotal||0);},0);
+        var bv=state.pedidos.filter(function(o){return o.usuarioId===b.id;}).reduce(function(x,o){return x+(o.ventaTotal||0);},0);
+        return bv-av;
+      }).map(function(u){
         var mine=state.pedidos.filter(function(o){return o.usuarioId===u.id;});
+        var mineMes=mine.filter(function(o){return (o.fecha||'').slice(0,7)===mesKey;});
+        var vendidoTotal=mine.reduce(function(a,o){return a+(o.ventaTotal||0);},0);
+        var vendidoMes=mineMes.reduce(function(a,o){return a+(o.ventaTotal||0);},0);
         var isMe = session && session.usuarioId===u.id;
         var perfilInc = !u.cedula || !u.correo || !u.telefono || !u.cuentaPago;
         return '<div class="user-row" data-uid="'+esc(u.id)+'">'+
           '<div><div class="nm">'+esc(u.nombre)+ (isMe?' <span class="hint">(tú)</span>':'') + (perfilInc && u.role==='trabajador'?' <span class="hint" style="color:var(--warn)">⚠ perfil incompleto</span>':'') +'</div>'+
-            '<div class="rl '+(u.role==='admin'?'a':'')+'">'+esc(u.role)+' · '+mine.length+' pedidos</div></div>'+
+            '<div class="rl '+(u.role==='admin'?'a':'')+'">'+esc(u.role)+' · '+mine.length+' pedidos</div>'+
+            '<div style="font-size:12.5px;color:var(--muted);margin-top:2px">💰 Este mes: <b style="color:var(--good)">'+fmt(vendidoMes)+'</b> · Total: <b style="color:var(--ink)">'+fmt(vendidoTotal)+'</b></div></div>'+
           '<div class="acts">'+
             '<button data-act="us-view">👤 Ver datos</button>'+
             '<button data-act="us-pwd">🔑 Contraseña</button>'+
