@@ -514,6 +514,11 @@ body.role-trabajador .pexp{display:none !important}
   "use strict";
 
   var CFG_KEY='bm-supabase', THEME_KEY='bm-theme', CACHE_KEY='bm-cache', ROW_ID='main', SESSION_KEY='bm-session';
+  // Configuración fija de VELORA — así los trabajadores no tienen que pegar nada al entrar
+  var DEFAULT_CFG={
+    url:'https://ubiingxrbjpiqlgqrewe.supabase.co',
+    key:'sb_publishable_GO5vsVIFg2OEko1YuoUVSg__OKzxm4h'
+  };
   var state={moneda:'COP', bodegas:[], bodegaTels:{}, productos:[], pedido:{items:[],cliente:{nombre:'',tel:''}}, pedidos:[], usuarios:[], carritos:{}, notifEmail:{enabled:true, accessKey:'', destinatario:'', extras:[]}, metaMensual:600000};
   var session=null; // {usuarioId, usuarioNombre, role}
   var cfg=null;              // {url,key}
@@ -543,7 +548,12 @@ body.role-trabajador .pexp{display:none !important}
   function autoUrl(){ try{ var o=location.origin; return /^https:\/\/[a-z0-9-]+\.supabase\.co$/.test(o)?o:''; }catch(e){ return ''; } }
 
   /* ---------- config ---------- */
-  function loadCfg(){ try{ var c=JSON.parse(localStorage.getItem(CFG_KEY)); if(c&&c.url&&c.key) return c; }catch(e){} return null; }
+  function loadCfg(){
+    try{ var c=JSON.parse(localStorage.getItem(CFG_KEY)); if(c&&c.url&&c.key) return c; }catch(e){}
+    // Sin config guardada → usar la default y guardarla automáticamente
+    try{ localStorage.setItem(CFG_KEY, JSON.stringify(DEFAULT_CFG)); }catch(e){}
+    return DEFAULT_CFG;
+  }
   function saveCfg(c){ try{ localStorage.setItem(CFG_KEY, JSON.stringify(c)); }catch(e){} }
   function cacheState(){ try{ localStorage.setItem(CACHE_KEY, JSON.stringify(state)); }catch(e){} }
   function loadCache(){ try{ var s=JSON.parse(localStorage.getItem(CACHE_KEY)); if(s&&s.productos) return s; }catch(e){} return null; }
