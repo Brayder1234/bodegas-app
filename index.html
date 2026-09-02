@@ -205,14 +205,25 @@ select.sort{padding:10px 12px; border-radius:10px; border:1px solid var(--border
 
 /* Tutorial / Onboarding */
 .tut-overlay{
-  position:fixed; inset:0; z-index:90; pointer-events:none;
-  background:rgba(15,25,20,.55); backdrop-filter:blur(2px);
+  position:fixed; inset:0; z-index:90; pointer-events:auto;
+  background:rgba(10,15,12,.72);
   animation:fadeIn .2s ease both;
 }
+/* El halo crea el "spotlight" — su box-shadow gigante oscurece TODO menos el hueco */
 .tut-halo{
-  position:absolute; border-radius:14px; pointer-events:none;
-  box-shadow:0 0 0 4px rgba(13,122,110,.35), 0 0 0 9999px rgba(15,25,20,.55);
-  transition:all .35s cubic-bezier(.4,0,.2,1);
+  position:fixed; border-radius:14px; pointer-events:none;
+  z-index:92;
+  box-shadow:
+    0 0 0 3px var(--accent),
+    0 0 32px 4px rgba(13,122,110,.55),
+    0 0 0 9999px rgba(10,15,12,.72);
+  transition:top .35s cubic-bezier(.4,0,.2,1), left .35s cubic-bezier(.4,0,.2,1),
+             width .35s cubic-bezier(.4,0,.2,1), height .35s cubic-bezier(.4,0,.2,1);
+  animation:haloPulse 1.8s ease-in-out infinite;
+}
+@keyframes haloPulse{
+  0%,100%{box-shadow:0 0 0 3px var(--accent), 0 0 32px 4px rgba(13,122,110,.55), 0 0 0 9999px rgba(10,15,12,.72)}
+  50%{box-shadow:0 0 0 3px var(--accent), 0 0 48px 8px rgba(13,122,110,.75), 0 0 0 9999px rgba(10,15,12,.72)}
 }
 .tut-card{
   position:fixed; z-index:91; pointer-events:auto;
@@ -1889,8 +1900,12 @@ body.role-trabajador .pexp{display:none !important}
   function renderTutorial(){
     document.querySelectorAll('.tut-overlay, .tut-card, .tut-halo').forEach(function(el){ el.remove(); });
     var step=tutState.steps[tutState.index]; if(!step) return endTutorial(true);
-    var overlay=document.createElement('div'); overlay.className='tut-overlay';
-    document.body.appendChild(overlay);
+    // Overlay pleno SOLO si no hay elemento a resaltar (el halo crea el spotlight cuando hay uno)
+    var el = step.sel ? document.querySelector(step.sel) : null;
+    if(!el){
+      var overlay=document.createElement('div'); overlay.className='tut-overlay';
+      document.body.appendChild(overlay);
+    }
     var card=document.createElement('div'); card.className='tut-card';
     var n=tutState.index+1, tot=tutState.steps.length;
     var isLast=(n===tot);
@@ -1906,8 +1921,7 @@ body.role-trabajador .pexp{display:none !important}
         '</div>'+
       '</div>';
     document.body.appendChild(card);
-    // Highlight del elemento
-    var el = step.sel ? document.querySelector(step.sel) : null;
+    // Highlight del elemento (el ya está declarado arriba)
     if(el){
       el.scrollIntoView({behavior:'smooth', block:'center'});
       setTimeout(function(){
