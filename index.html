@@ -611,6 +611,12 @@ body.role-trabajador .pexp{display:none !important}
   // Helpers de precios de producto (con fallback si el mayorista aún no está fijado)
   function mayoristaOf(p){ var m=parseFloat(p&&p.precioMayorista); return (!isNaN(m)&&m>0)?m:(p&&p.precioVenta ? +p.precioVenta : 0); }
   function ventaOf(p){ return p && p.precioVenta ? +p.precioVenta : 0; }
+  // Precio real de venta en una línea del carrito: usa el editado por el trabajador, si no el sugerido
+  function itemVenta(it, p){
+    var v=parseFloat(it && it.precioVendido);
+    if(!isNaN(v) && v>0) return v;
+    return ventaOf(p);
+  }
   function setCurrentCart(c){
     if(session) state.carritos[session.usuarioId]=c;
     else state.pedido=c;
@@ -824,7 +830,7 @@ body.role-trabajador .pexp{display:none !important}
       var cst=b?b.costo:0;
       totC+= (cst||0)*it.cantidad;
       totM+= mayoristaOf(p)*it.cantidad;
-      totV+= ventaOf(p)*it.cantidad;
+      totV+= itemVenta(it,p)*it.cantidad;
       units+=it.cantidad;
     });
     return {
@@ -979,7 +985,7 @@ body.role-trabajador .pexp{display:none !important}
       row='<div class="prow prow-t'+(expanded?' expanded':'')+'" data-id="'+esc(p.id)+'" data-act="tg-row">'+
         '<div class="pn">'+esc(p.nombre||'(sin nombre)')+'</div>'+
         '<div class="pv-t"><span class="lb">Mayorista</span>'+fmt(mayo)+'</div>'+
-        '<div class="pv-t vv"><span class="lb">Al cliente</span>'+fmt(venta)+'</div>'+
+        '<div class="pv-t vv"><span class="lb">Sugerido</span>'+fmt(venta)+'</div>'+
         '<button class="padd'+(inCart?' in':'')+'" data-act="add-cart" title="Añadir al pedido">'+(inCart?'✓':'＋')+'</button>'+
       '</div>';
     }
@@ -1598,7 +1604,7 @@ body.role-trabajador .pexp{display:none !important}
       else if(a==='hist-reopen'){
         var o=state.pedidos.find(function(x){return x.id===oid;}); if(!o) return;
         if(currentCart().items.length && !confirm('Tienes un pedido en curso. ¿Reemplazarlo con este?')) return;
-        setCurrentCart({items:o.items.map(function(it){return {productId:it.productId, bodega:it.bodega, cantidad:it.cantidad};}), cliente:{nombre:(o.cliente||{}).nombre||'', tel:(o.cliente||{}).tel||''}});
+        setCurrentCart({items:o.items.map(function(it){return {productId:it.productId, bodega:it.bodega, cantidad:it.cantidad, precioVendido:it.precio};}), cliente:{nombre:(o.cliente||{}).nombre||'', tel:(o.cliente||{}).tel||'', direccion:(o.cliente||{}).direccion||'', ciudad:(o.cliente||{}).ciudad||'', notas:(o.cliente||{}).notas||''}});
         closeModal(); render(); openCart(); scheduleSave();
       }
     }
@@ -1608,6 +1614,19 @@ body.role-trabajador .pexp{display:none !important}
     else if(e.target.matches('[data-cli]')){
       var k=e.target.getAttribute('data-cli');
       currentCart().cliente[k]=e.target.value; scheduleSave();
+    }
+    else if(e.target.matches('[data-act="setprecio"]')){
+      // Trabajador edita el precio real de una línea del carrito
+      var line=e.target.closest('.line'); if(!line) return;
+      var pid=line.getAttribute('data-pid');
+      var it=currentCart().items.find(function(x){return x.productId===pid;});
+      if(!it) return;
+      var raw=e.target.value.trim();
+      var v=parseFloat(raw);
+      if(raw==='' || isNaN(v) || v<=0){ delete it.precioVendido; }
+      else { it.precioVendido=Math.round(v); }
+      // Actualiza los subtotales sin re-renderizar el input (mantiene el foco)
+      updateCartTotalsUI(); scheduleSave();
     }
   });
   document.addEventListener('change',function(e){
@@ -1834,7 +1853,8 @@ body.role-trabajador .pexp{display:none !important}
     if(!p) return '';
     var admin=isAdmin();
     var mayo=mayoristaOf(p); var venta=ventaOf(p);
-    var subV=venta*it.cantidad;
+    var precioReal=itemVenta(it,p);
+    var subV=precioReal*it.cantidad;
     var subM=mayo*it.cantidad;
     var qty='<div class="qty"><button data-act="qminus">−</button><span>'+it.cantidad+'</span><button data-act="qplus">＋</button></div>';
     if(admin){
@@ -1860,16 +1880,20 @@ body.role-trabajador .pexp{display:none !important}
         '</div>'+
       '</div>';
     } else {
-      // Trabajador
+      // Trabajador: precio editable con el sugerido como placeholder
+      var custom = (it.precioVendido && +it.precioVendido>0 && +it.precioVendido !== venta);
       return '<div class="line" data-pid="'+esc(p.id)+'">'+
         '<div class="nm">'+esc(p.nombre)+'</div>'+ qty+
         '<div class="bd-row">'+
-          '<span class="info">Mayorista '+fmt(mayo)+' · Al cliente '+fmt(venta)+'</span>'+
+          '<label style="display:flex;align-items:center;gap:6px;flex:1;font-size:12.5px;color:var(--muted)">'+
+            '<span>Precio venta:</span>'+
+            '<input type="number" inputmode="numeric" data-act="setprecio" value="'+esc(precioReal)+'" placeholder="'+esc(venta)+'" style="flex:1;max-width:130px;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface-2);color:var(--ink);font-family:'+"'JetBrains Mono',monospace"+';font-size:13.5px;font-weight:600">'+
+          '</label>'+
           '<button class="rmv" data-act="rmv" title="Quitar">🗑</button>'+
         '</div>'+
-        '<div style="grid-column:1/-1; display:flex; justify-content:space-between; font-size:12.5px; color:var(--muted); margin-top:2px">'+
-          '<span>Mi costo: <b class="num">'+fmt(subM)+'</b></span>'+
-          '<span>Al cliente: <b class="num">'+fmt(subV)+'</b></span>'+
+        '<div style="grid-column:1/-1; display:flex; justify-content:space-between; font-size:12px; color:var(--muted); margin-top:4px; flex-wrap:wrap; gap:6px">'+
+          '<span>Mi costo: <b class="num">'+fmt(subM)+'</b> · Sugerido: '+fmt(venta)+(custom?' <span style="color:var(--warn)">(editado)</span>':'')+'</span>'+
+          '<span>Subtotal: <b class="num">'+fmt(subV)+'</b></span>'+
         '</div>'+
       '</div>';
     }
@@ -1976,6 +2000,52 @@ body.role-trabajador .pexp{display:none !important}
   function openCart(){ host.innerHTML=cartHTML(); }
   function closeCart(){ host.innerHTML=''; }
   function renderCart(){ if(host.querySelector('.side-panel')) host.innerHTML=cartHTML(); }
+  // Actualiza SOLO los totales y subtotales del carrito, sin reset del input activo
+  function updateCartTotalsUI(){
+    var panel=host.querySelector('.side-panel'); if(!panel) return;
+    var t=cartTotals();
+    var admin=isAdmin();
+    // Actualizar el bloque de totales
+    var totBlock=panel.querySelector('.side-tot');
+    if(totBlock){
+      if(admin){
+        var mgT=t.venta?Math.round(t.gananciaTotal/t.venta*100):0;
+        totBlock.innerHTML=
+          '<div class="r"><span>Unidades</span><b class="num">'+t.unidades+'</b></div>'+
+          '<div class="r"><span>Costo (bodegas)</span><b class="num">'+fmt(t.costo)+'</b></div>'+
+          '<div class="r"><span>Mayorista</span><b class="num">'+fmt(t.mayorista)+'</b></div>'+
+          '<div class="r"><span>Al cliente</span><b class="num">'+fmt(t.venta)+'</b></div>'+
+          '<div class="r gain"><span>Ganancia total</span><span class="val '+mgClass(mgT)+'">'+fmt(t.gananciaTotal)+' <span style="font-size:13px">('+pct(mgT)+')</span></span></div>';
+      } else {
+        var mgTr=t.venta?Math.round(t.gananciaTrabajador/t.venta*100):0;
+        totBlock.innerHTML=
+          '<div class="r"><span>Unidades</span><b class="num">'+t.unidades+'</b></div>'+
+          '<div class="r"><span>Mi costo (mayorista)</span><b class="num">'+fmt(t.mayorista)+'</b></div>'+
+          '<div class="r"><span>Al cliente</span><b class="num">'+fmt(t.venta)+'</b></div>'+
+          '<div class="r gain"><span>Mi ganancia</span><span class="val '+mgClass(mgTr)+'">'+fmt(t.gananciaTrabajador)+' <span style="font-size:13px">('+pct(mgTr)+')</span></span></div>';
+      }
+    }
+    // Actualizar los subtotales de cada línea (sin reemplazar el input)
+    panel.querySelectorAll('.line').forEach(function(line){
+      var pid=line.getAttribute('data-pid');
+      var it=currentCart().items.find(function(x){return x.productId===pid;});
+      var p=state.productos.find(function(x){return x.id===pid;});
+      if(!it || !p) return;
+      var precio=itemVenta(it,p);
+      var sub=precio*it.cantidad;
+      var venta=ventaOf(p);
+      var mayo=mayoristaOf(p);
+      var subM=mayo*it.cantidad;
+      var custom=(it.precioVendido && +it.precioVendido>0 && +it.precioVendido!==venta);
+      var footer=line.lastElementChild;
+      if(footer && !admin){
+        footer.innerHTML='<span>Mi costo: <b class="num">'+fmt(subM)+'</b> · Sugerido: '+fmt(venta)+(custom?' <span style="color:var(--warn)">(editado)</span>':'')+'</span>'+
+          '<span>Subtotal: <b class="num">'+fmt(sub)+'</b></span>';
+      }
+    });
+    // Actualiza el FAB del carrito
+    updateFab();
+  }
 
   function sendWhatsApp(bodega){
     if(!isAdmin()){ showToast('Solo los admin pueden enviar pedidos a bodegas',false); return; }
@@ -2022,7 +2092,7 @@ body.role-trabajador .pexp{display:none !important}
     lines.push('');
     currentCart().items.forEach(function(it){
       var p=state.productos.find(function(x){return x.id===it.productId;}); if(!p) return;
-      lines.push('• '+it.cantidad+'x '+p.nombre+' — '+fmt(ventaOf(p)*it.cantidad));
+      lines.push('• '+it.cantidad+'x '+p.nombre+' — '+fmt(itemVenta(it,p)*it.cantidad));
     });
     lines.push('');
     lines.push('*Total: '+fmt(t.venta)+'*');
@@ -2076,13 +2146,16 @@ body.role-trabajador .pexp{display:none !important}
     var items=currentCart().items.map(function(it){
       var p=state.productos.find(function(x){return x.id===it.productId;}) || {};
       var b=(p.costos||[]).find(function(c){return c.bodega===it.bodega;}) || best(p) || {};
+      var precioReal=itemVenta(it,p);
+      var sug=ventaOf(p);
       return {
         productId:it.productId,
         nombre:p.nombre||'(producto borrado)',
         bodega:it.bodega||(b.bodega||''),
         costo:b.costo||0,
         mayorista:mayoristaOf(p),
-        precio:ventaOf(p),
+        precio:precioReal,        // precio REAL vendido
+        precioSugerido:sug,       // precio sugerido en el momento (para historial)
         cantidad:it.cantidad
       };
     });
