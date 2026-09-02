@@ -180,6 +180,15 @@ select.sort{padding:10px 12px; border-radius:10px; border:1px solid var(--border
 @keyframes sp{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion: reduce){ .spin,.status.saving .led{animation:none} .toast{transition:none} }
 
+/* Banner de perfil incompleto */
+.perfil-alert{
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  background:var(--bad-soft); color:var(--bad); border:1px solid var(--bad);
+  border-radius:12px; padding:12px 16px; margin-bottom:14px; cursor:pointer;
+  font-size:13.5px; line-height:1.35; transition:.15s;
+}
+.perfil-alert:hover{filter:brightness(1.02)}
+
 /* Vista trabajador — oculta datos de negocio */
 body.role-trabajador .pg-hdr .avg,
 body.role-trabajador .pexp{display:none !important}
@@ -727,6 +736,16 @@ body.role-trabajador .pexp{display:none !important}
     app.innerHTML=
       '<div class="wrap">'+
         header(s)+
+        (function(){
+          if(!session) return '';
+          var yo=state.usuarios.find(function(x){return x.id===session.usuarioId;});
+          var falt=perfilFaltante(yo);
+          if(!falt.length) return '';
+          return '<div class="perfil-alert" data-act="mi-perfil">'+
+            '<div><b>⚠ Completa tu perfil antes de poder guardar pedidos</b><div style="font-size:12.5px;margin-top:2px;opacity:.9">Faltan: '+esc(falt.join(', '))+'</div></div>'+
+            '<span style="font-size:12.5px;font-weight:700">Completar ›</span>'+
+          '</div>';
+        })()+
         '<div class="toolbar">'+
           '<div class="search"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/></svg>'+
             '<input type="search" id="q" placeholder="Buscar producto, SKU o bodega…" value="'+esc(ui.q)+'"></div>'+
@@ -1939,8 +1958,28 @@ body.role-trabajador .pexp{display:none !important}
     document.body.removeChild(ta);
   }
 
+  // Perfil obligatorio: cédula, teléfono, correo, cuenta pago
+  function perfilFaltante(u){
+    if(!u) return [];
+    var f=[];
+    if(!(u.cedula||'').trim()) f.push('cédula');
+    if(!(u.telefono||'').trim()) f.push('teléfono');
+    if(!(u.correo||'').trim()) f.push('correo');
+    if(!(u.cuentaPago||'').trim()) f.push('Nequi/Cuenta bancaria');
+    return f;
+  }
   function saveCart(){
     var t=cartTotals(); if(!t.lineas){ return; }
+    // Antes de guardar, verificar perfil completo del usuario que está armando el pedido
+    if(session){
+      var yo=state.usuarios.find(function(x){return x.id===session.usuarioId;});
+      var faltanPerfil=perfilFaltante(yo);
+      if(faltanPerfil.length){
+        alert('Antes de guardar un pedido debes completar tu perfil.\n\nFaltan estos datos: '+faltanPerfil.join(', ')+'.\n\nAhora te abro "Mi perfil" para que los completes.');
+        openMiPerfil();
+        return;
+      }
+    }
     var c=currentCart().cliente;
     var nom=(c.nombre||'').trim(), tel=(c.tel||'').trim(), dir=(c.direccion||'').trim(), ciu=(c.ciudad||'').trim(), notas=(c.notas||'').trim();
     // Validación de envío
