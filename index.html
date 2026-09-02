@@ -684,6 +684,13 @@ body.role-trabajador .pexp{display:none !important}
     return (o.mayoristaTotal||0) - (o.costoTotal||0);
   }
   function gananciaAdminAll(list){ return list.reduce(function(a,o){return a+gananciaAdminDe(o);},0); }
+  // Solo cuentan las ventas con pago confirmado
+  function gananciaAdminConfirmada(list){
+    return list.reduce(function(a,o){ ensureEstado(o); return a + (o.estado.venta ? gananciaAdminDe(o) : 0); },0);
+  }
+  function gananciaAdminPendiente(list){
+    return list.reduce(function(a,o){ ensureEstado(o); return a + (o.estado.venta ? 0 : gananciaAdminDe(o)); },0);
+  }
 
   /* ---------- resumen ---------- */
   function summary(){
@@ -768,7 +775,8 @@ body.role-trabajador .pexp{display:none !important}
     if(admin){
       var mes=new Date().toISOString().slice(0,7);
       var pedMes=state.pedidos.filter(function(o){return (o.fecha||'').slice(0,7)===mes;});
-      var gTot=gananciaAdminAll(state.pedidos);
+      var gTot=gananciaAdminConfirmada(state.pedidos);
+      var gPend=gananciaAdminPendiente(state.pedidos);
       var nTrab=state.usuarios.filter(function(u){return u.role==='trabajador';}).length;
       function bigStat(k,v,cls){
         return '<div class="stat '+(cls||'')+'"><div class="rail" style="background:var(--good)"></div>'+
@@ -785,17 +793,25 @@ body.role-trabajador .pexp{display:none !important}
         '<span>🏬 '+s.nbod+' bodegas</span>'+
         (s.avg!=null?'<span>margen prom. '+pct(s.avg)+'</span>':'')+
         (s.low>0?'<span style="color:var(--bad)">⚠ '+s.low+' con margen bajo</span>':'<span style="color:var(--good)">✓ sin productos con margen bajo</span>')+
+        (gPend>0?'<span style="color:var(--warn)">⏳ Pendiente de pago: <b>'+fmt(gPend)+'</b></span>':'')+
       '</div>';
     }else{
       // trabajador: productos, pedidos este mes, ganancia este mes
       var mine=state.pedidos.filter(function(o){return o.usuarioId===session.usuarioId;});
       var mes=new Date().toISOString().slice(0,7);
       var mineMes=mine.filter(function(o){return (o.fecha||'').slice(0,7)===mes;});
-      var ganMes=mineMes.reduce(function(a,o){
-        if(o.gananciaTrabajador!=null) return a+o.gananciaTrabajador;
-        return a+((o.ventaTotal||0)-(o.mayoristaTotal||0));
-      },0);
+      function gTrabDe(o){ if(o.gananciaTrabajador!=null) return o.gananciaTrabajador; return (o.ventaTotal||0)-(o.mayoristaTotal||0); }
+      // Solo suma la ganancia cuando el admin confirma el pago (estado.venta)
+      var pagadosMes=mineMes.filter(function(o){ ensureEstado(o); return !!o.estado.venta; });
+      var pendMes=mineMes.filter(function(o){ ensureEstado(o); return !o.estado.venta; });
+      var ganMes=pagadosMes.reduce(function(a,o){return a+gTrabDe(o);},0);
+      var ganPend=pendMes.reduce(function(a,o){return a+gTrabDe(o);},0);
       statsHTML='<div class="stats">'+stat('Productos',s.nprod)+stat('Pedidos (este mes)',mineMes.length)+stat('Ganancia (este mes)',fmt(ganMes))+'</div>';
+      if(ganPend>0){
+        statsHTML += '<div class="hint" style="margin:-8px 2px 16px; display:flex; gap:14px; flex-wrap:wrap">'+
+          '<span style="color:var(--warn)">⏳ Por confirmar pago: <b>'+fmt(ganPend)+'</b> ('+pendMes.length+' pedido'+(pendMes.length===1?'':'s')+')</span>'+
+        '</div>';
+      }
     }
     return '<div class="top">'+
       '<div class="brand"><h1>Bodegas &amp; Márgenes</h1><p>'+esc(lead)+'</p></div>'+
