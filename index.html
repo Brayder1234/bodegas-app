@@ -702,6 +702,8 @@ body.role-trabajador .pexp{display:none !important}
   }
   function metaWidgetHTML(){
     if(!session) return '';
+    // Brayder01 no ve el widget (lo edita desde el menú "⋯ Más")
+    if(puedeEditarMeta()) return '';
     var meta = (typeof state.metaMensual==='number' && state.metaMensual>0) ? state.metaMensual : 600000;
     var mesKey = new Date().toISOString().slice(0,7);
     // Ventas totales del mes: si es trabajador, solo las suyas; si es admin, todas
@@ -748,15 +750,9 @@ body.role-trabajador .pexp{display:none !important}
 
   /* ---------- ganancia real del admin ---------- */
   // Cuánto gana el DUEÑO (admin) por un pedido:
-  //  · si lo hizo un admin → gana todo (venta cliente - costo bodega)
-  //  · si lo hizo un trabajador → gana solo la empresa (mayorista - costo bodega)
+  // SIEMPRE = mayorista - costo bodega (la ganancia real de la empresa),
+  // sin importar quién hizo la venta (admin o trabajador).
   function gananciaAdminDe(o){
-    var u=state.usuarios.find(function(x){return x.id===o.usuarioId;});
-    var esAdmin = u && u.role==='admin';
-    if(esAdmin){
-      return (o.gananciaTotal!=null) ? o.gananciaTotal : ((o.ventaTotal||0)-(o.costoTotal||0));
-    }
-    // Trabajador o usuario desconocido → solo la ganancia de la empresa
     if(o.gananciaEmpresa!=null) return o.gananciaEmpresa;
     return (o.mayoristaTotal||0) - (o.costoTotal||0);
   }
@@ -1423,6 +1419,7 @@ body.role-trabajador .pexp{display:none !important}
           '<button class="btn ghost" data-act="mi-perfil" style="justify-content:flex-start">👤 Mi perfil</button>'+
           (admin?'<button class="btn ghost" data-act="users" style="justify-content:flex-start">👥 Trabajadores ('+state.usuarios.length+')</button>':'')+
           (admin?'<button class="btn ghost" data-act="notifs" style="justify-content:flex-start">🔔 Notificaciones por email'+(state.notifEmail&&state.notifEmail.accessKey?' <span style="color:var(--good);font-size:11px;margin-left:auto">activas</span>':' <span style="color:var(--warn);font-size:11px;margin-left:auto">sin configurar</span>')+'</button>':'')+
+          (puedeEditarMeta()?'<button class="btn ghost" data-act="edit-meta" style="justify-content:flex-start">🎯 Meta mensual del equipo <span style="color:var(--muted);font-size:11.5px;margin-left:auto">'+fmt(state.metaMensual||600000)+'</span></button>':'')+
           (admin?'<button class="btn ghost" data-act="export" style="justify-content:flex-start">⬇ Exportar a CSV (Excel)</button>':'')+
           (admin?'<button class="btn ghost" data-act="backup" style="justify-content:flex-start">💾 Descargar respaldo (JSON)</button>':'')+
           (admin?'<button class="btn ghost" data-act="import" style="justify-content:flex-start">📂 Restaurar respaldo</button>':'')+
@@ -1534,6 +1531,7 @@ body.role-trabajador .pexp{display:none !important}
     else if(a==='mi-perfil'){ closeModal(); openMiPerfil(); }
     else if(a==='edit-meta'){
       if(!puedeEditarMeta()){ showToast('Solo Brayder01 puede cambiar la meta',false); return; }
+      closeModal();
       var actual=state.metaMensual||600000;
       var nueva=prompt('Meta mensual de ventas totales (COP):\n\nEjemplo: 600000 = $600.000\n\nSe aplica a cada trabajador (individual) y al equipo.', String(actual));
       if(nueva==null) return;
