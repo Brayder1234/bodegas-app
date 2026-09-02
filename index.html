@@ -203,6 +203,39 @@ select.sort{padding:10px 12px; border-radius:10px; border:1px solid var(--border
 .meta-ft .edit{color:var(--accent); font-weight:600; cursor:pointer; background:none; border:none; font-size:12.5px}
 .meta-ft .edit:hover{text-decoration:underline}
 
+/* Tutorial / Onboarding */
+.tut-overlay{
+  position:fixed; inset:0; z-index:90; pointer-events:none;
+  background:rgba(15,25,20,.55); backdrop-filter:blur(2px);
+  animation:fadeIn .2s ease both;
+}
+.tut-halo{
+  position:absolute; border-radius:14px; pointer-events:none;
+  box-shadow:0 0 0 4px rgba(13,122,110,.35), 0 0 0 9999px rgba(15,25,20,.55);
+  transition:all .35s cubic-bezier(.4,0,.2,1);
+}
+.tut-card{
+  position:fixed; z-index:91; pointer-events:auto;
+  background:var(--surface); border:1px solid var(--border); border-radius:14px;
+  box-shadow:var(--shadow-lg); padding:16px 18px; max-width:340px; width:calc(100vw - 32px);
+  animation:fadeUp .28s ease both;
+}
+.tut-card .step{font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; font-weight:700; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center}
+.tut-card .step .skip{background:none; border:none; color:var(--faint); font-size:12px; cursor:pointer; padding:2px 6px; text-transform:none; letter-spacing:0}
+.tut-card .step .skip:hover{color:var(--ink)}
+.tut-card h3{margin:0 0 6px; font-size:16px; font-weight:700; color:var(--ink); line-height:1.3}
+.tut-card p{margin:0 0 14px; font-size:13.5px; color:var(--muted); line-height:1.5}
+.tut-card .nav{display:flex; gap:8px; justify-content:space-between; align-items:center}
+.tut-card .nav .dots{display:flex; gap:4px}
+.tut-card .nav .dot{width:6px; height:6px; border-radius:50%; background:var(--border-strong); transition:.2s}
+.tut-card .nav .dot.on{background:var(--accent); width:16px; border-radius:3px}
+.tut-card .nav .btns{display:flex; gap:6px}
+.tut-card .nav .btns button{padding:7px 13px; border-radius:8px; border:1px solid var(--border); background:var(--surface-2); color:var(--ink); font-size:13px; font-weight:600; cursor:pointer; font-family:inherit}
+.tut-card .nav .btns button:hover{border-color:var(--border-strong)}
+.tut-card .nav .btns .next{background:var(--accent); border-color:var(--accent); color:#fff}
+.tut-card .nav .btns .next:hover{filter:brightness(1.06)}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+
 /* Banner de perfil incompleto */
 .perfil-alert{
   display:flex; align-items:center; justify-content:space-between; gap:12px;
@@ -562,6 +595,7 @@ body.role-trabajador .pexp{display:none !important}
         u.telefono = u.telefono || '';
         u.correo = u.correo || '';
         u.cuentaPago = u.cuentaPago || '';
+        u.tutorialVisto = u.tutorialVisto || false;
         return u;
       }),
       carritos:(d.carritos&&typeof d.carritos==='object')?d.carritos:{},
@@ -1108,6 +1142,7 @@ body.role-trabajador .pexp{display:none !important}
     saveSession(session);
     render(); startPolling();
     showToast('Bienvenido, '+u.nombre, false);
+    autoStartTutorial();
   }
   async function tryCreateFirstAdmin(){
     var name=(document.getElementById('lg-name').value||'').trim();
@@ -1431,6 +1466,7 @@ body.role-trabajador .pexp{display:none !important}
           var pedLabel = admin ? 'Ventas guardadas' : 'Mis pedidos';
           return '<button class="btn ghost" data-act="history" style="justify-content:flex-start">📋 '+pedLabel+' ('+pedCount+')</button>'+
           '<button class="btn ghost" data-act="mi-perfil" style="justify-content:flex-start">👤 Mi perfil</button>'+
+          '<button class="btn ghost" data-act="tutorial" style="justify-content:flex-start">🎓 Ver tutorial</button>'+
           (admin?'<button class="btn ghost" data-act="users" style="justify-content:flex-start">👥 Trabajadores ('+state.usuarios.length+')</button>':'')+
           (admin?'<button class="btn ghost" data-act="notifs" style="justify-content:flex-start">🔔 Notificaciones por email'+(state.notifEmail&&state.notifEmail.accessKey?' <span style="color:var(--good);font-size:11px;margin-left:auto">activas</span>':' <span style="color:var(--warn);font-size:11px;margin-left:auto">sin configurar</span>')+'</button>':'')+
           (puedeEditarMeta()?'<button class="btn ghost" data-act="edit-meta" style="justify-content:flex-start">🎯 Meta mensual del equipo <span style="color:var(--muted);font-size:11.5px;margin-left:auto">'+fmt(state.metaMensual||600000)+'</span></button>':'')+
@@ -1543,6 +1579,7 @@ body.role-trabajador .pexp{display:none !important}
     else if(a==='who'){ if(confirm('¿Cerrar sesión de '+(session?session.usuarioNombre:'')+'?')){ clearSession(); render(); } }
     else if(a==='us-create'){ createUser(); }
     else if(a==='mi-perfil'){ closeModal(); openMiPerfil(); }
+    else if(a==='tutorial'){ closeModal(); startTutorial(); }
     else if(a==='edit-meta'){
       if(!puedeEditarMeta()){ showToast('Solo Brayder01 puede cambiar la meta',false); return; }
       closeModal();
@@ -1637,6 +1674,11 @@ body.role-trabajador .pexp{display:none !important}
     }
   });
   document.addEventListener('keydown',function(e){ if(e.key==='Escape'){ closeModal(); closeCart(); document.querySelectorAll('.pact.open').forEach(function(el){el.classList.remove('open');}); } });
+  // Botones del tutorial
+  document.addEventListener('click', function(e){
+    var t=e.target.closest('[data-tut]');
+    if(t){ tutNav(t.getAttribute('data-tut')); return; }
+  });
   // Cierre global de modales: cualquier [data-role="close"] o click en scrim
   document.addEventListener('click', function(e){
     var closer = e.target.closest('[data-role="close"]');
@@ -1806,6 +1848,110 @@ body.role-trabajador .pexp{display:none !important}
     state.notifEmail=Object.assign({destinatario:''}, ne);
     closeModal(); scheduleSave();
     showToast('Notificaciones guardadas',false);
+  }
+
+  /* ---------- tutorial / onboarding ---------- */
+  var tutState={index:0, steps:[]};
+  function stepsForRole(){
+    var admin=isAdmin();
+    // Trabajador (los pasos que pediste)
+    if(!admin) return [
+      {sel:'.brand', title:'👋 Bienvenido a VELORA', body:'Este es el panel donde vas a manejar tus pedidos. Te muestro rápido lo que puedes hacer.'},
+      {sel:'.meta-card', title:'🎯 Tu meta del mes', body:'Aquí ves cuánto llevas vendido y cuánto te falta para llegar a tu meta mensual.'},
+      {sel:'.stats', title:'📊 Tus números', body:'Un vistazo rápido: productos disponibles, pedidos que has hecho este mes y tu ganancia.'},
+      {sel:'.search', title:'🔍 Buscar productos', body:'Escribe aquí el nombre, marca o SKU para encontrar cualquier producto.'},
+      {sel:'.pgroup:first-of-type', title:'🏷️ Agrupados por marca', body:'Los productos están organizados por marca. Toca el nombre para plegar o abrir cada grupo.'},
+      {sel:'.prow .padd', title:'🛒 Añadir al pedido', body:'Toca el botón + para sumar el producto a tu pedido actual.'},
+      {sel:'.fab-cart', title:'💼 Ver el pedido', body:'Este botón flotante te muestra el pedido en curso. Ahí puedes cambiar cantidades y el precio real al que vendiste (el sugerido es una referencia).', pos:'bottom-right'},
+      {sel:'[data-act="menu"]', title:'⋯ Más opciones', body:'Aquí encuentras "Mis pedidos" y "Mi perfil" (donde debes tener cédula, correo, teléfono y cuenta de pago para poder guardar pedidos).'},
+      {sel:null, title:'✨ ¡Listo!', body:'Ya conoces lo básico. Recuerda: cuando guardes un pedido, el admin confirma cuando recibe el pago y tu ganancia se suma automáticamente. ¡Éxitos con tus ventas!'}
+    ];
+    // Admin (versión corta)
+    return [
+      {sel:'.brand', title:'👋 Panel de admin', body:'Como admin ves toda la operación: costos, márgenes, trabajadores y ganancias.'},
+      {sel:'.stats', title:'📊 Panel principal', body:'Productos, ventas del mes, trabajadores y tu ganancia total (mayorista − costo bodega).'},
+      {sel:'[data-act="menu"]', title:'⋯ Más', body:'Aquí administras trabajadores, ves ventas guardadas, configuras notificaciones y la meta del equipo.'},
+      {sel:null, title:'✨ ¡Listo!', body:'Confirma "Envío" y "Venta" en cada pedido guardado para que la ganancia se cuente.'}
+    ];
+  }
+  function startTutorial(){
+    tutState={index:0, steps:stepsForRole()};
+    if(!tutState.steps.length) return;
+    renderTutorial();
+  }
+  function endTutorial(marcarVisto){
+    document.querySelectorAll('.tut-overlay, .tut-card, .tut-halo').forEach(function(el){ el.remove(); });
+    if(marcarVisto && session){
+      var u=state.usuarios.find(function(x){return x.id===session.usuarioId;});
+      if(u && !u.tutorialVisto){ u.tutorialVisto=true; scheduleSave(); }
+    }
+  }
+  function renderTutorial(){
+    document.querySelectorAll('.tut-overlay, .tut-card, .tut-halo').forEach(function(el){ el.remove(); });
+    var step=tutState.steps[tutState.index]; if(!step) return endTutorial(true);
+    var overlay=document.createElement('div'); overlay.className='tut-overlay';
+    document.body.appendChild(overlay);
+    var card=document.createElement('div'); card.className='tut-card';
+    var n=tutState.index+1, tot=tutState.steps.length;
+    var isLast=(n===tot);
+    var dots=''; for(var i=0;i<tot;i++){ dots += '<span class="dot'+(i===tutState.index?' on':'')+'"></span>'; }
+    card.innerHTML=
+      '<div class="step">Paso '+n+' de '+tot+' <button class="skip" data-tut="skip">Cerrar tutorial</button></div>'+
+      '<h3>'+esc(step.title)+'</h3><p>'+esc(step.body)+'</p>'+
+      '<div class="nav">'+
+        '<div class="dots">'+dots+'</div>'+
+        '<div class="btns">'+
+          (tutState.index>0 ? '<button data-tut="prev">Atrás</button>' : '')+
+          (isLast ? '<button class="next" data-tut="done">¡Entendido!</button>' : '<button class="next" data-tut="next">Siguiente</button>')+
+        '</div>'+
+      '</div>';
+    document.body.appendChild(card);
+    // Highlight del elemento
+    var el = step.sel ? document.querySelector(step.sel) : null;
+    if(el){
+      el.scrollIntoView({behavior:'smooth', block:'center'});
+      setTimeout(function(){
+        var r=el.getBoundingClientRect();
+        var halo=document.createElement('div'); halo.className='tut-halo';
+        halo.style.top=(r.top-6)+'px'; halo.style.left=(r.left-6)+'px';
+        halo.style.width=(r.width+12)+'px'; halo.style.height=(r.height+12)+'px';
+        document.body.appendChild(halo);
+        // Posicionar card debajo/arriba/al lado
+        var cw=card.offsetWidth||320, ch=card.offsetHeight||160;
+        var vw=window.innerWidth, vh=window.innerHeight;
+        var top, left;
+        // Preferir debajo del elemento
+        if(r.bottom + ch + 20 <= vh){
+          top = r.bottom + 16;
+          left = Math.min(Math.max(12, r.left), vw - cw - 12);
+        } else if(r.top - ch - 20 >= 0){
+          top = r.top - ch - 16;
+          left = Math.min(Math.max(12, r.left), vw - cw - 12);
+        } else {
+          // centrado si no hay espacio
+          top = Math.max(12, (vh - ch)/2);
+          left = Math.max(12, (vw - cw)/2);
+        }
+        card.style.top=top+'px'; card.style.left=left+'px';
+      }, 350);
+    } else {
+      // Sin elemento: centrado
+      card.style.top='50%'; card.style.left='50%'; card.style.transform='translate(-50%,-50%)';
+    }
+  }
+  function tutNav(dir){
+    if(dir==='next'){ tutState.index++; if(tutState.index>=tutState.steps.length){ endTutorial(true); return; } renderTutorial(); }
+    else if(dir==='prev'){ tutState.index=Math.max(0,tutState.index-1); renderTutorial(); }
+    else if(dir==='done'){ endTutorial(true); showToast('¡A vender! 💪',false); }
+    else if(dir==='skip'){ endTutorial(true); }
+  }
+  // Detectar tutorial pendiente al cargar
+  function autoStartTutorial(){
+    if(!session) return;
+    var u=state.usuarios.find(function(x){return x.id===session.usuarioId;});
+    if(!u || u.tutorialVisto) return;
+    // Espera un momento para que el DOM esté listo
+    setTimeout(startTutorial, 700);
   }
 
   /* ---------- carrito / pedido ---------- */
@@ -2359,6 +2505,7 @@ body.role-trabajador .pexp{display:none !important}
       catch(e){ setConn('err'); showToast('Sin conexión — usando copia local',false); }
       bootstrapping=false;
       render(); startPolling();
+      autoStartTutorial();
     })();
   }
 })();
