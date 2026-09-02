@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Bodegas & Márgenes</title>
+<title>VELORA Cosmetic</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -852,9 +852,7 @@ body.role-trabajador .pexp{display:none !important}
       '<span class="avat">'+esc(whoIni)+'</span>'+esc(session?session.usuarioNombre:'')+
       ' <span class="role">'+(admin?'admin':'trabajador')+'</span>'+
     '</button>';
-    var lead = admin
-      ? 'Tus productos, en qué bodega están y a cómo te los da cada una — con tu ganancia calculada.'
-      : 'Arma tus pedidos y envíalos por WhatsApp a cada bodega.';
+    var lead = '💄 Sección: Maquillaje';
     var statsHTML;
     if(admin){
       var mes=new Date().toISOString().slice(0,7);
@@ -898,7 +896,7 @@ body.role-trabajador .pexp{display:none !important}
       }
     }
     return '<div class="top">'+
-      '<div class="brand"><h1>Bodegas &amp; Márgenes</h1><p>'+esc(lead)+'</p></div>'+
+      '<div class="brand"><h1>VELORA <span style="font-weight:400;color:var(--muted);letter-spacing:0">Cosmetic</span></h1><p>'+esc(lead)+'</p></div>'+
       '<div class="top-tools">'+whoLine+connHTML()+
         (admin?'<button class="icon-btn" data-act="toggle-moneda" title="Cambiar moneda">'+(state.moneda==='USD'?'US$':'COP')+'</button>':'')+
         '<button class="icon-btn" data-act="toggle-theme" title="Tema claro/oscuro" aria-label="Cambiar tema">◐</button>'+
@@ -2167,9 +2165,8 @@ body.role-trabajador .pexp{display:none !important}
           '<span class="est-chip '+e3+'"'+(admin?' data-act="est-venta"':'')+'><span class="dot"></span>'+(admin?'Venta':'Pedido')+' '+(o.estado.venta?'✓':(admin?'confirmar':'pendiente'))+'</span>'+
         '</div>';
         return '<div class="hist-item" data-oid="'+esc(o.id)+'">'+
-          '<div class="hd"><span class="cli">'+esc(o.cliente&&o.cliente.nombre?o.cliente.nombre:'(sin cliente)')+'</span><span class="fec">'+esc(fs)+'</span></div>'+
-          '<div class="tt">'+fmt(o.ventaTotal)+'<div class="mini">'+gLabel+' '+fmt(gShown)+' · <span class="mg '+mgClass(mg)+'">'+pct(mg)+'</span></div></div>'+
-          '<div class="sm">'+o.unidades+' unidad(es) · '+o.items.length+' producto(s)'+(o.cliente&&o.cliente.tel?' · '+esc(o.cliente.tel):'')+ciudad+who+'</div>'+
+          '<div class="hd"><span class="cli">👤 '+esc(o.usuarioNombre||'(sin vendedor)')+'</span><span class="fec">'+esc(fs)+'</span></div>'+
+          '<div class="tt">'+fmt(o.ventaTotal)+'<div class="mini">'+o.unidades+' unidad'+(o.unidades===1?'':'es')+'</div></div>'+
           chips+
           '<div class="acts">'+
             '<button class="btn ghost" data-act="hist-view">Ver detalle</button>'+
