@@ -1863,47 +1863,106 @@ body.role-trabajador .pexp{display:none !important}
   }
 
   /* ---------- tutorial / onboarding ---------- */
-  var tutState={index:0, steps:[]};
+  var tutState={index:0, steps:[], demoAdded:false};
+
+  // Helpers que preparan la escena de cada paso
+  function tutExpandFirstGroup(){
+    var pg=document.querySelector('.pgroup');
+    if(pg && pg.classList.contains('collapsed')){
+      pg.classList.remove('collapsed');
+      var marca=pg.getAttribute('data-marca');
+      if(marca && ui.collapsed) ui.collapsed[marca]=false;
+    }
+    // scroll al primer grupo
+    if(pg) pg.scrollIntoView({behavior:'smooth', block:'center'});
+  }
+  function tutEnsureDemoInCart(){
+    if(!session) return;
+    var cart=currentCart();
+    if(cart.items.length>0){ updateFab(); return; }
+    var p=state.productos.find(function(x){return x.precioMayorista>0 && x.precioVenta>0;});
+    if(!p) return;
+    cart.items.push({productId:p.id, bodega:(best(p)?best(p).bodega:''), cantidad:1, __demo:true});
+    tutState.demoAdded=true;
+    refreshProds();
+    updateFab();
+  }
+  function tutCleanupDemoCart(){
+    if(!tutState.demoAdded || !session) return;
+    var cart=currentCart();
+    cart.items=cart.items.filter(function(it){return !it.__demo;});
+    tutState.demoAdded=false;
+    refreshProds();
+    updateFab();
+  }
+  function tutOpenCartPanel(){ tutEnsureDemoInCart(); if(!host.querySelector('.side-panel')) openCart(); }
+  function tutCloseCartPanel(){ closeCart(); }
+  function tutOpenMenu(){
+    closeCart();
+    var btn=document.querySelector('[data-act="menu"]'); if(btn) btn.click();
+  }
+  function tutCloseMenu(){ closeModal(); }
+
   function stepsForRole(){
     var admin=isAdmin();
-    // Trabajador (los pasos que pediste)
+    // Trabajador
     if(!admin) return [
-      {sel:'.brand', title:'👋 Bienvenido a VELORA', body:'Este es el panel donde vas a manejar tus pedidos. Te muestro rápido lo que puedes hacer.'},
+      {sel:'.brand', title:'👋 Bienvenido a VELORA', body:'Este es tu panel para manejar pedidos. Te muestro rápido cada parte.'},
       {sel:'.meta-card', title:'🎯 Tu meta del mes', body:'Aquí ves cuánto llevas vendido y cuánto te falta para llegar a tu meta mensual.'},
       {sel:'.stats', title:'📊 Tus números', body:'Un vistazo rápido: productos disponibles, pedidos que has hecho este mes y tu ganancia.'},
-      {sel:'.search', title:'🔍 Buscar productos', body:'Escribe aquí el nombre, marca o SKU para encontrar cualquier producto.'},
-      {sel:'.pgroup:first-of-type', title:'🏷️ Agrupados por marca', body:'Los productos están organizados por marca. Toca el nombre para plegar o abrir cada grupo.'},
-      {sel:'.prow .padd', title:'🛒 Añadir al pedido', body:'Toca el botón + para sumar el producto a tu pedido actual.'},
-      {sel:'.fab-cart', title:'💼 Ver el pedido', body:'Este botón flotante te muestra el pedido en curso. Ahí puedes cambiar cantidades y el precio real al que vendiste (el sugerido es una referencia).', pos:'bottom-right'},
-      {sel:'[data-act="menu"]', title:'⋯ Más opciones', body:'Aquí encuentras "Mis pedidos" y "Mi perfil" (donde debes tener cédula, correo, teléfono y cuenta de pago para poder guardar pedidos).'},
-      {sel:null, title:'✨ ¡Listo!', body:'Ya conoces lo básico. Recuerda: cuando guardes un pedido, el admin confirma cuando recibe el pago y tu ganancia se suma automáticamente. ¡Éxitos con tus ventas!'}
+      {sel:'.search', title:'🔍 Buscar productos', body:'Escribe aquí el nombre del producto, marca o SKU para encontrarlo rápido.'},
+      {sel:'.pgroup:first-of-type .pg-hdr', title:'🏷️ Agrupados por marca', body:'Los productos están organizados por marca. Toca el nombre para plegar o abrir cada grupo.', onEnter:tutExpandFirstGroup},
+      {sel:'.prow .padd', title:'🛒 Añadir al pedido', body:'Toca el botón + de cualquier producto para sumarlo a tu pedido actual.', onEnter:tutExpandFirstGroup},
+      {sel:'.fab-cart', title:'💼 Botón del carrito', body:'Cuando añades productos aparece este botón flotante abajo a la derecha. Muestra el total y te lleva al panel del pedido.', onEnter:tutEnsureDemoInCart, onExit:function(){ /* mantengo el demo para próximo paso */ }},
+      {sel:'.side-cli', title:'📝 Datos del cliente', body:'Antes de guardar, llena estos datos del cliente: nombre, teléfono, dirección y ciudad — son obligatorios.', onEnter:tutOpenCartPanel},
+      {sel:'[data-act="setprecio"]', title:'💰 Precio editable', body:'Cada producto trae un precio sugerido. Si vendiste más caro o más barato, escribe aquí el precio REAL — tu ganancia se calcula automáticamente.', onEnter:tutOpenCartPanel, onExit:tutCloseCartPanel},
+      {sel:'[data-act="menu"]', title:'⋯ Más opciones', body:'Toca "⋯ Más" para abrir Mis pedidos, Mi perfil y otras opciones.', onEnter:function(){ tutCloseCartPanel(); tutCleanupDemoCart(); }},
+      {sel:'[data-act="mi-perfil"]', title:'👤 Mi perfil', body:'Debes tener completos cédula, correo, teléfono y cuenta de pago (Nequi o banco). Sin esto no puedes guardar pedidos.', onEnter:tutOpenMenu, onExit:tutCloseMenu},
+      {sel:null, title:'✨ ¡Listo!', body:'Ya conoces lo básico. Recuerda: cuando guardas un pedido, el admin confirma cuando recibe el pago y tu ganancia se suma. ¡Éxitos con tus ventas!'}
     ];
-    // Admin (versión corta)
+    // Admin
     return [
       {sel:'.brand', title:'👋 Panel de admin', body:'Como admin ves toda la operación: costos, márgenes, trabajadores y ganancias.'},
       {sel:'.stats', title:'📊 Panel principal', body:'Productos, ventas del mes, trabajadores y tu ganancia total (mayorista − costo bodega).'},
-      {sel:'[data-act="menu"]', title:'⋯ Más', body:'Aquí administras trabajadores, ves ventas guardadas, configuras notificaciones y la meta del equipo.'},
-      {sel:null, title:'✨ ¡Listo!', body:'Confirma "Envío" y "Venta" en cada pedido guardado para que la ganancia se cuente.'}
+      {sel:'[data-act="menu"]', title:'⋯ Más opciones', body:'Aquí administras trabajadores, ves ventas guardadas, configuras notificaciones y la meta del equipo.'},
+      {sel:'[data-act="history"]', title:'📋 Ventas guardadas', body:'Cada venta pasa por 3 estados: Realizado → Envío → Venta. Debes confirmar el envío y luego la venta para que la ganancia se sume.', onEnter:tutOpenMenu, onExit:tutCloseMenu},
+      {sel:null, title:'✨ ¡Listo!', body:'Ya conoces lo esencial. Explora "Trabajadores" y "Notificaciones" para completar la configuración.'}
     ];
   }
   function startTutorial(){
-    tutState={index:0, steps:stepsForRole()};
+    tutState={index:0, steps:stepsForRole(), demoAdded:false, prevIndex:-1};
     if(!tutState.steps.length) return;
     renderTutorial();
   }
   function endTutorial(marcarVisto){
+    // Ejecuta onExit del paso actual
+    var cur=tutState.steps[tutState.index];
+    if(cur && typeof cur.onExit==='function'){ try{ cur.onExit(); }catch(e){} }
     document.querySelectorAll('.tut-overlay, .tut-card, .tut-halo').forEach(function(el){ el.remove(); });
+    // Limpieza universal
+    tutCleanupDemoCart();
+    tutCloseCartPanel();
+    tutCloseMenu();
     if(marcarVisto && session){
       var u=state.usuarios.find(function(x){return x.id===session.usuarioId;});
       if(u && !u.tutorialVisto){ u.tutorialVisto=true; scheduleSave(); }
     }
   }
   function renderTutorial(){
+    // Ejecuta onExit del paso anterior (si cambió el índice)
+    if(tutState.prevIndex>=0 && tutState.prevIndex!==tutState.index){
+      var prev=tutState.steps[tutState.prevIndex];
+      if(prev && typeof prev.onExit==='function'){ try{ prev.onExit(); }catch(e){} }
+    }
     document.querySelectorAll('.tut-overlay, .tut-card, .tut-halo').forEach(function(el){ el.remove(); });
     var step=tutState.steps[tutState.index]; if(!step) return endTutorial(true);
+    // Ejecuta onEnter del paso actual
+    if(typeof step.onEnter==='function'){ try{ step.onEnter(); }catch(e){} }
+    tutState.prevIndex=tutState.index;
     // Overlay pleno SOLO si no hay elemento a resaltar (el halo crea el spotlight cuando hay uno)
     var el = step.sel ? document.querySelector(step.sel) : null;
-    if(!el){
+    if(!el && !step.sel){
+      // Solo fondo oscuro cuando no hay ningún elemento a resaltar (paso final)
       var overlay=document.createElement('div'); overlay.className='tut-overlay';
       document.body.appendChild(overlay);
     }
@@ -1922,37 +1981,53 @@ body.role-trabajador .pexp{display:none !important}
         '</div>'+
       '</div>';
     document.body.appendChild(card);
-    // Highlight del elemento (el ya está declarado arriba)
+    tutState.currentCard=card;
     if(el){
-      el.scrollIntoView({behavior:'smooth', block:'center'});
-      setTimeout(function(){
-        var r=el.getBoundingClientRect();
-        var halo=document.createElement('div'); halo.className='tut-halo';
-        halo.style.top=(r.top-6)+'px'; halo.style.left=(r.left-6)+'px';
-        halo.style.width=(r.width+12)+'px'; halo.style.height=(r.height+12)+'px';
-        document.body.appendChild(halo);
-        // Posicionar card debajo/arriba/al lado
-        var cw=card.offsetWidth||320, ch=card.offsetHeight||160;
-        var vw=window.innerWidth, vh=window.innerHeight;
-        var top, left;
-        // Preferir debajo del elemento
-        if(r.bottom + ch + 20 <= vh){
-          top = r.bottom + 16;
-          left = Math.min(Math.max(12, r.left), vw - cw - 12);
-        } else if(r.top - ch - 20 >= 0){
-          top = r.top - ch - 16;
-          left = Math.min(Math.max(12, r.left), vw - cw - 12);
-        } else {
-          // centrado si no hay espacio
-          top = Math.max(12, (vh - ch)/2);
-          left = Math.max(12, (vw - cw)/2);
-        }
-        card.style.top=top+'px'; card.style.left=left+'px';
-      }, 350);
+      positionTutHalo(el, card);
     } else {
-      // Sin elemento: centrado
-      card.style.top='50%'; card.style.left='50%'; card.style.transform='translate(-50%,-50%)';
+      // Sin elemento a la primera: intento hasta 3 veces con delay (por si openCart/openMenu tarda)
+      if(step.sel){
+        var attempts=0;
+        var iv=setInterval(function(){
+          attempts++;
+          var el2=document.querySelector(step.sel);
+          if(el2){ clearInterval(iv); positionTutHalo(el2, card); return; }
+          if(attempts>=8){ clearInterval(iv); centerCard(card); }
+        }, 120);
+      } else {
+        centerCard(card);
+      }
     }
+  }
+  function centerCard(card){
+    card.style.top='50%'; card.style.left='50%'; card.style.transform='translate(-50%,-50%)';
+  }
+  function positionTutHalo(el, card){
+    // Quitar halo anterior si existe
+    document.querySelectorAll('.tut-halo').forEach(function(h){ h.remove(); });
+    el.scrollIntoView({behavior:'smooth', block:'center'});
+    setTimeout(function(){
+      var r=el.getBoundingClientRect();
+      var halo=document.createElement('div'); halo.className='tut-halo';
+      halo.style.top=(r.top-6)+'px'; halo.style.left=(r.left-6)+'px';
+      halo.style.width=(r.width+12)+'px'; halo.style.height=(r.height+12)+'px';
+      document.body.appendChild(halo);
+      // Posicionar card debajo/arriba/al lado
+      var cw=card.offsetWidth||320, ch=card.offsetHeight||160;
+      var vw=window.innerWidth, vh=window.innerHeight;
+      var top, left;
+      if(r.bottom + ch + 20 <= vh){
+        top = r.bottom + 16;
+        left = Math.min(Math.max(12, r.left), vw - cw - 12);
+      } else if(r.top - ch - 20 >= 0){
+        top = r.top - ch - 16;
+        left = Math.min(Math.max(12, r.left), vw - cw - 12);
+      } else {
+        top = Math.max(12, (vh - ch)/2);
+        left = Math.max(12, (vw - cw)/2);
+      }
+      card.style.top=top+'px'; card.style.left=left+'px'; card.style.transform='none';
+    }, 350);
   }
   function tutNav(dir){
     if(dir==='next'){ tutState.index++; if(tutState.index>=tutState.steps.length){ endTutorial(true); return; } renderTutorial(); }
