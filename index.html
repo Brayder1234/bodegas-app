@@ -787,11 +787,15 @@ body.role-trabajador .pexp{display:none !important}
         (s.low>0?'<span style="color:var(--bad)">⚠ '+s.low+' con margen bajo</span>':'<span style="color:var(--good)">✓ sin productos con margen bajo</span>')+
       '</div>';
     }else{
-      // trabajador: sin datos financieros; solo cuántos hay y su propio historial
+      // trabajador: productos, pedidos este mes, ganancia este mes
       var mine=state.pedidos.filter(function(o){return o.usuarioId===session.usuarioId;});
-      var hoy=new Date().toISOString().slice(0,10);
-      var hoyN=mine.filter(function(o){return (o.fecha||'').slice(0,10)===hoy;}).length;
-      statsHTML='<div class="stats">'+stat('Productos',s.nprod)+stat('Mis pedidos hoy',hoyN)+stat('Total mis pedidos',mine.length)+'</div>';
+      var mes=new Date().toISOString().slice(0,7);
+      var mineMes=mine.filter(function(o){return (o.fecha||'').slice(0,7)===mes;});
+      var ganMes=mineMes.reduce(function(a,o){
+        if(o.gananciaTrabajador!=null) return a+o.gananciaTrabajador;
+        return a+((o.ventaTotal||0)-(o.mayoristaTotal||0));
+      },0);
+      statsHTML='<div class="stats">'+stat('Productos',s.nprod)+stat('Pedidos (este mes)',mineMes.length)+stat('Ganancia (este mes)',fmt(ganMes))+'</div>';
     }
     return '<div class="top">'+
       '<div class="brand"><h1>Bodegas &amp; Márgenes</h1><p>'+esc(lead)+'</p></div>'+
