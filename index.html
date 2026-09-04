@@ -340,6 +340,18 @@ body.role-trabajador .pexp{display:none !important}
   .pv-t{font-size:12.5px}
 }
 
+/* Password con ojo mostrar/ocultar */
+.pwd-wrap{position:relative}
+.pwd-wrap input{padding-right:44px !important}
+.pwd-eye{
+  position:absolute; right:6px; top:50%; transform:translateY(-50%);
+  background:transparent; border:none; cursor:pointer; padding:6px 8px;
+  border-radius:6px; font-size:16px; opacity:.65; transition:opacity .15s, background .15s;
+  color:var(--ink); line-height:1;
+}
+.pwd-eye:hover{opacity:1; background:var(--surface-2)}
+.pwd-eye.on{opacity:1; color:var(--accent)}
+
 /* Login y panel de usuarios */
 .login-wrap{max-width:400px; margin:8vh auto 0; padding:0 18px}
 .login-card{background:var(--surface); border:1px solid var(--border); border-radius:18px; box-shadow:var(--shadow-lg); padding:28px 26px}
@@ -1297,9 +1309,19 @@ body.role-trabajador .pexp{display:none !important}
         ? '<h1>Crea tu cuenta de administrador</h1><p class="lead">Este es el primer usuario de la plataforma. Podrás crear más trabajadores después.</p>'
         : '<h1>Inicia sesión</h1><p class="lead">Ingresa con tu nombre y contraseña.</p>'
       )+
-      '<div class="field"><label>Nombre de usuario</label><input type="text" id="lg-name" autocomplete="username" placeholder="Ej: Brayder"></div>'+
-      '<div class="field" style="margin-top:12px"><label>Contraseña</label><input type="password" id="lg-pwd" autocomplete="'+(needsAdmin?'new-password':'current-password')+'" placeholder="••••••"></div>'+
-      (needsAdmin ? '<div class="field" style="margin-top:12px"><label>Repetir contraseña</label><input type="password" id="lg-pwd2" autocomplete="new-password"></div>' : '')+
+      '<div class="field"><label>Nombre de usuario</label><input type="text" id="lg-name" autocomplete="username" placeholder="Ej: Juan"></div>'+
+      '<div class="field" style="margin-top:12px"><label>Contraseña</label>'+
+        '<div class="pwd-wrap">'+
+          '<input type="password" id="lg-pwd" autocomplete="'+(needsAdmin?'new-password':'current-password')+'" placeholder="••••••">'+
+          '<button type="button" class="pwd-eye" data-toggle-pwd="lg-pwd" aria-label="Mostrar/ocultar contraseña">👁️</button>'+
+        '</div>'+
+      '</div>'+
+      (needsAdmin ? '<div class="field" style="margin-top:12px"><label>Repetir contraseña</label>'+
+        '<div class="pwd-wrap">'+
+          '<input type="password" id="lg-pwd2" autocomplete="new-password">'+
+          '<button type="button" class="pwd-eye" data-toggle-pwd="lg-pwd2" aria-label="Mostrar/ocultar contraseña">👁️</button>'+
+        '</div>'+
+      '</div>' : '')+
       '<div id="lg-msg" style="margin-top:12px"></div>'+
       '<div style="display:flex; gap:10px; margin-top:16px">'+
         '<button class="btn primary" id="lg-btn" style="flex:1;justify-content:center">'+(needsAdmin?'Crear administrador':'Entrar')+'</button>'+
@@ -1927,6 +1949,20 @@ body.role-trabajador .pexp{display:none !important}
   document.addEventListener('click', function(e){
     var t=e.target.closest('[data-tut]');
     if(t){ tutNav(t.getAttribute('data-tut')); return; }
+    // Toggle mostrar/ocultar contraseña
+    var eye=e.target.closest('[data-toggle-pwd]');
+    if(eye){
+      e.preventDefault();
+      var id=eye.getAttribute('data-toggle-pwd');
+      var inp=document.getElementById(id);
+      if(inp){
+        var showing = inp.type==='text';
+        inp.type = showing ? 'password' : 'text';
+        eye.textContent = showing ? '👁️' : '🙈';
+        eye.classList.toggle('on', !showing);
+      }
+      return;
+    }
   });
   // Cierre global de modales: cualquier [data-role="close"] o click en scrim
   document.addEventListener('click', function(e){
