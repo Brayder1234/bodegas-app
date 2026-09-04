@@ -1343,18 +1343,20 @@ body.role-trabajador .pexp{display:none !important}
 
   function renderRegister(){
     app.innerHTML='<div class="login-wrap"><div class="login-card">'+
-      '<h1>Crea tu cuenta</h1><p class="lead">Regístrate como trabajador. El admin revisará tu perfil.</p>'+
-      '<div class="field"><label>Nombre completo *</label><input type="text" id="rg-name" placeholder="Ej: Juan Pérez"></div>'+
-      '<div class="f2" style="margin-top:12px"><div class="field"><label>Contraseña *</label>'+
-        '<div class="pwd-wrap"><input type="password" id="rg-pwd" placeholder="Al menos 4 caracteres">'+
-        '<button type="button" class="pwd-eye" data-toggle-pwd="rg-pwd">👁️</button></div></div>'+
-      '<div class="field"><label>Repetir contraseña *</label>'+
-        '<div class="pwd-wrap"><input type="password" id="rg-pwd2" placeholder="Repite tu contraseña">'+
-        '<button type="button" class="pwd-eye" data-toggle-pwd="rg-pwd2">👁️</button></div></div></div>'+
-      '<div class="f2" style="margin-top:12px"><div class="field"><label>Cédula</label><input type="text" inputmode="numeric" id="rg-cedula" placeholder="1234567890"></div>'+
-      '<div class="field"><label>Teléfono</label><input type="tel" inputmode="tel" id="rg-tel" placeholder="3001234567"></div></div>'+
-      '<div class="field" style="margin-top:12px"><label>Correo</label><input type="email" id="rg-correo" placeholder="tu@correo.com"></div>'+
-      '<div class="field" style="margin-top:12px"><label>Nequi / Cuenta bancaria (para pagos)</label><input type="text" id="rg-pago" placeholder="Nequi 3001234567 o Bancolombia 123456"></div>'+
+      '<h1>Crea tu cuenta</h1><p class="lead">Elige tu nombre de usuario y contraseña. Los demás datos los completas después.</p>'+
+      '<div class="field"><label>Nombre de usuario</label><input type="text" id="rg-name" placeholder="Ej: Juan"></div>'+
+      '<div class="field" style="margin-top:12px"><label>Contraseña</label>'+
+        '<div class="pwd-wrap">'+
+          '<input type="password" id="rg-pwd" placeholder="Al menos 4 caracteres">'+
+          '<button type="button" class="pwd-eye" data-toggle-pwd="rg-pwd">👁️</button>'+
+        '</div>'+
+      '</div>'+
+      '<div class="field" style="margin-top:12px"><label>Repetir contraseña</label>'+
+        '<div class="pwd-wrap">'+
+          '<input type="password" id="rg-pwd2" placeholder="Repite tu contraseña">'+
+          '<button type="button" class="pwd-eye" data-toggle-pwd="rg-pwd2">👁️</button>'+
+        '</div>'+
+      '</div>'+
       '<div id="rg-msg" style="margin-top:12px"></div>'+
       '<div style="display:flex; gap:10px; margin-top:16px">'+
         '<button class="btn primary" id="rg-btn" style="flex:1;justify-content:center">Crear cuenta</button>'+
@@ -1366,29 +1368,26 @@ body.role-trabajador .pexp{display:none !important}
     '</div></div>';
     document.getElementById('rg-btn').addEventListener('click', tryRegister);
     var focusEl=document.getElementById('rg-name'); if(focusEl) focusEl.focus();
-    ['rg-name','rg-pwd','rg-pwd2','rg-cedula','rg-tel','rg-correo','rg-pago'].forEach(function(id){
+    ['rg-name','rg-pwd','rg-pwd2'].forEach(function(id){
       var el=document.getElementById(id); if(el) el.addEventListener('keydown', function(e){ if(e.key==='Enter') tryRegister(); });
     });
   }
   async function tryRegister(){
-    var g=function(id){ return (document.getElementById(id).value||'').trim(); };
-    var name=g('rg-name'); var pwd=document.getElementById('rg-pwd').value||'';
+    var name=(document.getElementById('rg-name').value||'').trim();
+    var pwd=document.getElementById('rg-pwd').value||'';
     var pwd2=document.getElementById('rg-pwd2').value||'';
     var msg=document.getElementById('rg-msg');
-    var faltan=[];
-    if(!name||name.length<2) faltan.push('nombre completo');
-    if(pwd.length<4) faltan.push('contraseña (mínimo 4)');
-    if(pwd!==pwd2) faltan.push('las contraseñas no coinciden');
-    if(faltan.length){ msg.innerHTML='<div class="callout warn">'+esc(faltan.join(', '))+'</div>'; return; }
+    if(!name||name.length<2){ msg.innerHTML='<div class="callout warn">Escribe un nombre de usuario (mínimo 2 letras).</div>'; return; }
+    if(pwd.length<4){ msg.innerHTML='<div class="callout warn">La contraseña debe tener al menos 4 caracteres.</div>'; return; }
+    if(pwd!==pwd2){ msg.innerHTML='<div class="callout warn">Las contraseñas no coinciden.</div>'; return; }
     msg.innerHTML='<div class="callout"><span class="spin" style="display:inline-block;vertical-align:-2px"></span> Creando cuenta…</div>';
-    // Sincroniza para no chocar con nombres existentes
     try{ await pullFromServer(false); }catch(e){}
     if(findUser(name)){ msg.innerHTML='<div class="callout warn">Ya existe un usuario con el nombre "'+esc(name)+'". Usa otro nombre.</div>'; return; }
     var salt=randSalt(); var hash=await hashPwd(pwd, salt);
     var u={
       id:uidUser(), nombre:name, salt:salt, hash:hash,
       role:'trabajador', createdAt:new Date().toISOString(),
-      cedula:g('rg-cedula'), telefono:g('rg-tel'), correo:g('rg-correo'), cuentaPago:g('rg-pago'),
+      cedula:'', telefono:'', correo:'', cuentaPago:'',
       tutorialVisto:false
     };
     state.usuarios.push(u);
