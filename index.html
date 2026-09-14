@@ -325,6 +325,30 @@ select.sort{padding:10px 12px; border-radius:10px; border:1px solid var(--border
 .pcard-add{margin-top:auto; background:var(--accent); color:#fff; border:none; padding:10px 14px; border-radius:10px; font-weight:700; cursor:pointer; font-family:inherit; font-size:13.5px; transition:filter .15s ease}
 .pcard-add:hover{filter:brightness(1.08)}
 .pcard-add.in{background:var(--good)}
+.pcard-badge{position:absolute; top:8px; left:8px; z-index:2; font-size:10.5px; font-weight:800; letter-spacing:.06em; padding:5px 10px; border-radius:8px; color:#fff; backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); box-shadow:0 2px 8px rgba(0,0,0,.2)}
+.pcard-badge.combo{background:linear-gradient(135deg, #c026d3, #7c3aed)}
+.pcard-badge.extra{background:linear-gradient(135deg, #f59e0b, #ea580c)}
+.pcard-tools{left:auto; right:52px; top:8px}
+.pcard.is-combo{border-color:rgba(192,38,211,.35)}
+.pcard.is-extra{border-color:rgba(245,158,11,.35)}
+.combo-list-hd{margin-top:10px; font-size:12px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.06em}
+.combo-list{margin-top:6px; display:flex; flex-direction:column; gap:6px}
+.combo-item{display:flex; align-items:center; gap:8px; padding:6px 8px; background:var(--surface-2); border-radius:8px; font-size:12.5px}
+.combo-item.missing{color:var(--muted); font-style:italic}
+.combo-item .ci-thumb{width:28px; height:28px; border-radius:6px; overflow:hidden; background:#fff; border:1px solid var(--border); flex-shrink:0; display:flex; align-items:center; justify-content:center}
+.combo-item .ci-thumb img{width:100%; height:100%; object-fit:cover}
+.combo-item .ci-thumb .ph{font-size:14px; opacity:.4}
+.combo-item .ci-name{flex:1; font-weight:600; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.combo-item .ci-qty{font-family:"JetBrains Mono",monospace; font-weight:700; color:var(--accent); font-size:12px}
+.tipo-picker{display:grid; grid-template-columns:repeat(3, 1fr); gap:8px}
+.tipo-opt{position:relative; padding:12px 10px; border:2px solid var(--border); border-radius:10px; cursor:pointer; text-align:center; transition:all .15s ease; background:var(--surface)}
+.tipo-opt input{position:absolute; opacity:0; pointer-events:none}
+.tipo-opt span{display:block; font-weight:700; font-size:13px; color:var(--ink)}
+.tipo-opt small{display:block; font-size:11px; color:var(--muted); margin-top:2px; line-height:1.3}
+.tipo-opt:hover{border-color:var(--accent)}
+.tipo-opt.on{border-color:var(--accent); background:var(--accent-soft)}
+@media (max-width:520px){.tipo-picker{grid-template-columns:1fr}}
+.comp-row select{flex:1}
 .pcard .pexp{padding:0 14px 14px; max-height:0; overflow:hidden; transition:max-height .28s ease; opacity:0}
 .pcard.expanded .pexp{max-height:1000px; opacity:1; padding-top:6px; border-top:1px solid var(--border); margin-top:0}
 .pcard .pexp table{width:100%; font-size:12.5px; border-collapse:collapse; margin-top:8px}
@@ -743,6 +767,24 @@ body.role-trabajador .pexp{display:none !important}
   function pct(n){ return (n>=0?'':'−')+Math.abs(Math.round(n))+'%'; }
   function validCostos(p){ return (p.costos||[]).filter(function(c){ return c.bodega && typeof c.costo==='number' && c.costo>0; }); }
   function best(p){ var v=validCostos(p); if(!v.length) return null; return v.reduce(function(a,b){ return b.costo<a.costo?b:a; }); }
+  function comboCostoTotal(p){
+    if(!p || p.tipo!=='combo' || !Array.isArray(p.componentes)) return null;
+    var total=0, any=false;
+    for(var i=0;i<p.componentes.length;i++){
+      var c=p.componentes[i];
+      var prod=(state.productos||[]).find(function(x){return x.id===c.productoId;});
+      if(!prod) continue;
+      var b=best(prod);
+      if(!b) continue;
+      var q=parseFloat(c.cantidad)||1;
+      total += b.costo * q; any=true;
+    }
+    return any ? total : null;
+  }
+  function bestCostoDe(p){
+    if(p && p.tipo==='combo'){ var t=comboCostoTotal(p); return t!=null ? {costo:t, bodega:'combo'} : null; }
+    return best(p);
+  }
   function marginPct(precio,costo){ if(!precio||precio<=0) return null; return (precio-costo)/precio*100; }
   function mgClass(m){ if(m==null) return ''; if(m>=40) return 'good'; if(m>=20) return 'warn'; return 'bad'; }
   function normUrl(u){ u=(u||'').trim().replace(/\/+$/,''); return u; }
@@ -810,7 +852,11 @@ body.role-trabajador .pexp{display:none !important}
       moneda:d.moneda||'COP',
       bodegas:Array.isArray(d.bodegas)?d.bodegas:[],
       bodegaTels:(d.bodegaTels&&typeof d.bodegaTels==='object')?d.bodegaTels:{},
-      productos:Array.isArray(d.productos)?d.productos:[],
+      productos:(Array.isArray(d.productos)?d.productos:[]).map(function(p){
+        p.tipo = (p.tipo==='combo'||p.tipo==='extra') ? p.tipo : 'normal';
+        p.componentes = Array.isArray(p.componentes) ? p.componentes : [];
+        return p;
+      }),
       pedido:pedido, // legado (compatibilidad)
       pedidos:Array.isArray(d.pedidos)?d.pedidos:[],
       usuarios:(Array.isArray(d.usuarios)?d.usuarios:[]).map(function(u){
@@ -1284,10 +1330,12 @@ body.role-trabajador .pexp{display:none !important}
 
   function rowHTML(p){
     var admin=isAdmin();
-    var b=best(p);
+    var b=bestCostoDe(p);
     var mayo=mayoristaOf(p);
     var venta=ventaOf(p);
     var mg=b?marginPct(venta,b.costo):null;
+    var badge = p.tipo==='combo' ? '<span class="pcard-badge combo">🎁 COMBO</span>' :
+                p.tipo==='extra' ? '<span class="pcard-badge extra">📦 EXTRA</span>' : '';
     var inCart=(currentCart().items||[]).some(function(it){return it.productId===p.id;});
     var expanded=!!ui.expanded[p.id];
     var img = p.imagen
@@ -1301,9 +1349,11 @@ body.role-trabajador .pexp{display:none !important}
     ) : '';
     var pricesHTML;
     if(admin){
+      var costLabel = p.tipo==='combo' ? 'Costo combo' : 'Costo';
+      var costSub = p.tipo==='combo' ? 'suma componentes' : (b?esc(b.bodega):'');
       var costLine = b
-        ? '<div class="pl pl-cost"><span class="lb">Costo</span><span class="v num">'+fmt(b.costo)+'</span><small>'+esc(b.bodega)+'</small></div>'
-        : '<div class="pl pl-cost none"><span class="lb">Costo</span><span class="v num">—</span></div>';
+        ? '<div class="pl pl-cost"><span class="lb">'+costLabel+'</span><span class="v num">'+fmt(b.costo)+'</span><small>'+costSub+'</small></div>'
+        : '<div class="pl pl-cost none"><span class="lb">'+costLabel+'</span><span class="v num">—</span></div>';
       var mayoLine = '<div class="pl pl-mayo"><span class="lb">Mayorista</span><span class="v num">'+fmt(mayo)+'</span></div>';
       var ventaLine = '<div class="pl pl-venta"><span class="lb">Venta cliente</span><span class="v num">'+fmt(venta)+'</span></div>';
       var mgLine = mg!=null ? '<div class="pl pl-mg '+mgClass(mg)+'"><span class="lb">Margen</span><span class="v num">'+pct(mg)+'</span></div>' : '';
@@ -1313,9 +1363,10 @@ body.role-trabajador .pexp{display:none !important}
         '<div class="pl pl-mayo"><span class="lb">Mayorista</span><span class="v num">'+fmt(mayo)+'</span></div>'+
         '<div class="pl pl-venta"><span class="lb">Sugerido</span><span class="v num">'+fmt(venta)+'</span></div>';
     }
-    var card='<div class="pcard'+(expanded?' expanded':'')+'" data-id="'+esc(p.id)+'">'+
+    var card='<div class="pcard'+(expanded?' expanded':'')+(p.tipo==='combo'?' is-combo':'')+(p.tipo==='extra'?' is-extra':'')+'" data-id="'+esc(p.id)+'">'+
       '<div class="pcard-img" data-act="tg-row">'+
         img+
+        badge+
         (dlBtn ? '<div class="pcard-tools">'+dlBtn+'</div>' : '')+
         adminBtn+
       '</div>'+
@@ -1335,6 +1386,29 @@ body.role-trabajador .pexp{display:none !important}
     var body='';
     if(p.imagen){
       body += '<button class="btn ghost pimg-dl" data-act="dl-img" data-pid="'+esc(p.id)+'">⬇ Descargar imagen</button>';
+    }
+    if(p.tipo==='combo'){
+      var comps = Array.isArray(p.componentes)?p.componentes:[];
+      if(!comps.length){
+        body += '<div class="note">Combo sin productos incluidos. Toca <b>✎ Editar</b> para agregar sus componentes.</div>';
+      }else{
+        body += '<div class="combo-list-hd">🎁 Productos incluidos</div>';
+        body += '<div class="combo-list">' + comps.map(function(c){
+          var prod=(state.productos||[]).find(function(x){return x.id===c.productoId;});
+          if(!prod) return '<div class="combo-item missing">Producto eliminado (×'+(c.cantidad||1)+')</div>';
+          var thumb = prod.imagen ? '<img src="'+esc(prod.imagen)+'" alt="">' : '<span class="ph">📦</span>';
+          return '<div class="combo-item"><span class="ci-thumb">'+thumb+'</span>'+
+            '<span class="ci-name">'+esc(prod.nombre||'(sin nombre)')+'</span>'+
+            '<span class="ci-qty">×'+esc(c.cantidad||1)+'</span></div>';
+        }).join('') + '</div>';
+      }
+      if(p.notas) body += '<div class="note">📝 '+esc(p.notas)+'</div>';
+      return body;
+    }
+    if(p.tipo==='extra'){
+      body += '<div class="note">📦 Extra / gasto adicional. Se vende como línea del pedido sin bodega.</div>';
+      if(p.notas) body += '<div class="note">📝 '+esc(p.notas)+'</div>';
+      return body;
     }
     if(!costos.length){
       body+='<div class="note">Sin bodegas cargadas. Toca <b>✎ Editar</b> para agregar la bodega y su costo.</div>';
@@ -1950,18 +2024,42 @@ body.role-trabajador .pexp{display:none !important}
     var useSelect=state.bodegas.length>0&&(c.bodega===''||state.bodegas.indexOf(c.bodega)>=0);
     var bodField=useSelect?'<select class="bod-select" data-role="bod">'+bodOptions(c.bodega)+'</select>':'<input type="text" data-role="bod" placeholder="Nombre de bodega" value="'+esc(c.bodega)+'">';
     return '<div class="cost-row">'+bodField+'<input type="number" inputmode="numeric" data-role="costo" placeholder="Costo" value="'+(c.costo===''||c.costo==null?'':esc(c.costo))+'"><button type="button" class="x" data-role="rm" title="Quitar">×</button></div>'; }
+  function prodOptionsForCombo(sel, excludeId){
+    var lista=(state.productos||[]).filter(function(x){return x.tipo!=='combo' && x.id!==excludeId;});
+    lista.sort(function(a,b){ return (a.nombre||'').localeCompare(b.nombre||'','es'); });
+    return '<option value="">— Elige producto —</option>' + lista.map(function(x){
+      var label = (x.marca?'['+x.marca+'] ':'') + (x.nombre||'(sin nombre)');
+      return '<option value="'+esc(x.id)+'"'+(x.id===sel?' selected':'')+'>'+esc(label)+'</option>';
+    }).join('');
+  }
+  function compRowHTML(c, excludeId){ c=c||{productoId:'',cantidad:1};
+    return '<div class="cost-row comp-row">'+
+      '<select class="bod-select" data-role="cprod">'+prodOptionsForCombo(c.productoId, excludeId)+'</select>'+
+      '<input type="number" inputmode="numeric" min="1" step="1" data-role="ccant" placeholder="Cant." value="'+(c.cantidad||1)+'" style="max-width:80px">'+
+      '<button type="button" class="x" data-role="crm" title="Quitar">×</button>'+
+    '</div>';
+  }
 
   function openProduct(prod){
     var isNew=!prod;
-    var p=prod?JSON.parse(JSON.stringify(prod)):{id:uid(),nombre:'',marca:'',sku:'',precioMayorista:'',precioVenta:'',notas:'',imagen:'',costos:[{bodega:'',costo:''}]};
+    var p=prod?JSON.parse(JSON.stringify(prod)):{id:uid(),nombre:'',marca:'',sku:'',precioMayorista:'',precioVenta:'',notas:'',imagen:'',tipo:'normal',componentes:[],costos:[{bodega:'',costo:''}]};
     if(p.marca==null) p.marca='';
     if(p.precioMayorista==null) p.precioMayorista='';
     if(p.imagen==null) p.imagen='';
+    if(!p.tipo || (p.tipo!=='combo' && p.tipo!=='extra')) p.tipo='normal';
+    if(!Array.isArray(p.componentes)) p.componentes=[];
     if(!p.costos||!p.costos.length) p.costos=[{bodega:'',costo:''}];
     var imgPreview = p.imagen ? '<img src="'+esc(p.imagen)+'" alt="" style="width:100%;max-height:200px;object-fit:contain;border-radius:10px;border:1px solid var(--border);background:#fff">' : '<div class="img-placeholder">Sin imagen</div>';
     host.innerHTML='<div class="scrim" data-role="scrim"><div class="modal" role="dialog" aria-modal="true">'+
       '<div class="modal-hd"><h2>'+(isNew?'Nuevo producto':'Editar producto')+'</h2><button class="mini" data-role="close" aria-label="Cerrar">×</button></div>'+
       '<div class="modal-bd">'+
+        '<div class="field"><label>Tipo</label>'+
+          '<div class="tipo-picker">'+
+            '<label class="tipo-opt'+(p.tipo==='normal'?' on':'')+'"><input type="radio" name="tipo" value="normal"'+(p.tipo==='normal'?' checked':'')+'><span>📦 Producto normal</span><small>Con bodegas y costos</small></label>'+
+            '<label class="tipo-opt'+(p.tipo==='combo'?' on':'')+'"><input type="radio" name="tipo" value="combo"'+(p.tipo==='combo'?' checked':'')+'><span>🎁 Combo</span><small>Varios productos juntos</small></label>'+
+            '<label class="tipo-opt'+(p.tipo==='extra'?' on':'')+'"><input type="radio" name="tipo" value="extra"'+(p.tipo==='extra'?' checked':'')+'><span>✨ Extra / gasto</span><small>Caja, decoración, empaque…</small></label>'+
+          '</div>'+
+        '</div>'+
         '<div class="field"><label>Imagen del producto</label>'+
           '<div data-role="ppreview" style="margin-bottom:10px">'+imgPreview+'</div>'+
           '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
@@ -1981,9 +2079,19 @@ body.role-trabajador .pexp{display:none !important}
           '<div class="field"><label>SKU / referencia (opcional)</label><input type="text" data-f="sku" value="'+esc(p.sku)+'" placeholder="REF-001"></div></div>'+
         '<div class="f2"><div class="field"><label>Precio mayorista ('+state.moneda+')</label><input type="number" inputmode="numeric" data-f="precioMayorista" value="'+esc(p.precioMayorista||"")+'" placeholder="Trabajador"><span class="help">Precio al que los trabajadores lo venden</span></div>'+
           '<div class="field"><label>Precio venta al cliente ('+state.moneda+')</label><input type="number" inputmode="numeric" data-f="precioVenta" value="'+esc(p.precioVenta)+'" placeholder="Cliente"><span class="help">Precio al público final</span></div></div>'+
-        '<div class="sub">Bodegas y su costo</div>'+
-        '<div class="cost-rows" data-role="rows">'+p.costos.map(costRowHTML).join('')+'</div>'+
-        '<button type="button" class="add-cost" data-role="addcost">＋ Agregar otra bodega</button>'+
+        '<div data-role="wrap-bodegas"'+(p.tipo!=='normal'?' style="display:none"':'')+'>'+
+          '<div class="sub">Bodegas y su costo</div>'+
+          '<div class="cost-rows" data-role="rows">'+p.costos.map(costRowHTML).join('')+'</div>'+
+          '<button type="button" class="add-cost" data-role="addcost">＋ Agregar otra bodega</button>'+
+        '</div>'+
+        '<div data-role="wrap-comps"'+(p.tipo!=='combo'?' style="display:none"':'')+'>'+
+          '<div class="sub">🎁 Productos que incluye el combo</div>'+
+          '<div class="comp-rows" data-role="crows">'+p.componentes.map(function(c){return compRowHTML(c, p.id);}).join('')+'</div>'+
+          '<button type="button" class="add-cost" data-role="addcomp">＋ Agregar producto al combo</button>'+
+        '</div>'+
+        '<div data-role="wrap-extra"'+(p.tipo!=='extra'?' style="display:none"':'')+'>'+
+          '<div class="note">📦 Los extras (cajas, decoración, empaques…) no llevan bodega. Solo se cobran al cliente y se pueden añadir a cualquier pedido.</div>'+
+        '</div>'+
         '<div class="field"><label>Notas (opcional)</label><textarea data-f="notas" placeholder="Proveedor, tiempos de entrega, observaciones…">'+esc(p.notas||'')+'</textarea></div>'+
       '</div>'+
       '<div class="modal-ft"><button class="btn ghost" data-role="close">Cancelar</button><button class="btn primary" data-role="save">'+(isNew?'Agregar producto':'Guardar cambios')+'</button></div>'+
@@ -2028,6 +2136,37 @@ body.role-trabajador .pexp{display:none !important}
     rowsEl.addEventListener('change',function(e){ if(e.target.matches('[data-role="bod"]')&&e.target.value==='__new__'){ var row=e.target.closest('.cost-row'); var inp=document.createElement('input'); inp.type='text'; inp.setAttribute('data-role','bod'); inp.placeholder='Nombre de bodega'; e.target.replaceWith(inp); inp.focus(); } });
     host.querySelector('[data-role="addcost"]').addEventListener('click',function(){ rowsEl.insertAdjacentHTML('beforeend',costRowHTML()); });
     rowsEl.addEventListener('click',function(e){ if(e.target.matches('[data-role="rm"]')){ if(rowsEl.querySelectorAll('.cost-row').length>1) e.target.closest('.cost-row').remove(); else e.target.closest('.cost-row').querySelectorAll('input,select').forEach(function(i){ if(i.tagName==='SELECT') i.selectedIndex=0; else i.value=''; }); } });
+
+    // Selector de tipo — cambia bloques visibles
+    var wrapBod = host.querySelector('[data-role="wrap-bodegas"]');
+    var wrapComps = host.querySelector('[data-role="wrap-comps"]');
+    var wrapExtra = host.querySelector('[data-role="wrap-extra"]');
+    var crowsEl = host.querySelector('[data-role="crows"]');
+    function refreshTipoUI(tipo){
+      wrapBod.style.display = tipo==='normal' ? '' : 'none';
+      wrapComps.style.display = tipo==='combo' ? '' : 'none';
+      wrapExtra.style.display = tipo==='extra' ? '' : 'none';
+      Array.prototype.forEach.call(modal.querySelectorAll('.tipo-opt'), function(el){
+        var inp = el.querySelector('input');
+        el.classList.toggle('on', inp && inp.value===tipo);
+      });
+    }
+    modal.querySelectorAll('input[name="tipo"]').forEach(function(r){
+      r.addEventListener('change', function(){
+        p.tipo = r.value;
+        refreshTipoUI(p.tipo);
+        // Si combo y no hay filas, agrega una
+        if(p.tipo==='combo' && crowsEl.querySelectorAll('.comp-row').length===0){
+          crowsEl.insertAdjacentHTML('beforeend', compRowHTML(null, p.id));
+        }
+      });
+    });
+    host.querySelector('[data-role="addcomp"]').addEventListener('click', function(){
+      crowsEl.insertAdjacentHTML('beforeend', compRowHTML(null, p.id));
+    });
+    crowsEl.addEventListener('click', function(e){
+      if(e.target.matches('[data-role="crm"]')){ e.target.closest('.comp-row').remove(); }
+    });
     function doClose(){ closeModal(); }
     host.querySelectorAll('[data-role="close"]').forEach(function(b){ b.addEventListener('click',doClose); });
     host.querySelector('[data-role="scrim"]').addEventListener('mousedown',function(e){ if(e.target===e.currentTarget) doClose(); });
@@ -2040,10 +2179,24 @@ body.role-trabajador .pexp{display:none !important}
       if(p.marca && !findMarcaCanonica(p.marca)) state.marcas.push(p.marca);
       var pv=parseFloat(g('precioVenta')); p.precioVenta=isNaN(pv)?0:pv;
       var pm=parseFloat(g('precioMayorista')); p.precioMayorista=isNaN(pm)?0:pm;
+      var tipoSel = modal.querySelector('input[name="tipo"]:checked');
+      p.tipo = tipoSel ? tipoSel.value : 'normal';
       var costos=[];
-      rowsEl.querySelectorAll('.cost-row').forEach(function(r){ var bEl=r.querySelector('[data-role="bod"]'); var bod=bEl?(bEl.value==='__new__'?'':bEl.value.trim()):''; var costo=parseFloat(r.querySelector('[data-role="costo"]').value); if(bod){ costos.push({bodega:bod,costo:isNaN(costo)?0:costo}); if(state.bodegas.indexOf(bod)<0) state.bodegas.push(bod); } });
+      if(p.tipo==='normal'){
+        rowsEl.querySelectorAll('.cost-row').forEach(function(r){ var bEl=r.querySelector('[data-role="bod"]'); var bod=bEl?(bEl.value==='__new__'?'':bEl.value.trim()):''; var costo=parseFloat(r.querySelector('[data-role="costo"]').value); if(bod){ costos.push({bodega:bod,costo:isNaN(costo)?0:costo}); if(state.bodegas.indexOf(bod)<0) state.bodegas.push(bod); } });
+      }
       p.costos=costos;
+      var comps=[];
+      if(p.tipo==='combo'){
+        crowsEl.querySelectorAll('.comp-row').forEach(function(r){
+          var pid=(r.querySelector('[data-role="cprod"]').value||'').trim();
+          var q=parseFloat(r.querySelector('[data-role="ccant"]').value); if(isNaN(q)||q<1) q=1;
+          if(pid) comps.push({productoId:pid, cantidad:Math.round(q)});
+        });
+      }
+      p.componentes=comps;
       if(!p.nombre){ modal.querySelector('[data-f="nombre"]').focus(); return; }
+      if(p.tipo==='combo' && !comps.length){ showToast('El combo necesita al menos un producto', false); return; }
       if(isNew) state.productos.push(p); else { var i=state.productos.findIndex(function(x){return x.id===p.id;}); if(i>=0) state.productos[i]=p; else state.productos.push(p); }
       closeModal(); render(); scheduleSave();
     });
