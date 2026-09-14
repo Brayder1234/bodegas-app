@@ -329,8 +329,8 @@ select.sort{padding:10px 12px; border-radius:10px; border:1px solid var(--border
 .pcard-more .menu button:hover{background:var(--surface-2)}
 .pcard-more .menu button.del{color:var(--bad)}
 .pcard-body{padding:12px 14px 14px; display:flex; flex-direction:column; gap:10px; flex:1}
-.pcard-name{font-weight:700; line-height:1.3; font-size:15px; color:var(--ink); cursor:pointer; min-height:2.6em; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden}
-.pcard-name small{display:block; font-weight:500; font-size:11px; color:var(--faint); margin-top:2px; letter-spacing:.03em; -webkit-line-clamp:unset}
+.pcard-name{font-weight:700; line-height:1.3; font-size:15px; color:var(--ink); cursor:pointer; word-wrap:break-word; overflow-wrap:break-word; hyphens:auto}
+.pcard-name small{display:block; font-weight:500; font-size:11px; color:var(--faint); margin-top:2px; letter-spacing:.03em}
 .pcard-prices{display:flex; flex-direction:column; gap:4px; padding:8px 10px; background:var(--surface-2); border-radius:10px; font-size:13px}
 .pcard-prices .pl{display:flex; align-items:baseline; justify-content:space-between; gap:6px; min-width:0}
 .pcard-prices .pl .lb{color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.03em; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0}
@@ -442,7 +442,7 @@ select.sort{padding:10px 12px; border-radius:10px; border:1px solid var(--border
 @media (max-width:640px){
   .pgrid{grid-template-columns:repeat(2, 1fr); gap:10px; padding:10px}
   .pcard-body{padding:10px 10px 12px; gap:7px}
-  .pcard-name{font-size:13px; min-height:2.4em}
+  .pcard-name{font-size:12.5px; line-height:1.25}
   .pcard-prices{font-size:11.5px; padding:6px 8px; gap:3px}
   .pcard-prices .pl{gap:4px}
   .pcard-prices .pl .lb{font-size:9.5px; letter-spacing:.02em}
