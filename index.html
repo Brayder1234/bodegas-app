@@ -349,6 +349,29 @@ select.sort{padding:10px 12px; border-radius:10px; border:1px solid var(--border
 .tipo-opt.on{border-color:var(--accent); background:var(--accent-soft)}
 @media (max-width:520px){.tipo-picker{grid-template-columns:1fr}}
 .comp-row select{flex:1}
+
+/* ---- Inventario / stock ---- */
+.pcard-stock{position:absolute; bottom:8px; right:8px; z-index:2; font-size:11px; font-weight:800; letter-spacing:.04em; padding:4px 9px; border-radius:8px; color:#fff; backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); box-shadow:0 2px 6px rgba(0,0,0,.2)}
+.pcard-stock.stock-ok{background:rgba(22,163,74,.85)}
+.pcard-stock.stock-low{background:rgba(234,88,12,.85)}
+.pcard-stock.stock-out{background:rgba(220,38,38,.9); font-size:12px}
+.sold-out-overlay{position:absolute; inset:0; background:rgba(0,0,0,.55); color:#fff; font-weight:900; font-size:22px; letter-spacing:.15em; display:flex; align-items:center; justify-content:center; z-index:3; text-shadow:0 2px 6px rgba(0,0,0,.6); pointer-events:none}
+.pcard.is-out .pcard-img img{filter:grayscale(.7) brightness(.85)}
+.pcard-stock-btn{background:var(--surface-2); color:var(--muted); border:1px solid var(--border); border-radius:10px; padding:7px 10px; font-weight:700; cursor:pointer; font-family:inherit; font-size:12.5px; transition:all .12s ease}
+.pcard-stock-btn:hover{background:var(--accent-soft); color:var(--accent); border-color:var(--accent)}
+.pcard-add.sold-out{background:var(--surface-2); color:var(--muted); border:1px solid var(--border); cursor:not-allowed; font-weight:800; letter-spacing:.08em}
+.stock-hd{display:flex; align-items:center; gap:12px; padding-bottom:12px; border-bottom:1px solid var(--border); margin-bottom:14px}
+.stock-thumb{width:56px; height:56px; border-radius:10px; object-fit:cover; background:#fff; border:1px solid var(--border); flex-shrink:0; display:flex; align-items:center; justify-content:center}
+.stock-thumb.ph{font-size:26px; opacity:.4}
+.stock-name{font-weight:700; font-size:15px; color:var(--ink); line-height:1.2}
+.stock-marca{color:var(--muted); font-size:12px; margin-top:2px; text-transform:uppercase; letter-spacing:.05em; font-weight:600}
+.stock-current{display:flex; align-items:baseline; justify-content:space-between; gap:8px; padding:14px 16px; background:var(--surface-2); border-radius:12px; border:1px solid var(--border)}
+.stock-current .lb{color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.06em; font-weight:700}
+.stock-current .v{font-family:"JetBrains Mono",monospace; font-variant-numeric:tabular-nums; font-weight:800; font-size:26px; color:var(--ink)}
+.stock-current .v.out{color:var(--bad); font-size:18px; letter-spacing:.1em}
+.stock-preview{display:flex; align-items:baseline; justify-content:space-between; gap:8px; padding:12px 16px; background:var(--accent-soft); border:1px solid var(--accent); border-radius:12px; margin-top:14px}
+.stock-preview .lb{color:var(--accent); font-size:12px; text-transform:uppercase; letter-spacing:.06em; font-weight:700}
+.stock-preview .v{font-family:"JetBrains Mono",monospace; font-variant-numeric:tabular-nums; font-weight:800; font-size:22px}
 .pcard .pexp{padding:0 14px 14px; max-height:0; overflow:hidden; transition:max-height .28s ease; opacity:0}
 .pcard.expanded .pexp{max-height:1000px; opacity:1; padding-top:6px; border-top:1px solid var(--border); margin-top:0}
 .pcard .pexp table{width:100%; font-size:12.5px; border-collapse:collapse; margin-top:8px}
@@ -862,6 +885,11 @@ body.role-trabajador .pexp{display:none !important}
       productos:(Array.isArray(d.productos)?d.productos:[]).map(function(p){
         p.tipo = (p.tipo==='combo'||p.tipo==='extra') ? p.tipo : 'normal';
         p.componentes = Array.isArray(p.componentes) ? p.componentes : [];
+        if(p.stock === undefined) p.stock = null;
+        else if(p.stock !== null){
+          var n = parseInt(p.stock, 10);
+          p.stock = isNaN(n) ? null : Math.max(0, n);
+        }
         return p;
       }),
       pedido:pedido, // legado (compatibilidad)
@@ -1353,6 +1381,14 @@ body.role-trabajador .pexp{display:none !important}
     var mg=b?marginPct(venta,b.costo):null;
     var badge = p.tipo==='combo' ? '<span class="pcard-badge combo">🎁 COMBO</span>' :
                 p.tipo==='extra' ? '<span class="pcard-badge extra">📦 EXTRA</span>' : '';
+    var stock = (typeof p.stock==='number') ? p.stock : null;
+    var soldOut = stock===0;
+    var stockChip = '';
+    if(stock!=null){
+      var cls = soldOut ? 'stock-out' : (stock<=5 ? 'stock-low' : 'stock-ok');
+      stockChip = '<span class="pcard-stock '+cls+'">'+(soldOut?'AGOTADO':'📦 '+stock)+'</span>';
+    }
+    var soldOutOverlay = soldOut ? '<div class="sold-out-overlay">AGOTADO</div>' : '';
     var inCart=(currentCart().items||[]).some(function(it){return it.productId===p.id;});
     var expanded=!!ui.expanded[p.id];
     var img = p.imagen
@@ -1380,17 +1416,24 @@ body.role-trabajador .pexp{display:none !important}
         '<div class="pl pl-mayo"><span class="lb">Mayorista</span><span class="v num">'+fmt(mayo)+'</span></div>'+
         '<div class="pl pl-venta"><span class="lb">Sugerido</span><span class="v num">'+fmt(venta)+'</span></div>';
     }
-    var card='<div class="pcard'+(expanded?' expanded':'')+(p.tipo==='combo'?' is-combo':'')+(p.tipo==='extra'?' is-extra':'')+'" data-id="'+esc(p.id)+'">'+
+    var stockBtn = admin ? '<button class="pcard-stock-btn" data-act="stock-add" title="Gestionar inventario">📦 Inventario</button>' : '';
+    var addBtn = soldOut && !admin
+      ? '<button class="pcard-add sold-out" disabled>AGOTADO</button>'
+      : '<button class="pcard-add'+(inCart?' in':'')+'" data-act="add-cart">'+(inCart?'✓ En pedido':'＋ Al pedido')+'</button>';
+    var card='<div class="pcard'+(expanded?' expanded':'')+(p.tipo==='combo'?' is-combo':'')+(p.tipo==='extra'?' is-extra':'')+(soldOut?' is-out':'')+'" data-id="'+esc(p.id)+'">'+
       '<div class="pcard-img" data-act="tg-row">'+
         img+
         badge+
+        stockChip+
+        soldOutOverlay+
         (dlBtn ? '<div class="pcard-tools">'+dlBtn+'</div>' : '')+
         adminBtn+
       '</div>'+
       '<div class="pcard-body">'+
         '<div class="pcard-name" data-act="tg-row">'+esc(p.nombre||'(sin nombre)')+ (p.sku?'<small>'+esc(p.sku)+'</small>':'') +'</div>'+
         '<div class="pcard-prices">'+pricesHTML+'</div>'+
-        '<button class="pcard-add'+(inCart?' in':'')+'" data-act="add-cart">'+(inCart?'✓ En pedido':'＋ Al pedido')+'</button>'+
+        stockBtn+
+        addBtn+
       '</div>'+
       '<div class="pexp" data-for="'+esc(p.id)+'">'+expandedHTML(p)+'</div>'+
     '</div>';
@@ -1956,6 +1999,74 @@ body.role-trabajador .pexp{display:none !important}
   }
   function slugifyName(s){ return String(s||'imagen').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,40) || 'imagen'; }
 
+  /* ---------- modal inventario ---------- */
+  function openStock(pid){
+    var p = state.productos.find(function(x){return x.id===pid;});
+    if(!p){ showToast('Producto no encontrado', false); return; }
+    var actual = (typeof p.stock==='number') ? p.stock : 0;
+    host.innerHTML='<div class="scrim" data-role="scrim"><div class="modal" role="dialog" aria-modal="true" style="width:min(440px,100%)">'+
+      '<div class="modal-hd"><h2>📦 Inventario</h2><button class="mini" data-role="close">×</button></div>'+
+      '<div class="modal-bd">'+
+        '<div class="stock-hd">'+
+          (p.imagen ? '<img src="'+esc(p.imagen)+'" alt="" class="stock-thumb">' : '<div class="stock-thumb ph">📦</div>')+
+          '<div><div class="stock-name">'+esc(p.nombre||'(sin nombre)')+'</div>'+
+          (p.marca?'<div class="stock-marca">'+esc(p.marca)+'</div>':'')+'</div>'+
+        '</div>'+
+        '<div class="stock-current"><span class="lb">Cantidad actual</span><span class="v num'+(actual===0?' out':'')+'">'+(actual===0?'AGOTADO':actual)+'</span></div>'+
+        '<div class="field" style="margin-top:16px"><label>Cantidad</label><input type="number" inputmode="numeric" min="0" step="1" id="stk-qty" value="1" autofocus></div>'+
+        '<div class="field" style="margin-top:12px"><label>Acción</label>'+
+          '<div class="tipo-picker">'+
+            '<label class="tipo-opt on"><input type="radio" name="stk-mode" value="add" checked><span>➕ Agregar</span><small>Sumar al actual</small></label>'+
+            '<label class="tipo-opt"><input type="radio" name="stk-mode" value="sub"><span>➖ Retroceso</span><small>Restar del actual</small></label>'+
+            '<label class="tipo-opt"><input type="radio" name="stk-mode" value="set"><span>🔄 Actualizar</span><small>Reemplazar cantidad</small></label>'+
+          '</div>'+
+        '</div>'+
+        '<div id="stk-preview" class="stock-preview"></div>'+
+      '</div>'+
+      '<div class="modal-ft">'+
+        '<button class="btn ghost" data-role="close">Cancelar</button>'+
+        '<button class="btn primary" data-role="stk-save">Guardar</button>'+
+      '</div>'+
+    '</div></div>';
+    var modal=host.querySelector('.modal');
+    var qtyEl=host.querySelector('#stk-qty');
+    var previewEl=host.querySelector('#stk-preview');
+    function currentMode(){ var r=modal.querySelector('input[name="stk-mode"]:checked'); return r?r.value:'add'; }
+    function refreshPreview(){
+      var q=parseInt(qtyEl.value,10); if(isNaN(q)||q<0) q=0;
+      var mode=currentMode();
+      var result;
+      if(mode==='add') result = actual + q;
+      else if(mode==='sub') result = Math.max(0, actual - q);
+      else result = q;
+      var color = result===0 ? 'var(--bad)' : (result<=5 ? 'var(--warn)' : 'var(--good)');
+      previewEl.innerHTML = '<span class="lb">Nuevo stock</span><span class="v num" style="color:'+color+'">'+(result===0?'AGOTADO':result)+'</span>';
+    }
+    modal.querySelectorAll('input[name="stk-mode"]').forEach(function(r){
+      r.addEventListener('change', function(){
+        modal.querySelectorAll('.tipo-opt').forEach(function(el){
+          var inp=el.querySelector('input');
+          el.classList.toggle('on', inp && inp.checked);
+        });
+        refreshPreview();
+      });
+    });
+    qtyEl.addEventListener('input', refreshPreview);
+    refreshPreview();
+    setTimeout(function(){ qtyEl.focus(); qtyEl.select(); }, 30);
+    host.querySelector('[data-role="stk-save"]').addEventListener('click', function(){
+      var q=parseInt(qtyEl.value,10); if(isNaN(q)||q<0){ showToast('Cantidad inválida', false); return; }
+      var mode=currentMode();
+      var result;
+      if(mode==='add') result = actual + q;
+      else if(mode==='sub') result = Math.max(0, actual - q);
+      else result = q;
+      p.stock = result;
+      closeModal(); refreshProds(); scheduleSave();
+      showToast('Inventario actualizado: '+(result===0?'AGOTADO':result), false);
+    });
+  }
+
   /* ---------- modal sección ---------- */
   function openSeccion(sid){
     var isNew = !sid;
@@ -2096,6 +2207,10 @@ body.role-trabajador .pexp{display:none !important}
           '<div class="field"><label>SKU / referencia (opcional)</label><input type="text" data-f="sku" value="'+esc(p.sku)+'" placeholder="REF-001"></div></div>'+
         '<div class="f2"><div class="field"><label>Precio mayorista ('+state.moneda+')</label><input type="number" inputmode="numeric" data-f="precioMayorista" value="'+esc(p.precioMayorista||"")+'" placeholder="Trabajador"><span class="help">Precio al que los trabajadores lo venden</span></div>'+
           '<div class="field"><label>Precio venta al cliente ('+state.moneda+')</label><input type="number" inputmode="numeric" data-f="precioVenta" value="'+esc(p.precioVenta)+'" placeholder="Cliente"><span class="help">Precio al público final</span></div></div>'+
+        '<div class="field"><label>Inventario / stock <span style="color:var(--muted);font-weight:400">(opcional)</span></label>'+
+          '<input type="number" inputmode="numeric" min="0" step="1" data-f="stock" value="'+(p.stock==null?"":esc(p.stock))+'" placeholder="Deja vacío si no manejas stock">'+
+          '<span class="help">Si pones 0 aparecerá como AGOTADO. Puedes agregar más desde la tarjeta con el botón 📦.</span>'+
+        '</div>'+
         '<div data-role="wrap-bodegas"'+(p.tipo!=='normal'?' style="display:none"':'')+'>'+
           '<div class="sub">Bodegas y su costo</div>'+
           '<div class="cost-rows" data-role="rows">'+p.costos.map(costRowHTML).join('')+'</div>'+
@@ -2196,6 +2311,9 @@ body.role-trabajador .pexp{display:none !important}
       if(p.marca && !findMarcaCanonica(p.marca)) state.marcas.push(p.marca);
       var pv=parseFloat(g('precioVenta')); p.precioVenta=isNaN(pv)?0:pv;
       var pm=parseFloat(g('precioMayorista')); p.precioMayorista=isNaN(pm)?0:pm;
+      var stRaw=(g('stock')||'').trim();
+      if(stRaw===''){ p.stock=null; }
+      else { var st=parseInt(stRaw,10); p.stock=isNaN(st)?null:Math.max(0,st); }
       var tipoSel = modal.querySelector('input[name="tipo"]:checked');
       p.tipo = tipoSel ? tipoSel.value : 'normal';
       var costos=[];
@@ -2426,7 +2544,7 @@ body.role-trabajador .pexp{display:none !important}
     }
     else if(a==='tg-row'){
       // ignorar si el click nació en un botón interno
-      if(e.target.closest('.padd, .pact, .mm, .pcard-add, .pcard-dl, .pcard-more')) return;
+      if(e.target.closest('.padd, .pact, .mm, .pcard-add, .pcard-dl, .pcard-more, .pcard-stock-btn')) return;
       var pr=e.target.closest('.pcard, .prow'); if(!pr) return;
       var pid=pr.getAttribute('data-id');
       ui.expanded[pid]=!ui.expanded[pid];
@@ -2538,6 +2656,12 @@ body.role-trabajador .pexp{display:none !important}
       var pr=state.productos.find(function(x){return x.id===pid3;});
       if(!pr || !pr.imagen){ showToast('Este producto no tiene imagen', false); return; }
       downloadDataURL(pr.imagen, slugifyName(pr.nombre)+'.jpg');
+    }
+    else if(a==='stock-add'){
+      if(!isAdmin()){ showToast('Solo el admin puede modificar el inventario', false); return; }
+      e.stopPropagation();
+      var pcard=e.target.closest('.pcard'); if(!pcard) return;
+      openStock(pcard.getAttribute('data-id'));
     }
     else if(a==='edit-meta'){
       if(!puedeEditarMeta()){ showToast('Solo Brayder01 puede cambiar la meta',false); return; }
@@ -3008,6 +3132,9 @@ body.role-trabajador .pexp{display:none !important}
   /* ---------- carrito / pedido ---------- */
   function addToCart(pid){
     var p=state.productos.find(function(x){return x.id===pid;}); if(!p) return;
+    if(typeof p.stock==='number' && p.stock===0 && !isAdmin()){
+      showToast('Producto agotado', false); return;
+    }
     var it=currentCart().items.find(function(x){return x.productId===pid;});
     if(it){ it.cantidad++; }
     else {
