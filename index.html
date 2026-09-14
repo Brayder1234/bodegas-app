@@ -400,6 +400,14 @@ select.sort{padding:10px 12px; border-radius:10px; border:1px solid var(--border
 .del-marca-opt .opt-title{font-weight:700; font-size:14.5px; color:var(--ink); line-height:1.2}
 .del-marca-opt .opt-desc{font-size:12.5px; color:var(--muted); margin-top:4px; line-height:1.4}
 .del-marca-opt.danger .opt-title{color:var(--bad)}
+.mv-row{position:relative}
+.mv-row.sel{background:var(--accent-soft); border-color:var(--accent)}
+.mv-check{display:flex; align-items:center; justify-content:center; width:26px; height:26px; cursor:pointer; user-select:none; flex-shrink:0}
+.mv-check input{position:absolute; opacity:0; pointer-events:none}
+.mv-check span{display:block; width:22px; height:22px; border-radius:6px; background:var(--surface); border:2px solid var(--border); position:relative; transition:all .12s ease}
+.mv-check input:checked + span{background:var(--accent); border-color:var(--accent)}
+.mv-check input:checked + span::after{content:"✓"; position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:900; font-size:15px; line-height:1}
+.mv-bulk-bar{margin-top:14px; padding-top:14px; border-top:1px solid var(--border); position:sticky; bottom:0; background:var(--surface); z-index:2}
 .pcard .pexp{padding:0 14px 14px; max-height:0; overflow:hidden; transition:max-height .28s ease; opacity:0}
 .pcard.expanded .pexp{max-height:1000px; opacity:1; padding-top:6px; border-top:1px solid var(--border); margin-top:0}
 .pcard .pexp table{width:100%; font-size:12.5px; border-collapse:collapse; margin-top:8px}
@@ -1922,6 +1930,7 @@ body.role-trabajador .pexp{display:none !important}
     });
     return by;
   }
+  var _mvSel = {};
   function openMarcasVisibles(){
     if(!isAdmin()){ showToast('Solo admin', false); return; }
     if(!Array.isArray(state.marcas)) state.marcas=[];
@@ -1929,19 +1938,28 @@ body.role-trabajador .pexp{display:none !important}
     var marcas = state.marcas.slice();
     var ocultas=(state.marcasOcultas||[]).map(marcaUpper);
     var visible=marcas.filter(function(m){return ocultas.indexOf(marcaUpper(m))<0;}).length;
+    // Limpia selección de marcas que ya no existen
+    Object.keys(_mvSel).forEach(function(k){
+      if(!marcas.some(function(m){return marcaUpper(m)===marcaUpper(k);})) delete _mvSel[k];
+    });
+    var selCount = Object.keys(_mvSel).filter(function(k){return _mvSel[k];}).length;
     var body='<div class="modal-bd">'+
       '<p class="hint">Agrega, renombra o elimina las marcas de la plataforma. Con el interruptor decides cuáles ven los trabajadores.</p>'+
       '<div class="list-row" style="border:none;padding:6px 0 10px"><input type="text" data-role="new-marca" placeholder="Nueva marca (ej: LOREAL)"><button class="btn primary" data-role="add-marca">＋ Agregar</button></div>'+
-      '<div style="display:flex; gap:8px; margin-bottom:6px">'+
-        '<button class="btn ghost" data-act="mv-all-on" style="flex:1;justify-content:center">Mostrar todas</button>'+
-        '<button class="btn ghost" data-act="mv-all-off" style="flex:1;justify-content:center">Ocultar todas</button>'+
+      '<div style="display:flex; gap:8px; margin-bottom:6px; flex-wrap:wrap">'+
+        '<button class="btn ghost" data-act="mv-sel-all" style="flex:1 1 auto;justify-content:center;min-width:110px">☑ Todas</button>'+
+        '<button class="btn ghost" data-act="mv-sel-none" style="flex:1 1 auto;justify-content:center;min-width:110px">Ninguna</button>'+
+        '<button class="btn ghost" data-act="mv-all-on" style="flex:1 1 auto;justify-content:center;min-width:110px">Mostrar todas</button>'+
+        '<button class="btn ghost" data-act="mv-all-off" style="flex:1 1 auto;justify-content:center;min-width:110px">Ocultar todas</button>'+
       '</div>'+
-      '<div class="hint" style="margin:-2px 2px 4px"><b>'+visible+'</b> de '+marcas.length+' marcas visibles para trabajadores</div>'+
+      '<div class="hint" style="margin:-2px 2px 4px"><b>'+visible+'</b> de '+marcas.length+' marcas visibles para trabajadores'+(selCount>0?' · <b style="color:var(--accent)">'+selCount+' seleccionada'+(selCount===1?'':'s')+'</b>':'')+'</div>'+
       '<div class="mv-list">'+
         (marcas.length ? marcas.map(function(m){
           var isOn = ocultas.indexOf(marcaUpper(m))<0;
           var count = by[m] || 0;
-          return '<div class="mv-row '+(isOn?'on':'off')+'" data-marca="'+esc(m)+'">'+
+          var checked = !!_mvSel[m];
+          return '<div class="mv-row '+(isOn?'on':'off')+(checked?' sel':'')+'" data-marca="'+esc(m)+'">'+
+            '<label class="mv-check" data-act="mv-sel-toggle"><input type="checkbox"'+(checked?' checked':'')+'><span></span></label>'+
             '<div style="flex:1;min-width:0">'+
               '<div class="name">'+esc(m)+'</div>'+
               '<div class="info">'+count+' producto'+(count===1?'':'s')+' · '+(isOn?'Visible para trabajadores':'Oculta a trabajadores')+'</div>'+
@@ -1952,6 +1970,7 @@ body.role-trabajador .pexp{display:none !important}
           '</div>';
         }).join('') : '<p class="hint" style="text-align:center;padding:20px 0">Aún no hay marcas. Agrega una arriba.</p>')+
       '</div>'+
+      (selCount>0 ? '<div class="mv-bulk-bar"><button class="btn danger" data-act="mv-sel-del" style="width:100%;justify-content:center">🗑 Eliminar '+selCount+' marca'+(selCount===1?'':'s')+' seleccionada'+(selCount===1?'':'s')+'</button></div>' : '')+
     '</div>';
     host.innerHTML='<div class="scrim" data-role="scrim"><div class="modal" role="dialog" aria-modal="true" style="width:min(560px,100%)">'+
       '<div class="modal-hd"><h2>🏷️ Marcas</h2><button class="mini" data-role="close">×</button></div>'+
@@ -1967,7 +1986,6 @@ body.role-trabajador .pexp{display:none !important}
     }
     addBtn.addEventListener('click', addMarca);
     newInp.addEventListener('keydown', function(e){ if(e.key==='Enter') addMarca(); });
-    newInp.focus();
   }
 
   function openMiPerfil(){
@@ -2042,6 +2060,56 @@ body.role-trabajador .pexp{display:none !important}
     }catch(e){ showToast('No se pudo descargar', false); }
   }
   function slugifyName(s){ return String(s||'imagen').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,40) || 'imagen'; }
+
+  /* ---------- modal eliminar varias marcas ---------- */
+  function openDelMarcasBulk(marcasList){
+    var arr = marcasList.slice();
+    var totalProds = arr.reduce(function(sum, m){
+      return sum + (state.productos||[]).filter(function(p){ return marcaUpper(p.marca)===marcaUpper(m); }).length;
+    }, 0);
+    var listado = arr.map(function(m){ return '<b>'+esc(m)+'</b>'; }).join(', ');
+    host.innerHTML='<div class="scrim" data-role="scrim"><div class="modal" role="dialog" aria-modal="true" style="width:min(460px,100%)">'+
+      '<div class="modal-hd"><h2>🗑 Eliminar '+arr.length+' marca'+(arr.length===1?'':'s')+'</h2><button class="mini" data-role="close">×</button></div>'+
+      '<div class="modal-bd">'+
+        '<p class="hint" style="font-size:14px;color:var(--ink);margin-bottom:14px">Vas a eliminar: '+listado+'. En total tienen <b>'+totalProds+'</b> producto'+(totalProds===1?'':'s')+' asignado'+(totalProds===1?'':'s')+'.</p>'+
+        '<button class="del-marca-opt" data-role="opt-only">'+
+          '<div class="opt-ico">🏷️</div>'+
+          '<div><div class="opt-title">Solo eliminar las marcas</div>'+
+          '<div class="opt-desc">Los '+totalProds+' producto'+(totalProds===1?'':'s')+' se conservan y quedan como <b>SIN MARCA</b>.</div></div>'+
+        '</button>'+
+        '<button class="del-marca-opt danger" data-role="opt-both">'+
+          '<div class="opt-ico">💥</div>'+
+          '<div><div class="opt-title">Eliminar marcas <u>y sus productos</u></div>'+
+          '<div class="opt-desc">Borra las marcas <b>y los '+totalProds+' producto'+(totalProds===1?'':'s')+'</b>. No se puede deshacer.</div></div>'+
+        '</button>'+
+      '</div>'+
+      '<div class="modal-ft"><button class="btn ghost" data-role="close" style="margin-left:auto">Cancelar</button></div>'+
+    '</div></div>';
+    var uppers = arr.map(marcaUpper);
+    host.querySelector('[data-role="opt-only"]').addEventListener('click', function(){
+      state.marcas = (state.marcas||[]).filter(function(x){ return uppers.indexOf(marcaUpper(x))<0; });
+      state.marcasOcultas = (state.marcasOcultas||[]).filter(function(x){ return uppers.indexOf(marcaUpper(x))<0; });
+      state.productos.forEach(function(p){ if(uppers.indexOf(marcaUpper(p.marca))>=0) p.marca=''; });
+      _mvSel = {};
+      closeModal(); scheduleSave(); render();
+      showToast(arr.length+' marca(s) eliminada(s). Los productos quedaron sin marca.', false);
+    });
+    host.querySelector('[data-role="opt-both"]').addEventListener('click', function(){
+      if(totalProds>0 && !confirm('¿Confirmas borrar las '+arr.length+' marca(s) Y los '+totalProds+' producto(s) asignados?')) return;
+      var idsBorrados = (state.productos||[]).filter(function(p){ return uppers.indexOf(marcaUpper(p.marca))>=0; }).map(function(p){return p.id;});
+      state.productos = state.productos.filter(function(p){ return uppers.indexOf(marcaUpper(p.marca))<0; });
+      state.productos.forEach(function(p){
+        if(p.tipo==='combo' && Array.isArray(p.componentes)){
+          p.componentes = p.componentes.filter(function(c){ return idsBorrados.indexOf(c.productoId)<0; });
+        }
+      });
+      state.marcas = (state.marcas||[]).filter(function(x){ return uppers.indexOf(marcaUpper(x))<0; });
+      state.marcasOcultas = (state.marcasOcultas||[]).filter(function(x){ return uppers.indexOf(marcaUpper(x))<0; });
+      _mvSel = {};
+      closeModal(); scheduleSave(); render();
+      showToast(arr.length+' marca(s) y '+totalProds+' producto(s) eliminados', false);
+    });
+  }
 
   /* ---------- modal eliminar marca ---------- */
   function openDelMarca(marcaName){
@@ -2696,6 +2764,27 @@ body.role-trabajador .pexp{display:none !important}
       var row2=e.target.closest('.mv-row'); if(!row2) return;
       var m=row2.getAttribute('data-marca'); if(!m) return;
       openDelMarca(m);
+    }
+    else if(a==='mv-sel-toggle'){
+      e.preventDefault(); e.stopPropagation();
+      var row3=e.target.closest('.mv-row'); if(!row3) return;
+      var mm3=row3.getAttribute('data-marca'); if(!mm3) return;
+      _mvSel[mm3] = !_mvSel[mm3];
+      if(!_mvSel[mm3]) delete _mvSel[mm3];
+      openMarcasVisibles();
+    }
+    else if(a==='mv-sel-all'){
+      (state.marcas||[]).forEach(function(m){ _mvSel[m]=true; });
+      openMarcasVisibles();
+    }
+    else if(a==='mv-sel-none'){
+      _mvSel = {};
+      openMarcasVisibles();
+    }
+    else if(a==='mv-sel-del'){
+      var lista = Object.keys(_mvSel).filter(function(k){return _mvSel[k];});
+      if(!lista.length){ showToast('No hay marcas seleccionadas', false); return; }
+      openDelMarcasBulk(lista);
     }
     else if(a==='tutorial'){ closeModal(); startTutorial(); }
     else if(a==='pick-section'){
