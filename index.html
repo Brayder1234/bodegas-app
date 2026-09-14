@@ -951,6 +951,12 @@ body.role-trabajador .pexp{display:none !important}
       moneda:d.moneda||'COP',
       bodegas:Array.isArray(d.bodegas)?d.bodegas:[],
       bodegaTels:(d.bodegaTels&&typeof d.bodegaTels==='object')?d.bodegaTels:{},
+      bodegasPorSeccion:(function(){
+        var b = (d.bodegasPorSeccion && typeof d.bodegasPorSeccion==='object') ? d.bodegasPorSeccion : null;
+        if(b) return b;
+        // Migración: todas las bodegas existentes se asignan a maquillaje (la sección histórica)
+        return {maquillaje: Array.isArray(d.bodegas)?d.bodegas.slice():[]};
+      })(),
       productos:(Array.isArray(d.productos)?d.productos:[]).map(function(p){
         p.tipo = (p.tipo==='combo'||p.tipo==='extra') ? p.tipo : 'normal';
         p.componentes = Array.isArray(p.componentes) ? p.componentes : [];
@@ -992,15 +998,18 @@ body.role-trabajador .pexp{display:none !important}
         var arr = Array.isArray(d.secciones) ? d.secciones : null;
         if(!arr || !arr.length){
           return [
-            {id:'maquillaje', nombre:'Maquillaje', descripcion:'Bases, labiales, sombras y todos los productos de belleza.', imagen:'https://images.unsplash.com/photo-1596462502278-27bfdc403348?w=900&q=85&auto=format&fit=crop', disponible:true},
-            {id:'calzado', nombre:'Calzado', descripcion:'Tenis, sandalias y zapatos de temporada.', imagen:'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=900&q=85&auto=format&fit=crop', disponible:false},
-            {id:'perfumeria', nombre:'Perfumería', descripcion:'Perfumes, colonias y esencias importadas.', imagen:'https://images.unsplash.com/photo-1541643600914-78b084683601?w=900&q=85&auto=format&fit=crop', disponible:false}
+            {id:'maquillaje', nombre:'Maquillaje', marca:'VELORA', sublabel:'Cosmetic', emoji:'💄', descripcion:'Bases, labiales, sombras y todos los productos de belleza.', imagen:'https://images.unsplash.com/photo-1596462502278-27bfdc403348?w=900&q=85&auto=format&fit=crop', disponible:true},
+            {id:'calzado', nombre:'Calzado', marca:'', sublabel:'', emoji:'👟', descripcion:'Tenis, sandalias y zapatos de temporada.', imagen:'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=900&q=85&auto=format&fit=crop', disponible:false},
+            {id:'perfumeria', nombre:'Perfumería', marca:'', sublabel:'', emoji:'🌸', descripcion:'Perfumes, colonias y esencias importadas.', imagen:'https://images.unsplash.com/photo-1541643600914-78b084683601?w=900&q=85&auto=format&fit=crop', disponible:false}
           ];
         }
         return arr.map(function(s){
           return {
             id: s.id || ('s'+Date.now().toString(36)+Math.random().toString(36).slice(2,5)),
             nombre: s.nombre || '(sin nombre)',
+            marca: s.marca || '',
+            sublabel: s.sublabel || '',
+            emoji: s.emoji || '',
             descripcion: s.descripcion || '',
             imagen: s.imagen || '',
             disponible: s.disponible !== false
@@ -1218,7 +1227,7 @@ body.role-trabajador .pexp{display:none !important}
     var prods = productosDeSeccion();
     prods.forEach(function(p){ var b=best(p); if(b){ var m=marginPct(p.precioVenta,b.costo); if(m!=null){ margins.push(m); if(m<20) low++; } } });
     var avg=margins.length?margins.reduce(function(a,b){return a+b;},0)/margins.length:null;
-    return {nprod:prods.length, nbod:state.bodegas.length, avg:avg, low:low};
+    return {nprod:prods.length, nbod:bodegasDeSeccion().length, avg:avg, low:low};
   }
 
   /* ---------- render principal ---------- */
@@ -1313,7 +1322,9 @@ body.role-trabajador .pexp{display:none !important}
       '<span class="avat">'+esc(whoIni)+'</span>'+esc(session?session.usuarioNombre:'')+
       ' <span class="role">'+(admin?'admin':'trabajador')+'</span>'+
     '</button>';
-    var lead = '💄 Sección: Maquillaje';
+    var secActiva = (state.secciones||[]).find(function(x){return x.id===activeSection;}) || {nombre:activeSection||'', emoji:''};
+    var leadEmoji = secActiva.emoji || '📦';
+    var lead = leadEmoji + ' Sección: ' + (secActiva.nombre || 'Sin nombre');
     var statsHTML;
     if(admin){
       var mes=new Date().toISOString().slice(0,7);
@@ -1357,7 +1368,7 @@ body.role-trabajador .pexp{display:none !important}
       }
     }
     return '<div class="top">'+
-      '<div class="brand"><h1>VELORA <span style="font-weight:400;color:var(--muted);letter-spacing:0">Cosmetic</span></h1><p>'+esc(lead)+' <button class="change-sect" data-act="change-section" title="Cambiar de sección">Cambiar</button></p></div>'+
+      '<div class="brand"><h1>'+esc((secActiva.marca||secActiva.nombre||'').toUpperCase())+ (secActiva.sublabel?' <span style="font-weight:400;color:var(--muted);letter-spacing:0">'+esc(secActiva.sublabel)+'</span>':'') +'</h1><p>'+esc(lead)+' <button class="change-sect" data-act="change-section" title="Cambiar de sección">Cambiar</button></p></div>'+
       '<div class="top-tools">'+whoLine+connHTML()+
         (admin?'<button class="icon-btn" data-act="toggle-moneda" title="Cambiar moneda">'+(state.moneda==='USD'?'US$':'COP')+'</button>':'')+
         '<button class="icon-btn" data-act="toggle-theme" title="Tema claro/oscuro" aria-label="Cambiar tema">◐</button>'+
@@ -1369,6 +1380,21 @@ body.role-trabajador .pexp{display:none !important}
   function productosDeSeccion(){
     var sec = activeSection || 'maquillaje';
     return (state.productos||[]).filter(function(p){ return (p.seccion||'maquillaje') === sec; });
+  }
+  function bodegasDeSeccion(){
+    var sec = activeSection || 'maquillaje';
+    if(!state.bodegasPorSeccion) state.bodegasPorSeccion = {};
+    if(!Array.isArray(state.bodegasPorSeccion[sec])) state.bodegasPorSeccion[sec] = [];
+    return state.bodegasPorSeccion[sec];
+  }
+  function ensureBodegaEnSeccion(bod){
+    var sec = activeSection || 'maquillaje';
+    if(!bod) return;
+    if(!state.bodegasPorSeccion) state.bodegasPorSeccion = {};
+    if(!Array.isArray(state.bodegasPorSeccion[sec])) state.bodegasPorSeccion[sec] = [];
+    if(state.bodegasPorSeccion[sec].indexOf(bod)<0) state.bodegasPorSeccion[sec].push(bod);
+    // Espejo en state.bodegas global por compat (unión de todas)
+    if(Array.isArray(state.bodegas) && state.bodegas.indexOf(bod)<0) state.bodegas.push(bod);
   }
   function filtered(){
     var q=ui.q.trim().toLowerCase();
@@ -2273,14 +2299,20 @@ body.role-trabajador .pexp{display:none !important}
   function openSeccion(sid){
     var isNew = !sid;
     var s = isNew
-      ? {id:'s'+Date.now().toString(36)+Math.random().toString(36).slice(2,5), nombre:'', descripcion:'', imagen:'', disponible:true}
+      ? {id:'s'+Date.now().toString(36)+Math.random().toString(36).slice(2,5), nombre:'', marca:'', sublabel:'', emoji:'', descripcion:'', imagen:'', disponible:true}
       : JSON.parse(JSON.stringify((state.secciones||[]).find(function(x){return x.id===sid;}) || {}));
+    if(s.marca==null) s.marca='';
+    if(s.sublabel==null) s.sublabel='';
+    if(s.emoji==null) s.emoji='';
     if(!s.id){ closeModal(); return; }
     var preview = s.imagen ? '<img src="'+esc(s.imagen)+'" alt="" style="width:100%;max-height:180px;object-fit:cover;border-radius:10px;border:1px solid var(--border)">' : '<div class="img-placeholder">Sin imagen</div>';
     host.innerHTML='<div class="scrim" data-role="scrim"><div class="modal" role="dialog" aria-modal="true">'+
       '<div class="modal-hd"><h2>'+(isNew?'Nueva sección':'Editar sección')+'</h2><button class="mini" data-role="close">×</button></div>'+
       '<div class="modal-bd">'+
-        '<div class="field"><label>Nombre</label><input type="text" data-f="nombre" value="'+esc(s.nombre)+'" placeholder="Ej: Ropa"></div>'+
+        '<div class="field"><label>Nombre de la sección</label><input type="text" data-f="nombre" value="'+esc(s.nombre)+'" placeholder="Ej: Ropa"></div>'+
+        '<div class="f2" style="margin-top:12px"><div class="field"><label>Emoji (opcional)</label><input type="text" data-f="emoji" value="'+esc(s.emoji)+'" placeholder="Ej: 👕" maxlength="4"></div>'+
+        '<div class="field"><label>Marca de la tienda (opcional)</label><input type="text" data-f="marca" value="'+esc(s.marca)+'" placeholder="Ej: VELORA"></div></div>'+
+        '<div class="field" style="margin-top:12px"><label>Sub-etiqueta del título (opcional)</label><input type="text" data-f="sublabel" value="'+esc(s.sublabel)+'" placeholder="Ej: Cosmetic, Shoes, Fashion..."><span class="help">Aparece al lado del nombre grande en el header del panel.</span></div>'+
         '<div class="field" style="margin-top:12px"><label>Descripción corta</label><input type="text" data-f="descripcion" value="'+esc(s.descripcion)+'" placeholder="Ej: Camisetas, jeans y más"></div>'+
         '<div class="field" style="margin-top:12px"><label>Imagen de fondo</label>'+
           '<div data-role="preview" style="margin-bottom:10px">'+preview+'</div>'+
@@ -2349,6 +2381,9 @@ body.role-trabajador .pexp{display:none !important}
     host.querySelector('[data-role="secsave"]').addEventListener('click', function(){
       var g = function(f){ var el=modal.querySelector('[data-f="'+f+'"]'); return el?el.value:''; };
       s.nombre = g('nombre').trim();
+      s.marca = g('marca').trim();
+      s.sublabel = g('sublabel').trim();
+      s.emoji = g('emoji').trim();
       s.descripcion = g('descripcion').trim();
       s.imagen = g('imagen').trim();
       s.disponible = !!modal.querySelector('[data-f="disponible"]').checked;
@@ -2369,9 +2404,10 @@ body.role-trabajador .pexp{display:none !important}
   /* ---------- modal producto ---------- */
   var host=document.getElementById('modal-host');
   function closeModal(){ host.innerHTML=''; }
-  function bodOptions(sel){ return state.bodegas.map(function(b){ return '<option value="'+esc(b)+'"'+(b===sel?' selected':'')+'>'+esc(b)+'</option>'; }).join('')+'<option value="__new__">➕ Nueva bodega…</option>'; }
+  function bodOptions(sel){ var bods=bodegasDeSeccion(); return bods.map(function(b){ return '<option value="'+esc(b)+'"'+(b===sel?' selected':'')+'>'+esc(b)+'</option>'; }).join('')+'<option value="__new__">➕ Nueva bodega…</option>'; }
   function costRowHTML(c){ c=c||{bodega:'',costo:''};
-    var useSelect=state.bodegas.length>0&&(c.bodega===''||state.bodegas.indexOf(c.bodega)>=0);
+    var bodsSec=bodegasDeSeccion();
+    var useSelect=bodsSec.length>0&&(c.bodega===''||bodsSec.indexOf(c.bodega)>=0);
     var bodField=useSelect?'<select class="bod-select" data-role="bod">'+bodOptions(c.bodega)+'</select>':'<input type="text" data-role="bod" placeholder="Nombre de bodega" value="'+esc(c.bodega)+'">';
     return '<div class="cost-row">'+bodField+'<input type="number" inputmode="numeric" data-role="costo" placeholder="Costo" value="'+(c.costo===''||c.costo==null?'':esc(c.costo))+'"><button type="button" class="x" data-role="rm" title="Quitar">×</button></div>'; }
   function prodOptionsForCombo(sel, excludeId){
@@ -2578,7 +2614,7 @@ body.role-trabajador .pexp{display:none !important}
       p.tipo = tipoSel ? tipoSel.value : 'normal';
       var costos=[];
       if(p.tipo==='normal'){
-        rowsEl.querySelectorAll('.cost-row').forEach(function(r){ var bEl=r.querySelector('[data-role="bod"]'); var bod=bEl?(bEl.value==='__new__'?'':bEl.value.trim()):''; var costo=parseFloat(r.querySelector('[data-role="costo"]').value); if(bod){ costos.push({bodega:bod,costo:isNaN(costo)?0:costo}); if(state.bodegas.indexOf(bod)<0) state.bodegas.push(bod); } });
+        rowsEl.querySelectorAll('.cost-row').forEach(function(r){ var bEl=r.querySelector('[data-role="bod"]'); var bod=bEl?(bEl.value==='__new__'?'':bEl.value.trim()):''; var costo=parseFloat(r.querySelector('[data-role="costo"]').value); if(bod){ costos.push({bodega:bod,costo:isNaN(costo)?0:costo}); ensureBodegaEnSeccion(bod); } });
       }
       p.costos=costos;
       var comps=[];
@@ -2600,10 +2636,14 @@ body.role-trabajador .pexp{display:none !important}
 
   /* ---------- modal bodegas ---------- */
   function openBodegas(){
+    var sec = activeSection || 'maquillaje';
+    var secNombre = ((state.secciones||[]).find(function(x){return x.id===sec;})||{}).nombre || sec;
+    function currentBods(){ return bodegasDeSeccion(); }
     function rows(){
-      if(!state.bodegas.length) return '<p class="hint">No hay bodegas. Se crean solas cuando las escribes en un producto.</p>';
-      return state.bodegas.map(function(b,i){
-        var uses=state.productos.filter(function(p){ return (p.costos||[]).some(function(c){return c.bodega===b;}); }).length;
+      var bods = currentBods();
+      if(!bods.length) return '<p class="hint">No hay bodegas en esta sección. Se crean solas cuando las escribes en un producto, o agrégalas abajo.</p>';
+      return bods.map(function(b,i){
+        var uses=productosDeSeccion().filter(function(p){ return (p.costos||[]).some(function(c){return c.bodega===b;}); }).length;
         var tel=state.bodegaTels[b]||'';
         return '<div class="bod-row" data-i="'+i+'">'+
           '<div class="bod-row-line">'+
@@ -2619,22 +2659,28 @@ body.role-trabajador .pexp{display:none !important}
       }).join('');
     }
     host.innerHTML='<div class="scrim" data-role="scrim"><div class="modal" role="dialog" aria-modal="true" style="width:min(480px,100%)">'+
-      '<div class="modal-hd"><h2>Bodegas</h2><button class="mini" data-role="close">×</button></div>'+
+      '<div class="modal-hd"><h2>🏬 Bodegas de '+esc(secNombre)+'</h2><button class="mini" data-role="close">×</button></div>'+
       '<div class="modal-bd">'+
-        '<p class="hint">Guarda el WhatsApp de cada bodega para enviarles el pedido con un solo toque. En Colombia basta con 10 dígitos (se agrega el 57 automático).</p>'+
+        '<p class="hint">Estas bodegas son únicas para la sección <b>'+esc(secNombre)+'</b>. Guarda el WhatsApp de cada una para enviar el pedido con un toque (en Colombia basta con 10 dígitos).</p>'+
         '<div data-role="blist">'+rows()+'</div>'+
-        '<div class="list-row" style="border:none;padding-top:10px"><input type="text" data-role="bnew" placeholder="Agregar bodega nueva…"><button class="btn ghost" data-role="badd">Agregar</button></div>'+
+        '<div class="list-row" style="border:none;padding-top:10px"><input type="text" data-role="bnew" placeholder="Agregar bodega nueva a '+esc(secNombre)+'…"><button class="btn ghost" data-role="badd">Agregar</button></div>'+
       '</div>'+
       '<div class="modal-ft"><button class="btn ghost" data-role="close">Cancelar</button><button class="btn primary" data-role="bsave">Guardar</button></div></div></div>';
     var modal=host.querySelector('.modal'), listEl=host.querySelector('[data-role="blist"]');
     function reRows(){ listEl.innerHTML=rows(); }
-    host.querySelector('[data-role="badd"]').addEventListener('click',function(){ var inp=modal.querySelector('[data-role="bnew"]'); var v=inp.value.trim(); if(v&&state.bodegas.indexOf(v)<0){ state.bodegas.push(v); reRows(); } inp.value=''; inp.focus(); });
+    host.querySelector('[data-role="badd"]').addEventListener('click',function(){
+      var inp=modal.querySelector('[data-role="bnew"]'); var v=inp.value.trim();
+      var bods=currentBods();
+      if(v&&bods.indexOf(v)<0){ bods.push(v); ensureBodegaEnSeccion(v); reRows(); }
+      inp.value=''; inp.focus();
+    });
     listEl.addEventListener('click',function(e){
       if(e.target.matches('[data-role="bdel"]')){
-        var i=+e.target.closest('.bod-row').getAttribute('data-i'); var name=state.bodegas[i];
-        var uses=state.productos.filter(function(p){ return (p.costos||[]).some(function(c){return c.bodega===name;}); }).length;
+        var bods=currentBods();
+        var i=+e.target.closest('.bod-row').getAttribute('data-i'); var name=bods[i];
+        var uses=productosDeSeccion().filter(function(p){ return (p.costos||[]).some(function(c){return c.bodega===name;}); }).length;
         if(uses>0){ showToast('“'+name+'” está en uso por '+uses+' producto(s)',false); return; }
-        state.bodegas.splice(i,1); delete state.bodegaTels[name]; reRows();
+        bods.splice(i,1); delete state.bodegaTels[name]; reRows();
       }
     });
     function doClose(){ closeModal(); }
@@ -2642,21 +2688,29 @@ body.role-trabajador .pexp{display:none !important}
     host.querySelector('[data-role="scrim"]').addEventListener('mousedown',function(e){ if(e.target===e.currentTarget) doClose(); });
     host.querySelector('[data-role="bsave"]').addEventListener('click',function(){
       var rowsN=listEl.querySelectorAll('.bod-row');
-      var newList=[]; var newTels={};
+      var bods=currentBods();
+      var newList=[]; var newTels=Object.assign({}, state.bodegaTels||{});
       rowsN.forEach(function(row){
-        var oldName=state.bodegas[+row.getAttribute('data-i')];
+        var oldName=bods[+row.getAttribute('data-i')];
         var nv=row.querySelector('[data-role="bname"]').value.trim();
         var tel=row.querySelector('[data-role="btel"]').value.trim();
         if(!nv){ newList.push(oldName); if(tel) newTels[oldName]=tel; return; }
         if(nv!==oldName){
-          state.productos.forEach(function(p){ (p.costos||[]).forEach(function(c){ if(c.bodega===oldName) c.bodega=nv; }); });
+          // Renombrar en productos de esta sección
+          productosDeSeccion().forEach(function(p){ (p.costos||[]).forEach(function(c){ if(c.bodega===oldName) c.bodega=nv; }); });
+          if(oldName && newTels[oldName]!=null){ delete newTels[oldName]; }
         }
         newList.push(nv);
-        if(tel) newTels[nv]=tel;
+        if(tel) newTels[nv]=tel; else delete newTels[nv];
       });
-      // dedupe
-      state.bodegas=newList.filter(function(v,i){ return newList.indexOf(v)===i; });
-      state.bodegaTels=newTels;
+      // Guardar dedupeado en la sección activa
+      var dedup = newList.filter(function(v,i){ return v && newList.indexOf(v)===i; });
+      state.bodegasPorSeccion[sec] = dedup;
+      // Espejo global (unión)
+      var unionSet = {};
+      Object.keys(state.bodegasPorSeccion).forEach(function(k){ (state.bodegasPorSeccion[k]||[]).forEach(function(b){ unionSet[b]=1; }); });
+      state.bodegas = Object.keys(unionSet);
+      state.bodegaTels = newTels;
       closeModal(); render(); scheduleSave();
     });
   }
