@@ -2356,7 +2356,13 @@ body.role-trabajador .pexp{display:none !important}
       if(!Array.isArray(state.secciones)) state.secciones=[];
       var i = state.secciones.findIndex(function(x){return x.id===s.id;});
       if(i>=0) state.secciones[i]=s; else state.secciones.push(s);
-      closeModal(); render(); scheduleSave();
+      closeModal();
+      // Si es una sección nueva, entrar automáticamente a su panel (catálogo vacío listo para llenar)
+      if(isNew){
+        setActiveSection(s.id);
+        showToast('Sección "'+s.nombre+'" creada. ¡Empieza a agregar productos!', false);
+      }
+      render(); scheduleSave();
     });
   }
 
