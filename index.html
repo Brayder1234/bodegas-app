@@ -271,6 +271,14 @@ select.sort{padding:10px 12px; border-radius:10px; border:1px solid var(--border
 .sect-card.sect-add h3{color:var(--ink); font-size:18px}
 .sect-card.sect-add p{color:var(--muted); font-size:13px}
 .img-placeholder{display:flex; align-items:center; justify-content:center; height:120px; background:var(--surface-2); border:1px dashed var(--border); border-radius:10px; color:var(--muted); font-size:13px}
+.img-dropzone{position:relative; min-height:140px; border:2px dashed var(--border); border-radius:12px; padding:8px; background:var(--surface-2); transition:all .18s ease; overflow:hidden}
+.img-dropzone.drag-over{border-color:var(--accent); background:var(--accent-soft); transform:scale(1.01)}
+.img-dropzone.drag-over::after{content:"Soltar aquí"; position:absolute; inset:8px; display:flex; align-items:center; justify-content:center; background:rgba(13,122,110,.15); border-radius:8px; font-weight:800; color:var(--accent); font-size:16px; pointer-events:none; z-index:10; letter-spacing:.03em}
+.img-dropzone img{display:block; margin:0 auto; max-height:200px; object-fit:contain; border-radius:8px}
+.img-dz-empty{display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:24px 12px; min-height:120px}
+.img-dz-empty .dz-ico{font-size:38px; opacity:.5; margin-bottom:6px}
+.img-dz-empty .dz-hd{font-weight:700; color:var(--ink); font-size:14px}
+.img-dz-empty .dz-sb{color:var(--muted); font-size:12px; margin-top:2px}
 .pthumb{display:inline-flex; align-items:center; justify-content:center; width:44px; height:44px; border-radius:10px; background:var(--surface-2); border:1px solid var(--border); overflow:hidden; flex-shrink:0}
 .pthumb.has{background:#fff}
 .pthumb img{width:100%; height:100%; object-fit:cover; display:block}
@@ -2259,16 +2267,30 @@ body.role-trabajador .pexp{display:none !important}
     var previewEl = host.querySelector('[data-role="preview"]');
     var imgUrlEl = modal.querySelector('[data-f="imagen"]');
     var fileEl = host.querySelector('[data-role="secfile"]');
-    fileEl.addEventListener('change', async function(e){
-      var f = e.target.files && e.target.files[0]; if(!f) return;
+    async function loadSecImg(f){
+      if(!f) return;
+      if(!/^image\//.test(f.type)){ showToast('No es una imagen', false); return; }
       previewEl.innerHTML = '<div class="img-placeholder"><span class="spin" style="display:inline-block;vertical-align:-2px"></span> Procesando…</div>';
       try{
         var dataURL = await fileToCompressedDataURL(f, 1000, 0.78);
         s.imagen = dataURL; imgUrlEl.value = dataURL;
         previewEl.innerHTML = '<img src="'+dataURL+'" alt="" style="width:100%;max-height:180px;object-fit:cover;border-radius:10px;border:1px solid var(--border)">';
       }catch(err){ previewEl.innerHTML = '<div class="img-placeholder">No se pudo cargar</div>'; }
+    }
+    fileEl.addEventListener('change', function(e){
+      var f = e.target.files && e.target.files[0]; if(f) loadSecImg(f);
       e.target.value = '';
     });
+    // Drag & drop en el preview
+    previewEl.classList.add('img-dropzone');
+    ;['dragenter','dragover'].forEach(function(ev){ previewEl.addEventListener(ev, function(e){ e.preventDefault(); e.stopPropagation(); previewEl.classList.add('drag-over'); }); });
+    ;['dragleave','dragend'].forEach(function(ev){ previewEl.addEventListener(ev, function(e){ e.preventDefault(); e.stopPropagation(); previewEl.classList.remove('drag-over'); }); });
+    previewEl.addEventListener('drop', function(e){
+      e.preventDefault(); e.stopPropagation(); previewEl.classList.remove('drag-over');
+      var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]; if(f) loadSecImg(f);
+    });
+    host.querySelector('.modal').addEventListener('dragover', function(e){ e.preventDefault(); });
+    host.querySelector('.modal').addEventListener('drop', function(e){ e.preventDefault(); });
     imgUrlEl.addEventListener('input', function(){
       var v = imgUrlEl.value.trim();
       if(v && /^https?:\/\//.test(v)){
@@ -2347,9 +2369,11 @@ body.role-trabajador .pexp{display:none !important}
           '</div>'+
         '</div>'+
         '<div class="field"><label>Imagen del producto</label>'+
-          '<div data-role="ppreview" style="margin-bottom:10px">'+imgPreview+'</div>'+
-          '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
-            '<label class="btn ghost" style="cursor:pointer;margin:0"><input type="file" accept="image/*" data-role="pfile" style="display:none">📷 Subir imagen</label>'+
+          '<div data-role="ppreview" class="img-dropzone">'+
+            (p.imagen ? imgPreview : '<div class="img-dz-empty"><div class="dz-ico">📷</div><div class="dz-hd">Arrastra una imagen aquí</div><div class="dz-sb">o toca abajo para elegir · Ctrl+V para pegar</div></div>')+
+          '</div>'+
+          '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">'+
+            '<label class="btn ghost" style="cursor:pointer;margin:0"><input type="file" accept="image/*" data-role="pfile" style="display:none">📷 Elegir archivo</label>'+
             '<button type="button" class="btn ghost" data-role="prm"'+(p.imagen?'':' style="display:none"')+'>Quitar</button>'+
           '</div>'+
           '<span class="help">La imagen se comprime automáticamente. Los trabajadores podrán descargarla.</span>'+
@@ -2407,22 +2431,58 @@ body.role-trabajador .pexp{display:none !important}
     var pPreviewEl = host.querySelector('[data-role="ppreview"]');
     var pFileEl = host.querySelector('[data-role="pfile"]');
     var pRmEl = host.querySelector('[data-role="prm"]');
-    pFileEl.addEventListener('change', async function(e){
-      var f = e.target.files && e.target.files[0]; if(!f) return;
+    async function loadProductImage(f){
+      if(!f){ return; }
+      if(!/^image\//.test(f.type)){ showToast('El archivo no es una imagen', false); return; }
       pPreviewEl.innerHTML = '<div class="img-placeholder"><span class="spin" style="display:inline-block;vertical-align:-2px"></span> Procesando…</div>';
       try{
         var dataURL = await fileToCompressedDataURL(f, 800, 0.78);
         p.imagen = dataURL;
-        pPreviewEl.innerHTML = '<img src="'+dataURL+'" alt="" style="width:100%;max-height:200px;object-fit:contain;border-radius:10px;border:1px solid var(--border);background:#fff">';
+        pPreviewEl.innerHTML = '<img src="'+dataURL+'" alt="" style="width:100%;max-height:200px;object-fit:contain;border-radius:10px;background:#fff">';
         pRmEl.style.display='';
-      }catch(err){ pPreviewEl.innerHTML='<div class="img-placeholder">No se pudo cargar</div>'; }
+      }catch(err){ pPreviewEl.innerHTML='<div class="img-dz-empty"><div class="dz-ico">⚠️</div><div class="dz-hd">No se pudo cargar</div><div class="dz-sb">Prueba con otra imagen</div></div>'; }
+    }
+    pFileEl.addEventListener('change', function(e){
+      var f = e.target.files && e.target.files[0]; if(f) loadProductImage(f);
       e.target.value='';
     });
     pRmEl.addEventListener('click', function(){
       p.imagen='';
-      pPreviewEl.innerHTML='<div class="img-placeholder">Sin imagen</div>';
+      pPreviewEl.innerHTML='<div class="img-dz-empty"><div class="dz-ico">📷</div><div class="dz-hd">Arrastra una imagen aquí</div><div class="dz-sb">o toca abajo para elegir · Ctrl+V para pegar</div></div>';
       pRmEl.style.display='none';
     });
+    // Drag & drop
+    ;['dragenter','dragover'].forEach(function(ev){
+      pPreviewEl.addEventListener(ev, function(e){ e.preventDefault(); e.stopPropagation(); pPreviewEl.classList.add('drag-over'); });
+    });
+    ;['dragleave','dragend'].forEach(function(ev){
+      pPreviewEl.addEventListener(ev, function(e){ e.preventDefault(); e.stopPropagation(); pPreviewEl.classList.remove('drag-over'); });
+    });
+    pPreviewEl.addEventListener('drop', function(e){
+      e.preventDefault(); e.stopPropagation();
+      pPreviewEl.classList.remove('drag-over');
+      var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if(f) loadProductImage(f);
+    });
+    // Bloquear drop en toda la modal para evitar que el navegador abra la imagen
+    modal.addEventListener('dragover', function(e){ e.preventDefault(); });
+    modal.addEventListener('drop', function(e){ e.preventDefault(); });
+    // Paste (Ctrl+V)
+    var pasteHandler = function(e){
+      if(!host.contains(document.activeElement) && !modal.contains(e.target)) return;
+      var items = (e.clipboardData||{}).items || [];
+      for(var i=0;i<items.length;i++){
+        if(items[i].kind==='file' && /^image\//.test(items[i].type)){
+          var f=items[i].getAsFile(); if(f){ loadProductImage(f); e.preventDefault(); break; }
+        }
+      }
+    };
+    document.addEventListener('paste', pasteHandler);
+    // Cleanup al cerrar
+    var origClose = closeModal;
+    var cleanup = function(){ document.removeEventListener('paste', pasteHandler); };
+    host.querySelectorAll('[data-role="close"]').forEach(function(b){ b.addEventListener('click', cleanup); });
+    host.querySelector('[data-role="scrim"]').addEventListener('mousedown', function(ev){ if(ev.target===ev.currentTarget) cleanup(); });
     rowsEl.addEventListener('change',function(e){ if(e.target.matches('[data-role="bod"]')&&e.target.value==='__new__'){ var row=e.target.closest('.cost-row'); var inp=document.createElement('input'); inp.type='text'; inp.setAttribute('data-role','bod'); inp.placeholder='Nombre de bodega'; e.target.replaceWith(inp); inp.focus(); } });
     host.querySelector('[data-role="addcost"]').addEventListener('click',function(){ rowsEl.insertAdjacentHTML('beforeend',costRowHTML()); });
     rowsEl.addEventListener('click',function(e){ if(e.target.matches('[data-role="rm"]')){ if(rowsEl.querySelectorAll('.cost-row').length>1) e.target.closest('.cost-row').remove(); else e.target.closest('.cost-row').querySelectorAll('input,select').forEach(function(i){ if(i.tagName==='SELECT') i.selectedIndex=0; else i.value=''; }); } });
