@@ -272,6 +272,9 @@ select.sort{padding:10px 12px; border-radius:10px; border:1px solid var(--border
 .sect-card.has-bg.disabled .badge{background:rgba(0,0,0,.4); color:rgba(255,255,255,.7); border-color:rgba(255,255,255,.15)}
 .sect-card .rail{position:absolute; top:0; left:0; right:0; height:3px; background:linear-gradient(90deg, var(--accent), transparent)}
 .sect-card .badge{display:inline-block; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; padding:3px 10px; border-radius:999px; background:var(--accent-soft); color:var(--accent); margin-top:4px}
+.sect-card.admin-preview{cursor:pointer; opacity:.85; filter:grayscale(.35) brightness(.9)}
+.sect-card.admin-preview:hover{opacity:1; filter:none; transform:translateY(-3px)}
+.sect-card.admin-preview .badge{background:rgba(245,158,11,.25); color:#fbbf24; border:1px solid rgba(245,158,11,.45); font-weight:800}
 .sect-card.disabled{opacity:.55; cursor:not-allowed; background-color:var(--surface-2)}
 .sect-card.disabled .rail{background:linear-gradient(90deg, var(--faint), transparent)}
 .sect-card.disabled .badge{background:var(--surface); color:var(--muted); border:1px solid var(--border)}
@@ -956,6 +959,8 @@ body.role-trabajador .pexp{display:none !important}
           var n = parseInt(p.stock, 10);
           p.stock = isNaN(n) ? null : Math.max(0, n);
         }
+        // Migración: productos sin sección explícita van a maquillaje (default histórico)
+        if(!p.seccion) p.seccion = 'maquillaje';
         return p;
       }),
       pedido:pedido, // legado (compatibilidad)
@@ -1210,9 +1215,10 @@ body.role-trabajador .pexp{display:none !important}
   /* ---------- resumen ---------- */
   function summary(){
     var margins=[], low=0;
-    state.productos.forEach(function(p){ var b=best(p); if(b){ var m=marginPct(p.precioVenta,b.costo); if(m!=null){ margins.push(m); if(m<20) low++; } } });
+    var prods = productosDeSeccion();
+    prods.forEach(function(p){ var b=best(p); if(b){ var m=marginPct(p.precioVenta,b.costo); if(m!=null){ margins.push(m); if(m<20) low++; } } });
     var avg=margins.length?margins.reduce(function(a,b){return a+b;},0)/margins.length:null;
-    return {nprod:state.productos.length, nbod:state.bodegas.length, avg:avg, low:low};
+    return {nprod:prods.length, nbod:state.bodegas.length, avg:avg, low:low};
   }
 
   /* ---------- render principal ---------- */
@@ -1360,9 +1366,14 @@ body.role-trabajador .pexp{display:none !important}
   function stat(k,v){ return '<div class="stat"><div class="rail"></div><div class="k">'+esc(k)+'</div><div class="v num">'+esc(v)+'</div></div>'; }
   function opt(v,label){ return '<option value="'+v+'"'+(ui.sort===v?' selected':'')+'>'+esc(label)+'</option>'; }
 
+  function productosDeSeccion(){
+    var sec = activeSection || 'maquillaje';
+    return (state.productos||[]).filter(function(p){ return (p.seccion||'maquillaje') === sec; });
+  }
   function filtered(){
     var q=ui.q.trim().toLowerCase();
-    var list=state.productos.filter(function(p){ if(!q) return true;
+    var base = productosDeSeccion();
+    var list=base.filter(function(p){ if(!q) return true;
       var hay=(p.nombre||'')+' '+(p.sku||'')+' '+(p.marca||'')+' '+(p.costos||[]).map(function(c){return c.bodega;}).join(' ');
       return hay.toLowerCase().indexOf(q)>=0; });
     if(ui.sort==='marca'){
@@ -1633,18 +1644,21 @@ body.role-trabajador .pexp{display:none !important}
     var cardsHTML = secs.map(function(s){
       var bgStyle = s.imagen ? ' style="background-image:url(\''+esc(s.imagen).replace(/'/g,"%27")+'\')"' : '';
       var disabled = !s.disponible;
-      var clickAttrs = disabled ? '' : ' data-act="pick-section" data-section="'+esc(s.id)+'"';
+      // Admin puede entrar aunque esté como próximamente (para preparar el catálogo)
+      var canEnter = admin || !disabled;
+      var clickAttrs = canEnter ? ' data-act="pick-section" data-section="'+esc(s.id)+'"' : '';
       var adminBtns = admin ? (
         '<div class="sect-admin" data-role="sect-admin">'+
           '<button class="mini" data-act="edit-section" data-sid="'+esc(s.id)+'" title="Editar sección">✎</button>'+
           '<button class="mini del" data-act="del-section" data-sid="'+esc(s.id)+'" title="Eliminar sección">🗑</button>'+
         '</div>'
       ) : '';
-      return '<div class="sect-card has-bg'+(disabled?' disabled':'')+'" role="button" tabindex="0"'+clickAttrs+bgStyle+'>'+
+      var badgeText = disabled ? (admin?'🔒 Próximamente · Entrar como admin':'Próximamente') : 'Disponible';
+      return '<div class="sect-card has-bg'+(disabled && !admin?' disabled':'')+(disabled && admin?' admin-preview':'')+'" role="button" tabindex="0"'+clickAttrs+bgStyle+'>'+
         adminBtns+
         '<h3>'+esc(s.nombre)+'</h3>'+
         '<p>'+esc(s.descripcion||'')+'</p>'+
-        '<span class="badge">'+(disabled?'Próximamente':'Disponible')+'</span>'+
+        '<span class="badge">'+badgeText+'</span>'+
       '</div>';
     }).join('');
     var addCard = admin ? (
@@ -2372,7 +2386,7 @@ body.role-trabajador .pexp{display:none !important}
 
   function openProduct(prod){
     var isNew=!prod;
-    var p=prod?JSON.parse(JSON.stringify(prod)):{id:uid(),nombre:'',marca:'',sku:'',precioMayorista:'',precioVenta:'',notas:'',imagen:'',tipo:'normal',componentes:[],costos:[{bodega:'',costo:''}]};
+    var p=prod?JSON.parse(JSON.stringify(prod)):{id:uid(),nombre:'',marca:'',sku:'',precioMayorista:'',precioVenta:'',notas:'',imagen:'',tipo:'normal',componentes:[],costos:[{bodega:'',costo:''}],seccion:(activeSection||'maquillaje')};
     if(p.marca==null) p.marca='';
     if(p.precioMayorista==null) p.precioMayorista='';
     if(p.imagen==null) p.imagen='';
