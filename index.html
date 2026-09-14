@@ -372,6 +372,34 @@ select.sort{padding:10px 12px; border-radius:10px; border:1px solid var(--border
 .stock-preview{display:flex; align-items:baseline; justify-content:space-between; gap:8px; padding:12px 16px; background:var(--accent-soft); border:1px solid var(--accent); border-radius:12px; margin-top:14px}
 .stock-preview .lb{color:var(--accent); font-size:12px; text-transform:uppercase; letter-spacing:.06em; font-weight:700}
 .stock-preview .v{font-family:"JetBrains Mono",monospace; font-variant-numeric:tabular-nums; font-weight:800; font-size:22px}
+
+/* ---- Modo selección ---- */
+.pcard.sel-mode{cursor:pointer}
+.pcard.sel-mode .pcard-img{cursor:pointer}
+.pcard.selected{border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft), 0 6px 16px rgba(0,0,0,.08)}
+.pcard.selected .pcard-img::before{content:""; position:absolute; inset:0; background:rgba(13,122,110,.18); z-index:1; pointer-events:none}
+.pcard-check{position:absolute; top:8px; left:8px; z-index:5; width:30px; height:30px; cursor:pointer; user-select:none}
+.pcard-check input{position:absolute; opacity:0; pointer-events:none}
+.pcard-check span{display:block; width:30px; height:30px; border-radius:8px; background:rgba(255,255,255,.9); border:2px solid rgba(0,0,0,.35); transition:all .15s ease; position:relative; backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px)}
+.pcard-check input:checked + span{background:var(--accent); border-color:var(--accent)}
+.pcard-check input:checked + span::after{content:"✓"; position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:900; font-size:18px}
+.pcard.sel-mode .pcard-badge{left:46px}
+.sel-bar{position:fixed; left:50%; transform:translateX(-50%); bottom:24px; z-index:900; display:flex; gap:8px; align-items:center; background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:10px 14px; box-shadow:0 12px 40px rgba(0,0,0,.20); max-width:calc(100% - 32px); flex-wrap:wrap}
+.sel-bar .sel-count{font-weight:700; font-size:14px; color:var(--ink); padding:0 6px}
+.sel-bar .sel-count b{font-family:"JetBrains Mono",monospace; color:var(--accent); font-size:18px; margin-right:2px}
+.btn.danger{background:var(--bad); color:#fff; border:none}
+.btn.danger:hover{filter:brightness(1.1)}
+.btn.danger:disabled{background:var(--surface-2); color:var(--muted); cursor:not-allowed; filter:none}
+.btn.ghost.on{background:var(--accent); color:#fff; border-color:var(--accent)}
+
+/* ---- Modal eliminar marca ---- */
+.del-marca-opt{display:flex; align-items:center; gap:14px; width:100%; padding:14px 16px; border:2px solid var(--border); border-radius:12px; background:var(--surface); cursor:pointer; text-align:left; margin-bottom:10px; transition:all .15s ease; font-family:inherit}
+.del-marca-opt:hover{border-color:var(--accent); background:var(--accent-soft)}
+.del-marca-opt.danger:hover{border-color:var(--bad); background:rgba(220,38,38,.08)}
+.del-marca-opt .opt-ico{font-size:28px; flex-shrink:0}
+.del-marca-opt .opt-title{font-weight:700; font-size:14.5px; color:var(--ink); line-height:1.2}
+.del-marca-opt .opt-desc{font-size:12.5px; color:var(--muted); margin-top:4px; line-height:1.4}
+.del-marca-opt.danger .opt-title{color:var(--bad)}
 .pcard .pexp{padding:0 14px 14px; max-height:0; overflow:hidden; transition:max-height .28s ease; opacity:0}
 .pcard.expanded .pexp{max-height:1000px; opacity:1; padding-top:6px; border-top:1px solid var(--border); margin-top:0}
 .pcard .pexp table{width:100%; font-size:12.5px; border-collapse:collapse; margin-top:8px}
@@ -771,7 +799,7 @@ body.role-trabajador .pexp{display:none !important}
   var session=null; // {usuarioId, usuarioNombre, role}
   var cfg=null;              // {url,key}
   var GROUPS_KEY='bm-collapsed';
-  var ui={q:'', sort:'marca', expanded:{}, collapsed:{}};
+  var ui={q:'', sort:'marca', expanded:{}, collapsed:{}, selectMode:false, selected:{}};
   try{ var _c=JSON.parse(localStorage.getItem(GROUPS_KEY)); if(_c && typeof _c==='object') ui.collapsed=_c; }catch(e){}
   var conn='off';            // off | connecting | ok | saving | err
   var lastServerStamp=null;  // updated_at conocido del servidor
@@ -1187,11 +1215,12 @@ body.role-trabajador .pexp{display:none !important}
             '<input type="search" id="q" placeholder="Buscar producto, SKU o bodega…" value="'+esc(ui.q)+'"></div>'+
           '<select class="sort" id="sort">'+opt('marca','Agrupado por marca')+opt('nombre','Ordenar: Nombre A→Z')+ (admin?(opt('margen','Ordenar: Mejor margen')+opt('costo','Ordenar: Menor costo')):'') +opt('precio','Ordenar: Mayor precio')+'</select>'+
           (admin?'<button class="btn ghost" data-act="bodegas">🏬 Bodegas</button>':'')+
+          (admin?'<button class="btn ghost'+(ui.selectMode?' on':'')+'" data-act="toggle-select">'+(ui.selectMode?'✕ Salir':'☑ Seleccionar')+'</button>':'')+
           '<button class="btn ghost" data-act="menu">⋯ Más</button>'+
           (admin?'<button class="btn primary" data-act="new">＋ Producto</button>':'')+
         '</div>'+
         '<div id="prods">'+productsHTML()+'</div>'+
-      '</div>'+ fabCartHTML();
+      '</div>'+ fabCartHTML() + selectionBarHTML();
   }
   function cartTotals(){
     var items=(currentCart().items||[]); var totC=0,totM=0,totV=0,units=0;
@@ -1219,6 +1248,17 @@ body.role-trabajador .pexp{display:none !important}
     if(!t.lineas) return '';
     return '<button class="fab-cart" data-act="open-cart" title="Ver pedido">'+
       '🛒 <span class="badge">'+t.lineas+'</span> Pedido <span class="totmini">'+fmt(t.venta)+'</span></button>';
+  }
+  function selectedCount(){ return Object.keys(ui.selected||{}).filter(function(k){return ui.selected[k];}).length; }
+  function selectionBarHTML(){
+    if(!ui.selectMode || !isAdmin()) return '';
+    var n = selectedCount();
+    return '<div class="sel-bar">'+
+      '<div class="sel-count"><b>'+n+'</b> seleccionado'+(n===1?'':'s')+'</div>'+
+      '<button class="btn ghost" data-act="sel-all">Todos visibles</button>'+
+      '<button class="btn ghost" data-act="sel-none">Ninguno</button>'+
+      '<button class="btn danger" data-act="sel-del"'+(n===0?' disabled':'')+'>🗑 Eliminar ('+n+')</button>'+
+    '</div>';
   }
 
   function header(s){
@@ -1420,14 +1460,18 @@ body.role-trabajador .pexp{display:none !important}
     var addBtn = soldOut && !admin
       ? '<button class="pcard-add sold-out" disabled>AGOTADO</button>'
       : '<button class="pcard-add'+(inCart?' in':'')+'" data-act="add-cart">'+(inCart?'✓ En pedido':'＋ Al pedido')+'</button>';
-    var card='<div class="pcard'+(expanded?' expanded':'')+(p.tipo==='combo'?' is-combo':'')+(p.tipo==='extra'?' is-extra':'')+(soldOut?' is-out':'')+'" data-id="'+esc(p.id)+'">'+
-      '<div class="pcard-img" data-act="tg-row">'+
+    var selectMode = admin && ui.selectMode;
+    var isSelected = selectMode && ui.selected[p.id];
+    var selCheck = selectMode ? '<label class="pcard-check" data-act="sel-toggle"><input type="checkbox"'+(isSelected?' checked':'')+' data-pid="'+esc(p.id)+'"><span></span></label>' : '';
+    var card='<div class="pcard'+(expanded?' expanded':'')+(p.tipo==='combo'?' is-combo':'')+(p.tipo==='extra'?' is-extra':'')+(soldOut?' is-out':'')+(selectMode?' sel-mode':'')+(isSelected?' selected':'')+'" data-id="'+esc(p.id)+'">'+
+      selCheck+
+      '<div class="pcard-img" data-act="'+(selectMode?'sel-toggle':'tg-row')+'"'+(selectMode?' data-pid="'+esc(p.id)+'"':'')+'>'+
         img+
         badge+
         stockChip+
         soldOutOverlay+
-        (dlBtn ? '<div class="pcard-tools">'+dlBtn+'</div>' : '')+
-        adminBtn+
+        (dlBtn && !selectMode ? '<div class="pcard-tools">'+dlBtn+'</div>' : '')+
+        (!selectMode ? adminBtn : '')+
       '</div>'+
       '<div class="pcard-body">'+
         '<div class="pcard-name" data-act="tg-row">'+esc(p.nombre||'(sin nombre)')+ (p.sku?'<small>'+esc(p.sku)+'</small>':'') +'</div>'+
@@ -1999,6 +2043,52 @@ body.role-trabajador .pexp{display:none !important}
   }
   function slugifyName(s){ return String(s||'imagen').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,40) || 'imagen'; }
 
+  /* ---------- modal eliminar marca ---------- */
+  function openDelMarca(marcaName){
+    var m = marcaName;
+    var count = (state.productos||[]).filter(function(p){ return marcaUpper(p.marca)===marcaUpper(m); }).length;
+    host.innerHTML='<div class="scrim" data-role="scrim"><div class="modal" role="dialog" aria-modal="true" style="width:min(440px,100%)">'+
+      '<div class="modal-hd"><h2>🗑 Eliminar marca</h2><button class="mini" data-role="close">×</button></div>'+
+      '<div class="modal-bd">'+
+        '<p class="hint" style="font-size:14px;color:var(--ink);margin-bottom:14px">Vas a eliminar la marca <b>"'+esc(m)+'"</b>. Tiene <b>'+count+'</b> producto'+(count===1?'':'s')+' asignado'+(count===1?'':'s')+'. ¿Qué quieres hacer con ellos?</p>'+
+        '<button class="del-marca-opt" data-role="opt-only">'+
+          '<div class="opt-ico">🏷️</div>'+
+          '<div><div class="opt-title">Solo eliminar la marca</div>'+
+          '<div class="opt-desc">Los '+count+' producto'+(count===1?'':'s')+' se conservan y quedan como <b>SIN MARCA</b>.</div></div>'+
+        '</button>'+
+        '<button class="del-marca-opt danger" data-role="opt-both">'+
+          '<div class="opt-ico">💥</div>'+
+          '<div><div class="opt-title">Eliminar marca <u>y sus productos</u></div>'+
+          '<div class="opt-desc">Borra la marca <b>y los '+count+' producto'+(count===1?'':'s')+'</b>. No se puede deshacer.</div></div>'+
+        '</button>'+
+      '</div>'+
+      '<div class="modal-ft"><button class="btn ghost" data-role="close" style="margin-left:auto">Cancelar</button></div>'+
+    '</div></div>';
+    host.querySelector('[data-role="opt-only"]').addEventListener('click', function(){
+      state.marcas=(state.marcas||[]).filter(function(x){return marcaUpper(x)!==marcaUpper(m);});
+      state.marcasOcultas=(state.marcasOcultas||[]).filter(function(x){return marcaUpper(x)!==marcaUpper(m);});
+      state.productos.forEach(function(p){ if(marcaUpper(p.marca)===marcaUpper(m)) p.marca=''; });
+      closeModal(); scheduleSave(); render();
+      showToast('Marca "'+m+'" eliminada. Los productos quedaron sin marca.', false);
+    });
+    host.querySelector('[data-role="opt-both"]').addEventListener('click', function(){
+      if(count>0 && !confirm('¿Confirmas que quieres borrar la marca "'+m+'" Y los '+count+' producto(s) asignados a ella?')) return;
+      // Borrar productos de esa marca
+      var idsBorrados = (state.productos||[]).filter(function(p){ return marcaUpper(p.marca)===marcaUpper(m); }).map(function(p){return p.id;});
+      state.productos = state.productos.filter(function(p){ return marcaUpper(p.marca)!==marcaUpper(m); });
+      // Limpiar componentes de combos que apuntaban a productos borrados
+      state.productos.forEach(function(p){
+        if(p.tipo==='combo' && Array.isArray(p.componentes)){
+          p.componentes = p.componentes.filter(function(c){ return idsBorrados.indexOf(c.productoId)<0; });
+        }
+      });
+      state.marcas=(state.marcas||[]).filter(function(x){return marcaUpper(x)!==marcaUpper(m);});
+      state.marcasOcultas=(state.marcasOcultas||[]).filter(function(x){return marcaUpper(x)!==marcaUpper(m);});
+      closeModal(); scheduleSave(); render();
+      showToast('Marca y '+count+' producto(s) eliminados', false);
+    });
+  }
+
   /* ---------- modal inventario ---------- */
   function openStock(pid){
     var p = state.productos.find(function(x){return x.id===pid;});
@@ -2520,16 +2610,7 @@ body.role-trabajador .pexp{display:none !important}
       if(!isAdmin()) return;
       e.stopPropagation();
       var mm=act.getAttribute('data-marca'); if(!mm) return;
-      var by=countByMarca();
-      var count=by[mm]||0;
-      var msg = count>0
-        ? '¿Eliminar la marca "'+mm+'"? Tiene '+count+' producto(s) que quedarán como SIN MARCA.'
-        : '¿Eliminar la marca "'+mm+'"?';
-      if(!confirm(msg)) return;
-      state.marcas=(state.marcas||[]).filter(function(x){return marcaUpper(x)!==marcaUpper(mm);});
-      state.marcasOcultas=(state.marcasOcultas||[]).filter(function(x){return marcaUpper(x)!==marcaUpper(mm);});
-      state.productos.forEach(function(pp){ if(marcaUpper(pp.marca)===marcaUpper(mm)) pp.marca=''; });
-      scheduleSave(); refreshProds();
+      openDelMarca(mm);
     }
     else if(a==='brand-toggle'){
       if(!isAdmin()) return;
@@ -2614,16 +2695,7 @@ body.role-trabajador .pexp{display:none !important}
     else if(a==='mv-del'){
       var row2=e.target.closest('.mv-row'); if(!row2) return;
       var m=row2.getAttribute('data-marca'); if(!m) return;
-      var by=countByMarca();
-      var count=by[m]||0;
-      var msg = count>0
-        ? '¿Eliminar la marca "'+m+'"? Tiene '+count+' producto(s) que quedarán como SIN MARCA.'
-        : '¿Eliminar la marca "'+m+'"?';
-      if(!confirm(msg)) return;
-      state.marcas=(state.marcas||[]).filter(function(x){return marcaUpper(x)!==marcaUpper(m);});
-      state.marcasOcultas=(state.marcasOcultas||[]).filter(function(x){return marcaUpper(x)!==marcaUpper(m);});
-      state.productos.forEach(function(p){ if(marcaUpper(p.marca)===marcaUpper(m)) p.marca=''; });
-      scheduleSave(); refreshProds(); openMarcasVisibles();
+      openDelMarca(m);
     }
     else if(a==='tutorial'){ closeModal(); startTutorial(); }
     else if(a==='pick-section'){
@@ -2662,6 +2734,56 @@ body.role-trabajador .pexp{display:none !important}
       e.stopPropagation();
       var pcard=e.target.closest('.pcard'); if(!pcard) return;
       openStock(pcard.getAttribute('data-id'));
+    }
+    else if(a==='toggle-select'){
+      if(!isAdmin()) return;
+      ui.selectMode = !ui.selectMode;
+      if(!ui.selectMode) ui.selected = {};
+      render();
+    }
+    else if(a==='sel-toggle'){
+      if(!isAdmin() || !ui.selectMode) return;
+      e.stopPropagation(); e.preventDefault();
+      var pcard2=e.target.closest('.pcard'); if(!pcard2) return;
+      var pid5=pcard2.getAttribute('data-id');
+      ui.selected[pid5] = !ui.selected[pid5];
+      if(!ui.selected[pid5]) delete ui.selected[pid5];
+      pcard2.classList.toggle('selected', !!ui.selected[pid5]);
+      var chk=pcard2.querySelector('.pcard-check input'); if(chk) chk.checked = !!ui.selected[pid5];
+      var barCount=document.querySelector('.sel-bar .sel-count');
+      if(barCount){
+        var n=selectedCount();
+        barCount.innerHTML='<b>'+n+'</b> seleccionado'+(n===1?'':'s');
+        var delBtn=document.querySelector('.sel-bar [data-act="sel-del"]');
+        if(delBtn){ delBtn.textContent='🗑 Eliminar ('+n+')'; delBtn.disabled = n===0; }
+      }
+    }
+    else if(a==='sel-all'){
+      if(!isAdmin() || !ui.selectMode) return;
+      var visibles = document.querySelectorAll('#prods .pcard');
+      visibles.forEach(function(c){ var id=c.getAttribute('data-id'); if(id) ui.selected[id]=true; });
+      refreshProds();
+    }
+    else if(a==='sel-none'){
+      if(!isAdmin() || !ui.selectMode) return;
+      ui.selected = {};
+      refreshProds();
+    }
+    else if(a==='sel-del'){
+      if(!isAdmin() || !ui.selectMode) return;
+      var ids = Object.keys(ui.selected).filter(function(k){return ui.selected[k];});
+      if(!ids.length){ showToast('No hay productos seleccionados', false); return; }
+      if(!confirm('¿Eliminar '+ids.length+' producto(s) seleccionado(s)? Esta acción no se puede deshacer.')) return;
+      state.productos = state.productos.filter(function(p){ return ids.indexOf(p.id)<0; });
+      // Además, limpiar componentes de combos que apuntaban a esos productos
+      state.productos.forEach(function(p){
+        if(p.tipo==='combo' && Array.isArray(p.componentes)){
+          p.componentes = p.componentes.filter(function(c){ return ids.indexOf(c.productoId)<0; });
+        }
+      });
+      ui.selected = {}; ui.selectMode = false;
+      scheduleSave(); render();
+      showToast(ids.length+' producto(s) eliminado(s)', false);
     }
     else if(a==='edit-meta'){
       if(!puedeEditarMeta()){ showToast('Solo Brayder01 puede cambiar la meta',false); return; }
