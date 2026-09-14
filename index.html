@@ -425,10 +425,35 @@ select.sort{padding:10px 12px; border-radius:10px; border:1px solid var(--border
 .pcard .pexp table td.best{color:var(--good); font-weight:700}
 .pcard .pexp .note{margin-top:8px; padding:8px 10px; background:var(--surface-2); border-radius:8px; font-size:12.5px; color:var(--muted)}
 @media (max-width:640px){
-  .pgrid{grid-template-columns:repeat(auto-fill, minmax(160px, 1fr)); gap:10px; padding:10px}
-  .pcard-name{font-size:13.5px; min-height:2.4em}
-  .pcard-prices{font-size:12px; padding:6px 8px}
-  .pcard-add{padding:8px 10px; font-size:12.5px}
+  .pgrid{grid-template-columns:repeat(3, 1fr); gap:8px; padding:8px}
+  .pcard{border-radius:10px}
+  .pcard-body{padding:8px 8px 10px; gap:6px}
+  .pcard-name{font-size:11.5px; min-height:2.4em; line-height:1.25}
+  .pcard-name small{font-size:9.5px; margin-top:1px}
+  .pcard-prices{font-size:10.5px; padding:5px 6px; gap:2px; border-radius:7px}
+  .pcard-prices .pl .lb{font-size:9.5px; letter-spacing:.03em}
+  .pcard-prices .pl-venta .v{font-size:12px}
+  .pcard-add{padding:7px 6px; font-size:11px; border-radius:7px}
+  .pcard-stock-btn{padding:5px 6px; font-size:10.5px}
+  .pcard-badge{padding:3px 6px; font-size:9px; letter-spacing:.03em; top:5px; left:5px}
+  .pcard-stock{padding:3px 6px; font-size:9.5px; bottom:5px; right:5px}
+  .pcard-tools{right:38px; top:5px}
+  .pcard-dl{padding:3px 6px; font-size:11px}
+  .pcard-more{top:5px; right:5px}
+  .pcard-more .mm{padding:3px 7px; font-size:13px}
+  .sold-out-overlay{font-size:14px; letter-spacing:.1em}
+  .pcard-check{width:22px; height:22px; top:5px; left:5px}
+  .pcard-check span{width:22px; height:22px; border-radius:5px}
+  .pcard-check input:checked + span::after{font-size:14px}
+  .pcard.sel-mode .pcard-badge{left:32px}
+}
+@media (max-width:400px){
+  .pgrid{gap:6px; padding:6px}
+  .pcard-body{padding:6px 6px 8px}
+  .pcard-name{font-size:11px}
+  .pcard-prices{font-size:10px}
+  .pcard-prices .pl-venta .v{font-size:11.5px}
+  .pcard-add{padding:6px 4px; font-size:10.5px}
 }
 .sect-topbar{display:flex; justify-content:space-between; align-items:center; margin-bottom:6px}
 .sect-topbar .link{background:none; border:none; color:var(--muted); font-size:13px; cursor:pointer; padding:4px 8px; border-radius:6px; font-family:inherit}
