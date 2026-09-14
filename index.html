@@ -260,6 +260,31 @@ select.sort{padding:10px 12px; border-radius:10px; border:1px solid var(--border
 .sect-card.disabled{opacity:.55; cursor:not-allowed; background-color:var(--surface-2)}
 .sect-card.disabled .rail{background:linear-gradient(90deg, var(--faint), transparent)}
 .sect-card.disabled .badge{background:var(--surface); color:var(--muted); border:1px solid var(--border)}
+.sect-card{cursor:pointer}
+.sect-admin{position:absolute; top:8px; right:8px; display:flex; gap:6px; z-index:3}
+.sect-admin .mini{background:rgba(0,0,0,.55); color:#fff; border:1px solid rgba(255,255,255,.25); border-radius:8px; padding:5px 9px; font-size:14px; cursor:pointer; backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px)}
+.sect-admin .mini:hover{background:rgba(0,0,0,.8)}
+.sect-admin .mini.del:hover{background:var(--bad); border-color:var(--bad)}
+.sect-card.sect-add{min-height:280px; border:2px dashed var(--border); background:var(--surface-2); display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:24px}
+.sect-card.sect-add:hover{border-color:var(--accent); background:var(--accent-soft)}
+.sect-card.sect-add .sect-add-ico{font-size:56px; color:var(--accent); font-weight:300; line-height:1; margin-bottom:8px}
+.sect-card.sect-add h3{color:var(--ink); font-size:18px}
+.sect-card.sect-add p{color:var(--muted); font-size:13px}
+.img-placeholder{display:flex; align-items:center; justify-content:center; height:120px; background:var(--surface-2); border:1px dashed var(--border); border-radius:10px; color:var(--muted); font-size:13px}
+.pthumb{display:inline-flex; align-items:center; justify-content:center; width:44px; height:44px; border-radius:10px; background:var(--surface-2); border:1px solid var(--border); overflow:hidden; flex-shrink:0}
+.pthumb.has{background:#fff}
+.pthumb img{width:100%; height:100%; object-fit:cover; display:block}
+.pthumb .ph{font-size:20px; opacity:.45}
+.prow.has-thumb{grid-template-columns:44px 1fr 90px 90px 44px 44px 40px; gap:10px; align-items:center}
+.prow-t.has-thumb{grid-template-columns:44px 1fr 100px 100px 44px !important; gap:10px; align-items:center}
+@media (max-width:640px){
+  .prow.has-thumb{grid-template-columns:40px 1fr 70px 70px 40px 40px 34px; gap:8px}
+  .prow-t.has-thumb{grid-template-columns:40px 1fr 80px 80px 40px !important; gap:8px}
+  .pthumb{width:40px; height:40px}
+}
+.pimg-wrap{margin:8px 0 12px; text-align:center}
+.pimg-big{max-width:100%; max-height:280px; border-radius:10px; border:1px solid var(--border); background:#fff; object-fit:contain}
+.pimg-dl{display:block; margin:10px auto 0; padding:8px 16px; font-size:13px}
 .sect-topbar{display:flex; justify-content:space-between; align-items:center; margin-bottom:6px}
 .sect-topbar .link{background:none; border:none; color:var(--muted); font-size:13px; cursor:pointer; padding:4px 8px; border-radius:6px; font-family:inherit}
 .sect-topbar .link:hover{color:var(--ink); background:var(--surface-2)}
@@ -633,7 +658,7 @@ body.role-trabajador .pexp{display:none !important}
     url:'https://ubiingxrbjpiqlgqrewe.supabase.co',
     key:'sb_publishable_GO5vsVIFg2OEko1YuoUVSg__OKzxm4h'
   };
-  var state={moneda:'COP', bodegas:[], bodegaTels:{}, productos:[], pedido:{items:[],cliente:{nombre:'',tel:''}}, pedidos:[], usuarios:[], carritos:{}, notifEmail:{enabled:true, accessKey:'', destinatario:'', extras:[]}, metaMensual:600000};
+  var state={moneda:'COP', bodegas:[], bodegaTels:{}, productos:[], pedido:{items:[],cliente:{nombre:'',tel:''}}, pedidos:[], usuarios:[], carritos:{}, notifEmail:{enabled:true, accessKey:'', destinatario:'', extras:[]}, metaMensual:600000, secciones:[]};
   var session=null; // {usuarioId, usuarioNombre, role}
   var cfg=null;              // {url,key}
   var GROUPS_KEY='bm-collapsed';
@@ -744,6 +769,25 @@ body.role-trabajador .pexp{display:none !important}
       carritos:(d.carritos&&typeof d.carritos==='object')?d.carritos:{},
       metaMensual: (typeof d.metaMensual==='number' && d.metaMensual>0) ? d.metaMensual : 600000,
       marcasOcultas: Array.isArray(d.marcasOcultas) ? d.marcasOcultas : [],
+      secciones: (function(){
+        var arr = Array.isArray(d.secciones) ? d.secciones : null;
+        if(!arr || !arr.length){
+          return [
+            {id:'maquillaje', nombre:'Maquillaje', descripcion:'Bases, labiales, sombras y todos los productos de belleza.', imagen:'https://images.unsplash.com/photo-1596462502278-27bfdc403348?w=900&q=85&auto=format&fit=crop', disponible:true},
+            {id:'calzado', nombre:'Calzado', descripcion:'Tenis, sandalias y zapatos de temporada.', imagen:'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=900&q=85&auto=format&fit=crop', disponible:false},
+            {id:'perfumeria', nombre:'Perfumería', descripcion:'Perfumes, colonias y esencias importadas.', imagen:'https://images.unsplash.com/photo-1541643600914-78b084683601?w=900&q=85&auto=format&fit=crop', disponible:false}
+          ];
+        }
+        return arr.map(function(s){
+          return {
+            id: s.id || ('s'+Date.now().toString(36)+Math.random().toString(36).slice(2,5)),
+            nombre: s.nombre || '(sin nombre)',
+            descripcion: s.descripcion || '',
+            imagen: s.imagen || '',
+            disponible: s.disponible !== false
+          };
+        });
+      })(),
       notifEmail:{
         enabled: ne.enabled!==false,
         accessKey: ne.accessKey || '',
@@ -1165,13 +1209,17 @@ body.role-trabajador .pexp{display:none !important}
     var mg=b?marginPct(venta,b.costo):null;
     var inCart=(currentCart().items||[]).some(function(it){return it.productId===p.id;});
     var expanded=!!ui.expanded[p.id];
+    var thumb = p.imagen
+      ? '<span class="pthumb has"><img src="'+esc(p.imagen)+'" alt="" loading="lazy"></span>'
+      : '<span class="pthumb"><span class="ph">📦</span></span>';
     var row;
     if(admin){
       var costCell = b
         ? '<div class="pc">'+fmt(b.costo)+'<span class="bod">'+esc(b.bodega)+'</span></div>'
         : '<div class="pc none">— sin costo —</div>';
       var mgCell = mg!=null ? '<div class="pm '+mgClass(mg)+'">'+pct(mg)+'</div>' : '<div class="pm" style="color:var(--faint)">—</div>';
-      row='<div class="prow'+(expanded?' expanded':'')+'" data-id="'+esc(p.id)+'" data-act="tg-row">'+
+      row='<div class="prow has-thumb'+(expanded?' expanded':'')+'" data-id="'+esc(p.id)+'" data-act="tg-row">'+
+        thumb+
         '<div class="pn">'+esc(p.nombre||'(sin nombre)')+ (p.sku?'<small>'+esc(p.sku)+'</small>':'') +'</div>'+
         '<div class="pv">'+fmt(venta)+'</div>'+
         costCell+ mgCell+
@@ -1182,7 +1230,8 @@ body.role-trabajador .pexp{display:none !important}
       '</div>';
     } else {
       // Trabajador: precio mayorista y precio al cliente, sin costo bodega
-      row='<div class="prow prow-t'+(expanded?' expanded':'')+'" data-id="'+esc(p.id)+'" data-act="tg-row">'+
+      row='<div class="prow prow-t has-thumb'+(expanded?' expanded':'')+'" data-id="'+esc(p.id)+'" data-act="tg-row">'+
+        thumb+
         '<div class="pn">'+esc(p.nombre||'(sin nombre)')+'</div>'+
         '<div class="pv-t"><span class="lb">Mayorista</span>'+fmt(mayo)+'</div>'+
         '<div class="pv-t vv"><span class="lb">Sugerido</span>'+fmt(venta)+'</div>'+
@@ -1196,8 +1245,14 @@ body.role-trabajador .pexp{display:none !important}
     var b=best(p);
     var costos=(p.costos||[]).slice().sort(function(x,y){return (x.costo||Infinity)-(y.costo||Infinity);});
     var body='';
+    if(p.imagen){
+      body += '<div class="pimg-wrap">'+
+        '<img src="'+esc(p.imagen)+'" alt="'+esc(p.nombre||'')+'" class="pimg-big">'+
+        '<button class="btn ghost pimg-dl" data-act="dl-img" data-pid="'+esc(p.id)+'">⬇ Descargar imagen</button>'+
+      '</div>';
+    }
     if(!costos.length){
-      body='<div class="note">Sin bodegas cargadas. Toca <b>✎ Editar</b> para agregar la bodega y su costo.</div>';
+      body+='<div class="note">Sin bodegas cargadas. Toca <b>✎ Editar</b> para agregar la bodega y su costo.</div>';
     }else{
       body='<table><thead><tr><th>Bodega</th><th class="r">Costo</th><th class="r">Ganancia</th><th class="r">Margen</th></tr></thead><tbody>'+
         costos.map(function(c){
@@ -1273,6 +1328,31 @@ body.role-trabajador .pexp{display:none !important}
   function renderSectionPicker(){
     var nombre = session ? session.usuarioNombre : '';
     var admin = isAdmin();
+    var secs = state.secciones || [];
+    var cardsHTML = secs.map(function(s){
+      var bgStyle = s.imagen ? ' style="background-image:url(\''+esc(s.imagen).replace(/'/g,"%27")+'\')"' : '';
+      var disabled = !s.disponible;
+      var clickAttrs = disabled ? '' : ' data-act="pick-section" data-section="'+esc(s.id)+'"';
+      var adminBtns = admin ? (
+        '<div class="sect-admin" data-role="sect-admin">'+
+          '<button class="mini" data-act="edit-section" data-sid="'+esc(s.id)+'" title="Editar sección">✎</button>'+
+          '<button class="mini del" data-act="del-section" data-sid="'+esc(s.id)+'" title="Eliminar sección">🗑</button>'+
+        '</div>'
+      ) : '';
+      return '<div class="sect-card has-bg'+(disabled?' disabled':'')+'" role="button" tabindex="0"'+clickAttrs+bgStyle+'>'+
+        adminBtns+
+        '<h3>'+esc(s.nombre)+'</h3>'+
+        '<p>'+esc(s.descripcion||'')+'</p>'+
+        '<span class="badge">'+(disabled?'Próximamente':'Disponible')+'</span>'+
+      '</div>';
+    }).join('');
+    var addCard = admin ? (
+      '<div class="sect-card sect-add" role="button" tabindex="0" data-act="new-section" title="Agregar nueva sección">'+
+        '<div class="sect-add-ico">＋</div>'+
+        '<h3>Agregar sección</h3>'+
+        '<p>Crea una nueva categoría de tienda.</p>'+
+      '</div>'
+    ) : '';
     app.innerHTML='<div class="sect-wrap">'+
       '<div class="sect-topbar">'+
         '<div class="who-chip'+(admin?' admin':'')+'"><span class="avat">'+esc((nombre||'?').charAt(0).toUpperCase())+'</span>'+esc(nombre)+' <span class="role">'+(admin?'admin':'trabajador')+'</span></div>'+
@@ -1280,25 +1360,9 @@ body.role-trabajador .pexp{display:none !important}
       '</div>'+
       '<div class="sect-hero">'+
         '<h1>Elige una sección</h1>'+
-        '<p>Selecciona la tienda con la que vas a trabajar</p>'+
+        '<p>'+(admin?'Selecciona una tienda o crea una nueva sección.':'Selecciona la tienda con la que vas a trabajar')+'</p>'+
       '</div>'+
-      '<div class="sect-grid">'+
-        '<button class="sect-card has-bg sect-maquillaje" data-act="pick-section" data-section="maquillaje">'+
-          '<h3>Maquillaje</h3>'+
-          '<p>Bases, labiales, sombras y todos los productos de belleza.</p>'+
-          '<span class="badge">Disponible</span>'+
-        '</button>'+
-        '<button class="sect-card has-bg sect-calzado disabled">'+
-          '<h3>Calzado</h3>'+
-          '<p>Tenis, sandalias y zapatos de temporada.</p>'+
-          '<span class="badge">Próximamente</span>'+
-        '</button>'+
-        '<button class="sect-card has-bg sect-perfumeria disabled">'+
-          '<h3>Perfumería</h3>'+
-          '<p>Perfumes, colonias y esencias importadas.</p>'+
-          '<span class="badge">Próximamente</span>'+
-        '</button>'+
-      '</div>'+
+      '<div class="sect-grid">'+cardsHTML+addCard+'</div>'+
     '</div>';
   }
 
@@ -1647,6 +1711,122 @@ body.role-trabajador .pexp{display:none !important}
   var toastEl=document.getElementById('toast'), toastT;
   function showToast(msg,spinning){ toastEl.innerHTML=(spinning?'<span class="spin"></span>':'✓ ')+esc(msg); toastEl.classList.add('show'); clearTimeout(toastT); if(!spinning) toastT=setTimeout(function(){ toastEl.classList.remove('show'); },2400); }
 
+  /* ---------- helpers de imagen ---------- */
+  function fileToCompressedDataURL(file, maxDim, quality){
+    maxDim = maxDim || 800; quality = quality || 0.78;
+    return new Promise(function(resolve, reject){
+      if(!file){ reject(new Error('sin archivo')); return; }
+      if(!/^image\//.test(file.type)){ reject(new Error('no es imagen')); return; }
+      var reader = new FileReader();
+      reader.onerror = function(){ reject(new Error('error leyendo')); };
+      reader.onload = function(){
+        var img = new Image();
+        img.onerror = function(){ reject(new Error('imagen inválida')); };
+        img.onload = function(){
+          var w=img.width, h=img.height;
+          if(w>maxDim || h>maxDim){
+            if(w>h){ h = Math.round(h*maxDim/w); w=maxDim; }
+            else { w = Math.round(w*maxDim/h); h=maxDim; }
+          }
+          var cv = document.createElement('canvas'); cv.width=w; cv.height=h;
+          var ctx = cv.getContext('2d');
+          ctx.fillStyle='#fff'; ctx.fillRect(0,0,w,h);
+          ctx.drawImage(img,0,0,w,h);
+          try{ resolve(cv.toDataURL('image/jpeg', quality)); }
+          catch(e){ reject(e); }
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+  function downloadDataURL(dataURL, filename){
+    try{
+      var a=document.createElement('a');
+      a.href=dataURL; a.download=filename||'imagen.jpg';
+      document.body.appendChild(a); a.click();
+      setTimeout(function(){ document.body.removeChild(a); }, 100);
+    }catch(e){ showToast('No se pudo descargar', false); }
+  }
+  function slugifyName(s){ return String(s||'imagen').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,40) || 'imagen'; }
+
+  /* ---------- modal sección ---------- */
+  function openSeccion(sid){
+    var isNew = !sid;
+    var s = isNew
+      ? {id:'s'+Date.now().toString(36)+Math.random().toString(36).slice(2,5), nombre:'', descripcion:'', imagen:'', disponible:true}
+      : JSON.parse(JSON.stringify((state.secciones||[]).find(function(x){return x.id===sid;}) || {}));
+    if(!s.id){ closeModal(); return; }
+    var preview = s.imagen ? '<img src="'+esc(s.imagen)+'" alt="" style="width:100%;max-height:180px;object-fit:cover;border-radius:10px;border:1px solid var(--border)">' : '<div class="img-placeholder">Sin imagen</div>';
+    host.innerHTML='<div class="scrim" data-role="scrim"><div class="modal" role="dialog" aria-modal="true">'+
+      '<div class="modal-hd"><h2>'+(isNew?'Nueva sección':'Editar sección')+'</h2><button class="mini" data-role="close">×</button></div>'+
+      '<div class="modal-bd">'+
+        '<div class="field"><label>Nombre</label><input type="text" data-f="nombre" value="'+esc(s.nombre)+'" placeholder="Ej: Ropa"></div>'+
+        '<div class="field" style="margin-top:12px"><label>Descripción corta</label><input type="text" data-f="descripcion" value="'+esc(s.descripcion)+'" placeholder="Ej: Camisetas, jeans y más"></div>'+
+        '<div class="field" style="margin-top:12px"><label>Imagen de fondo</label>'+
+          '<div data-role="preview" style="margin-bottom:10px">'+preview+'</div>'+
+          '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
+            '<label class="btn ghost" style="cursor:pointer;margin:0"><input type="file" accept="image/*" data-role="secfile" style="display:none">📷 Subir imagen</label>'+
+            (s.imagen ? '<button type="button" class="btn ghost" data-role="secrm">Quitar imagen</button>' : '')+
+          '</div>'+
+          '<span class="help">La foto se comprime automáticamente. También puedes pegar una URL debajo.</span>'+
+          '<input type="text" data-f="imagen" value="'+esc(s.imagen)+'" placeholder="https://... (opcional)" style="margin-top:8px">'+
+        '</div>'+
+        '<div class="field" style="margin-top:12px"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" data-f="disponible"'+(s.disponible?' checked':'')+'> <span>Sección disponible (los trabajadores pueden entrar)</span></label></div>'+
+      '</div>'+
+      '<div class="modal-ft">'+
+        (isNew ? '' : '<button class="btn ghost del" data-role="secdel" style="margin-right:auto">🗑 Eliminar</button>')+
+        '<button class="btn ghost" data-role="close">Cancelar</button>'+
+        '<button class="btn primary" data-role="secsave">'+(isNew?'Crear sección':'Guardar')+'</button>'+
+      '</div>'+
+    '</div></div>';
+    var modal = host.querySelector('.modal');
+    var previewEl = host.querySelector('[data-role="preview"]');
+    var imgUrlEl = modal.querySelector('[data-f="imagen"]');
+    var fileEl = host.querySelector('[data-role="secfile"]');
+    fileEl.addEventListener('change', async function(e){
+      var f = e.target.files && e.target.files[0]; if(!f) return;
+      previewEl.innerHTML = '<div class="img-placeholder"><span class="spin" style="display:inline-block;vertical-align:-2px"></span> Procesando…</div>';
+      try{
+        var dataURL = await fileToCompressedDataURL(f, 1000, 0.78);
+        s.imagen = dataURL; imgUrlEl.value = dataURL;
+        previewEl.innerHTML = '<img src="'+dataURL+'" alt="" style="width:100%;max-height:180px;object-fit:cover;border-radius:10px;border:1px solid var(--border)">';
+      }catch(err){ previewEl.innerHTML = '<div class="img-placeholder">No se pudo cargar</div>'; }
+      e.target.value = '';
+    });
+    imgUrlEl.addEventListener('input', function(){
+      var v = imgUrlEl.value.trim();
+      if(v && /^https?:\/\//.test(v)){
+        previewEl.innerHTML = '<img src="'+esc(v)+'" alt="" style="width:100%;max-height:180px;object-fit:cover;border-radius:10px;border:1px solid var(--border)">';
+      } else if(!v){
+        previewEl.innerHTML = '<div class="img-placeholder">Sin imagen</div>';
+      }
+    });
+    var rmBtn = host.querySelector('[data-role="secrm"]');
+    if(rmBtn) rmBtn.addEventListener('click', function(){
+      s.imagen=''; imgUrlEl.value='';
+      previewEl.innerHTML = '<div class="img-placeholder">Sin imagen</div>';
+    });
+    var delBtn = host.querySelector('[data-role="secdel"]');
+    if(delBtn) delBtn.addEventListener('click', function(){
+      if(!confirm('¿Eliminar la sección "'+s.nombre+'"? Los productos no se borran, solo desaparece la sección de la lista.')) return;
+      state.secciones = (state.secciones||[]).filter(function(x){return x.id!==s.id;});
+      closeModal(); render(); scheduleSave();
+    });
+    host.querySelector('[data-role="secsave"]').addEventListener('click', function(){
+      var g = function(f){ var el=modal.querySelector('[data-f="'+f+'"]'); return el?el.value:''; };
+      s.nombre = g('nombre').trim();
+      s.descripcion = g('descripcion').trim();
+      s.imagen = g('imagen').trim();
+      s.disponible = !!modal.querySelector('[data-f="disponible"]').checked;
+      if(!s.nombre){ modal.querySelector('[data-f="nombre"]').focus(); return; }
+      if(!Array.isArray(state.secciones)) state.secciones=[];
+      var i = state.secciones.findIndex(function(x){return x.id===s.id;});
+      if(i>=0) state.secciones[i]=s; else state.secciones.push(s);
+      closeModal(); render(); scheduleSave();
+    });
+  }
+
   /* ---------- modal producto ---------- */
   var host=document.getElementById('modal-host');
   function closeModal(){ host.innerHTML=''; }
@@ -1658,13 +1838,23 @@ body.role-trabajador .pexp{display:none !important}
 
   function openProduct(prod){
     var isNew=!prod;
-    var p=prod?JSON.parse(JSON.stringify(prod)):{id:uid(),nombre:'',marca:'',sku:'',precioMayorista:'',precioVenta:'',notas:'',costos:[{bodega:'',costo:''}]};
+    var p=prod?JSON.parse(JSON.stringify(prod)):{id:uid(),nombre:'',marca:'',sku:'',precioMayorista:'',precioVenta:'',notas:'',imagen:'',costos:[{bodega:'',costo:''}]};
     if(p.marca==null) p.marca='';
     if(p.precioMayorista==null) p.precioMayorista='';
+    if(p.imagen==null) p.imagen='';
     if(!p.costos||!p.costos.length) p.costos=[{bodega:'',costo:''}];
+    var imgPreview = p.imagen ? '<img src="'+esc(p.imagen)+'" alt="" style="width:100%;max-height:200px;object-fit:contain;border-radius:10px;border:1px solid var(--border);background:#fff">' : '<div class="img-placeholder">Sin imagen</div>';
     host.innerHTML='<div class="scrim" data-role="scrim"><div class="modal" role="dialog" aria-modal="true">'+
       '<div class="modal-hd"><h2>'+(isNew?'Nuevo producto':'Editar producto')+'</h2><button class="mini" data-role="close" aria-label="Cerrar">×</button></div>'+
       '<div class="modal-bd">'+
+        '<div class="field"><label>Imagen del producto</label>'+
+          '<div data-role="ppreview" style="margin-bottom:10px">'+imgPreview+'</div>'+
+          '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
+            '<label class="btn ghost" style="cursor:pointer;margin:0"><input type="file" accept="image/*" data-role="pfile" style="display:none">📷 Subir imagen</label>'+
+            '<button type="button" class="btn ghost" data-role="prm"'+(p.imagen?'':' style="display:none"')+'>Quitar</button>'+
+          '</div>'+
+          '<span class="help">La imagen se comprime automáticamente. Los trabajadores podrán descargarla.</span>'+
+        '</div>'+
         '<div class="field"><label>Nombre del producto</label><input type="text" data-f="nombre" value="'+esc(p.nombre)+'" placeholder="Ej: Reloj inteligente D20"></div>'+
         '<div class="f2"><div class="field"><label>Marca</label><input type="text" list="marcas-list" data-f="marca" value="'+esc(p.marca||'')+'" placeholder="Ej: ATENEA, ARANA…"></div>'+
           '<div class="field"><label>SKU / referencia (opcional)</label><input type="text" data-f="sku" value="'+esc(p.sku)+'" placeholder="REF-001"></div></div>'+
@@ -1681,6 +1871,25 @@ body.role-trabajador .pexp{display:none !important}
       '<div class="modal-ft"><button class="btn ghost" data-role="close">Cancelar</button><button class="btn primary" data-role="save">'+(isNew?'Agregar producto':'Guardar cambios')+'</button></div>'+
     '</div></div>';
     var modal=host.querySelector('.modal'), rowsEl=host.querySelector('[data-role="rows"]');
+    var pPreviewEl = host.querySelector('[data-role="ppreview"]');
+    var pFileEl = host.querySelector('[data-role="pfile"]');
+    var pRmEl = host.querySelector('[data-role="prm"]');
+    pFileEl.addEventListener('change', async function(e){
+      var f = e.target.files && e.target.files[0]; if(!f) return;
+      pPreviewEl.innerHTML = '<div class="img-placeholder"><span class="spin" style="display:inline-block;vertical-align:-2px"></span> Procesando…</div>';
+      try{
+        var dataURL = await fileToCompressedDataURL(f, 800, 0.78);
+        p.imagen = dataURL;
+        pPreviewEl.innerHTML = '<img src="'+dataURL+'" alt="" style="width:100%;max-height:200px;object-fit:contain;border-radius:10px;border:1px solid var(--border);background:#fff">';
+        pRmEl.style.display='';
+      }catch(err){ pPreviewEl.innerHTML='<div class="img-placeholder">No se pudo cargar</div>'; }
+      e.target.value='';
+    });
+    pRmEl.addEventListener('click', function(){
+      p.imagen='';
+      pPreviewEl.innerHTML='<div class="img-placeholder">Sin imagen</div>';
+      pRmEl.style.display='none';
+    });
     rowsEl.addEventListener('change',function(e){ if(e.target.matches('[data-role="bod"]')&&e.target.value==='__new__'){ var row=e.target.closest('.cost-row'); var inp=document.createElement('input'); inp.type='text'; inp.setAttribute('data-role','bod'); inp.placeholder='Nombre de bodega'; e.target.replaceWith(inp); inp.focus(); } });
     host.querySelector('[data-role="addcost"]').addEventListener('click',function(){ rowsEl.insertAdjacentHTML('beforeend',costRowHTML()); });
     rowsEl.addEventListener('click',function(e){ if(e.target.matches('[data-role="rm"]')){ if(rowsEl.querySelectorAll('.cost-row').length>1) e.target.closest('.cost-row').remove(); else e.target.closest('.cost-row').querySelectorAll('input,select').forEach(function(i){ if(i.tagName==='SELECT') i.selectedIndex=0; else i.value=''; }); } });
@@ -1917,6 +2126,32 @@ body.role-trabajador .pexp{display:none !important}
       if(s){ setActiveSection(s); render(); showToast('Sección: '+s, false); }
     }
     else if(a==='change-section'){ setActiveSection(null); render(); }
+    else if(a==='new-section'){
+      if(!isAdmin()){ showToast('Solo el admin puede crear secciones', false); return; }
+      openSeccion(null);
+    }
+    else if(a==='edit-section'){
+      if(!isAdmin()) return;
+      e.stopPropagation();
+      var sid=act.getAttribute('data-sid'); if(sid) openSeccion(sid);
+    }
+    else if(a==='del-section'){
+      if(!isAdmin()) return;
+      e.stopPropagation();
+      var sid2=act.getAttribute('data-sid');
+      var sec=(state.secciones||[]).find(function(x){return x.id===sid2;}); if(!sec) return;
+      if(!confirm('¿Eliminar la sección "'+sec.nombre+'"? Los productos se conservan.')) return;
+      state.secciones=(state.secciones||[]).filter(function(x){return x.id!==sid2;});
+      if(activeSection===sid2) setActiveSection(null);
+      render(); scheduleSave();
+    }
+    else if(a==='dl-img'){
+      e.stopPropagation();
+      var pid3=act.getAttribute('data-pid');
+      var pr=state.productos.find(function(x){return x.id===pid3;});
+      if(!pr || !pr.imagen){ showToast('Este producto no tiene imagen', false); return; }
+      downloadDataURL(pr.imagen, slugifyName(pr.nombre)+'.jpg');
+    }
     else if(a==='edit-meta'){
       if(!puedeEditarMeta()){ showToast('Solo Brayder01 puede cambiar la meta',false); return; }
       closeModal();
