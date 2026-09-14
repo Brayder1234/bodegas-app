@@ -505,6 +505,13 @@ body.role-trabajador .pexp{display:none !important}
   letter-spacing:.05em; padding:2px 8px; border-radius:6px;
   background:var(--warn-soft); border:1px solid var(--warn); flex-shrink:0;
 }
+.pg-admin{display:flex; gap:6px; margin-left:8px; flex-shrink:0}
+.pg-admin .mini{background:var(--surface-2); color:var(--muted); border:1px solid var(--border); border-radius:8px; padding:5px 9px; font-size:13px; cursor:pointer; transition:all .12s ease; line-height:1}
+.pg-admin .mini:hover{background:var(--accent-soft); color:var(--accent); border-color:var(--accent)}
+.pg-admin .mini.del:hover{background:var(--bad); color:#fff; border-color:var(--bad)}
+.brand-add-btn{width:100%; justify-content:center; margin-bottom:12px; border:2px dashed var(--border); background:transparent; padding:14px; font-weight:700; color:var(--muted); border-radius:12px; font-size:14px}
+.brand-add-btn:hover{border-color:var(--accent); color:var(--accent); background:var(--accent-soft)}
+@media (max-width:640px){ .pg-admin .mini{padding:4px 7px; font-size:12px} }
 .pgroup.hidden-brand{opacity:.7}
 .pgroup.hidden-brand .pg-hdr{background:repeating-linear-gradient(45deg, var(--surface-2), var(--surface-2) 8px, transparent 8px, transparent 16px)}
 .brand-footer-note{
@@ -1309,6 +1316,14 @@ body.role-trabajador .pexp{display:none !important}
       var collapsed = !searching && ui.collapsed[g.marca];
       var margenes=g.items.map(function(p){var b=best(p); return b?marginPct(p.precioVenta,b.costo):null;}).filter(function(x){return x!=null;});
       var avg=margenes.length?Math.round(margenes.reduce(function(a,b){return a+b;},0)/margenes.length):null;
+      var isVirtual = g.marca==='SIN MARCA';
+      var adminBtns = (admin && !isVirtual) ? (
+        '<div class="pg-admin">'+
+          '<button class="mini" data-act="brand-toggle" data-marca="'+esc(g.marca)+'" title="'+(isHidden?'Mostrar':'Ocultar')+' a trabajadores">'+(isHidden?'👁️‍🗨️':'👁️')+'</button>'+
+          '<button class="mini" data-act="brand-rename" data-marca="'+esc(g.marca)+'" title="Renombrar">✎</button>'+
+          '<button class="mini del" data-act="brand-del" data-marca="'+esc(g.marca)+'" title="Eliminar marca">🗑</button>'+
+        '</div>'
+      ) : '';
       return '<div class="pgroup'+(collapsed?' collapsed':'')+(isHidden?' hidden-brand':'')+'" data-marca="'+esc(g.marca)+'">'+
         '<div class="pg-hdr" data-act="tg-group">'+
           '<span class="chev">▼</span>'+
@@ -1316,16 +1331,18 @@ body.role-trabajador .pexp{display:none !important}
           (isHidden?'<span class="brand-tag-hidden">🚫 oculta</span>':'')+
           '<span class="count">'+g.items.length+'</span>'+
           (avg!=null?'<span class="avg">margen prom. '+pct(avg)+'</span>':'')+
+          adminBtns+
         '</div>'+
         '<div class="pgrid">'+g.items.map(rowHTML).join('')+'</div>'+
       '</div>';
     }).join('');
+    var addBrandBtn = admin ? '<button class="btn ghost brand-add-btn" data-act="brand-new">＋ Nueva marca</button>' : '';
     // Mensaje al final para trabajadores si hay marcas ocultas
     var footerNote='';
     if(!admin && hiddenCount>0){
       footerNote='<div class="brand-footer-note">✨ Estamos organizando el inventario. Pronto se irán habilitando <b>'+hiddenCount+' marca'+(hiddenCount===1?'':'s')+' más</b>.</div>';
     }
-    return '<div class="plist">'+listHTML+footerNote+'</div>';
+    return '<div class="plist">'+addBrandBtn+listHTML+footerNote+'</div>';
   }
 
   function rowHTML(p){
@@ -2348,11 +2365,64 @@ body.role-trabajador .pexp{display:none !important}
       else { if(confirm('¿Eliminar "'+(p.nombre||'este producto')+'"?')){ state.productos=state.productos.filter(function(x){return x.id!==id;}); render(); scheduleSave(); } }
     }
     else if(a==='tg-group'){
+      // No colapsar si el click nació en los botones admin de la marca
+      if(e.target.closest('.pg-admin')) return;
       var pg=e.target.closest('.pgroup'); if(!pg) return;
       var marca=pg.getAttribute('data-marca');
       pg.classList.toggle('collapsed');
       ui.collapsed[marca]=pg.classList.contains('collapsed');
       try{ localStorage.setItem(GROUPS_KEY, JSON.stringify(ui.collapsed)); }catch(x){}
+    }
+    else if(a==='brand-new'){
+      if(!isAdmin()) return;
+      e.stopPropagation();
+      var nv=prompt('Nombre de la nueva marca:',''); if(nv==null) return;
+      nv=String(nv).trim(); if(!nv){ showToast('Nombre vacío',false); return; }
+      if(findMarcaCanonica(nv)){ showToast('Ya existe una marca con ese nombre',false); return; }
+      if(!Array.isArray(state.marcas)) state.marcas=[];
+      state.marcas.push(nv);
+      scheduleSave(); refreshProds();
+      showToast('Marca "'+nv+'" agregada',false);
+    }
+    else if(a==='brand-rename'){
+      if(!isAdmin()) return;
+      e.stopPropagation();
+      var oldM=act.getAttribute('data-marca'); if(!oldM) return;
+      var nv2=prompt('Renombrar marca "'+oldM+'" a:', oldM); if(nv2==null) return;
+      nv2=String(nv2).trim(); if(!nv2){ showToast('Nombre vacío',false); return; }
+      if(marcaUpper(nv2)!==marcaUpper(oldM) && findMarcaCanonica(nv2)){ showToast('Ya existe una marca con ese nombre',false); return; }
+      var idx=(state.marcas||[]).findIndex(function(x){return marcaUpper(x)===marcaUpper(oldM);});
+      if(idx>=0) state.marcas[idx]=nv2; else { if(!Array.isArray(state.marcas)) state.marcas=[]; state.marcas.push(nv2); }
+      state.productos.forEach(function(pp){ if(marcaUpper(pp.marca)===marcaUpper(oldM)) pp.marca=nv2; });
+      var oi=(state.marcasOcultas||[]).findIndex(function(x){return marcaUpper(x)===marcaUpper(oldM);});
+      if(oi>=0) state.marcasOcultas[oi]=nv2;
+      scheduleSave(); refreshProds();
+    }
+    else if(a==='brand-del'){
+      if(!isAdmin()) return;
+      e.stopPropagation();
+      var mm=act.getAttribute('data-marca'); if(!mm) return;
+      var by=countByMarca();
+      var count=by[mm]||0;
+      var msg = count>0
+        ? '¿Eliminar la marca "'+mm+'"? Tiene '+count+' producto(s) que quedarán como SIN MARCA.'
+        : '¿Eliminar la marca "'+mm+'"?';
+      if(!confirm(msg)) return;
+      state.marcas=(state.marcas||[]).filter(function(x){return marcaUpper(x)!==marcaUpper(mm);});
+      state.marcasOcultas=(state.marcasOcultas||[]).filter(function(x){return marcaUpper(x)!==marcaUpper(mm);});
+      state.productos.forEach(function(pp){ if(marcaUpper(pp.marca)===marcaUpper(mm)) pp.marca=''; });
+      scheduleSave(); refreshProds();
+    }
+    else if(a==='brand-toggle'){
+      if(!isAdmin()) return;
+      e.stopPropagation();
+      var mt=act.getAttribute('data-marca'); if(!mt) return;
+      var ocs=(state.marcasOcultas||[]).slice();
+      var mu=marcaUpper(mt);
+      var oidx=ocs.findIndex(function(x){return marcaUpper(x)===mu;});
+      if(oidx>=0) ocs.splice(oidx,1); else ocs.push(mt);
+      state.marcasOcultas=ocs;
+      scheduleSave(); refreshProds();
     }
     else if(a==='tg-row'){
       // ignorar si el click nació en un botón interno
