@@ -317,10 +317,10 @@ select.sort{padding:10px 12px; border-radius:10px; border:1px solid var(--border
 .pcard-name{font-weight:700; line-height:1.3; font-size:15px; color:var(--ink); cursor:pointer; min-height:2.6em; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden}
 .pcard-name small{display:block; font-weight:500; font-size:11px; color:var(--faint); margin-top:2px; letter-spacing:.03em; -webkit-line-clamp:unset}
 .pcard-prices{display:flex; flex-direction:column; gap:4px; padding:8px 10px; background:var(--surface-2); border-radius:10px; font-size:13px}
-.pcard-prices .pl{display:flex; align-items:baseline; gap:6px}
-.pcard-prices .pl .lb{color:var(--muted); font-size:11.5px; text-transform:uppercase; letter-spacing:.05em; flex:1; font-weight:600}
-.pcard-prices .pl .v{font-family:"JetBrains Mono",monospace; font-variant-numeric:tabular-nums; font-weight:700; color:var(--ink)}
-.pcard-prices .pl small{font-size:10.5px; color:var(--faint); font-weight:600}
+.pcard-prices .pl{display:flex; align-items:baseline; justify-content:space-between; gap:6px; min-width:0}
+.pcard-prices .pl .lb{color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.03em; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0}
+.pcard-prices .pl .v{font-family:"JetBrains Mono",monospace; font-variant-numeric:tabular-nums; font-weight:700; color:var(--ink); text-align:right; white-space:nowrap; flex-shrink:0}
+.pcard-prices .pl small{font-size:10.5px; color:var(--faint); font-weight:600; margin-left:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0}
 .pcard-prices .pl-cost{color:var(--muted)}
 .pcard-prices .pl-cost .v{color:var(--muted); font-weight:600}
 .pcard-prices .pl-cost.none .v{color:var(--faint)}
@@ -426,10 +426,16 @@ select.sort{padding:10px 12px; border-radius:10px; border:1px solid var(--border
 .pcard .pexp .note{margin-top:8px; padding:8px 10px; background:var(--surface-2); border-radius:8px; font-size:12.5px; color:var(--muted)}
 @media (max-width:640px){
   .pgrid{grid-template-columns:repeat(2, 1fr); gap:10px; padding:10px}
-  .pcard-body{padding:10px 12px 12px; gap:8px}
-  .pcard-name{font-size:13.5px; min-height:2.4em}
-  .pcard-prices{font-size:12px; padding:6px 8px}
-  .pcard-add{padding:8px 10px; font-size:12.5px}
+  .pcard-body{padding:10px 10px 12px; gap:7px}
+  .pcard-name{font-size:13px; min-height:2.4em}
+  .pcard-prices{font-size:11.5px; padding:6px 8px; gap:3px}
+  .pcard-prices .pl{gap:4px}
+  .pcard-prices .pl .lb{font-size:9.5px; letter-spacing:.02em}
+  .pcard-prices .pl .v{font-size:11.5px}
+  .pcard-prices .pl-venta .v{font-size:13px}
+  .pcard-prices .pl small{display:none}
+  .pcard-add{padding:8px 8px; font-size:12px}
+  .pcard-stock-btn{padding:6px 8px; font-size:11.5px}
 }
 .sect-topbar{display:flex; justify-content:space-between; align-items:center; margin-bottom:6px}
 .sect-topbar .link{background:none; border:none; color:var(--muted); font-size:13px; cursor:pointer; padding:4px 8px; border-radius:6px; font-family:inherit}
@@ -1465,7 +1471,7 @@ body.role-trabajador .pexp{display:none !important}
         ? '<div class="pl pl-cost"><span class="lb">'+costLabel+'</span><span class="v num">'+fmt(b.costo)+'</span><small>'+costSub+'</small></div>'
         : '<div class="pl pl-cost none"><span class="lb">'+costLabel+'</span><span class="v num">—</span></div>';
       var mayoLine = '<div class="pl pl-mayo"><span class="lb">Mayorista</span><span class="v num">'+fmt(mayo)+'</span></div>';
-      var ventaLine = '<div class="pl pl-venta"><span class="lb">Venta cliente</span><span class="v num">'+fmt(venta)+'</span></div>';
+      var ventaLine = '<div class="pl pl-venta"><span class="lb">Venta</span><span class="v num">'+fmt(venta)+'</span></div>';
       var mgLine = mg!=null ? '<div class="pl pl-mg '+mgClass(mg)+'"><span class="lb">Margen</span><span class="v num">'+pct(mg)+'</span></div>' : '';
       pricesHTML = costLine + mayoLine + ventaLine + mgLine;
     } else {
