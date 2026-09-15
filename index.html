@@ -527,6 +527,8 @@ select.sort{padding:10px 12px; border-radius:10px; border:1px solid var(--border
 .var-row .var-prices{display:grid; grid-template-columns:1fr 1fr 1fr; gap:5px; margin-top:2px}
 .var-row .var-prices input{padding:6px 8px; font-size:12px; font-family:"JetBrains Mono",monospace; font-weight:600}
 @media (max-width:640px){ .var-row .var-prices{grid-template-columns:1fr 1fr; gap:4px} }
+/* Ocultar precios cuando la variación es solo visual (color, talla, tono) */
+[data-role="var-rows"].no-prices .var-prices{display:none}
 .var-row .var-rm{background:none; border:none; color:var(--bad); cursor:pointer; font-size:16px; padding:4px 8px; border-radius:6px; flex-shrink:0}
 .var-row .var-rm:hover{background:var(--bad-soft)}
 .tipo-var-picker{display:flex; gap:6px; flex-wrap:wrap}
@@ -2872,7 +2874,7 @@ body.role-trabajador .pexp{display:none !important}
             '</div>';
           }).join('')+
         '</div>'+
-        '<span class="help">💡 Deja los precios vacíos para usar el precio del producto. Útil para variaciones por gramaje (100g, 250g, 500g) donde el precio cambia.</span>'+
+        '<span class="help">💡 <b>Color/Talla/Tono</b> no cambian el precio (usan el del producto). <b>ml/gr</b> u <b>Otro</b> muestran campos de precio para cada variación (útil para 100g, 250g, 500g con distinto precio).</span>'+
         '<button type="button" class="add-cost" data-role="addvar">＋ Agregar variación</button>'+
         '<div class="sub" style="margin-top:14px">🎬 Videos <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--faint)">(opcional · máx 8MB c/u)</span></div>'+
         '<div data-role="vid-rows">'+
@@ -3002,6 +3004,26 @@ body.role-trabajador .pexp{display:none !important}
     var varRowsEl = host.querySelector('[data-role="var-rows"]');
     var tvPicker = host.querySelector('[data-role="tvpicker"]');
     var tvCustom = host.querySelector('[data-role="tv-custom"]');
+    // Tipos que NO cambian el precio (solo visual: color, talla, tono)
+    var TIPOS_SIN_PRECIO = ['Color','Colores','Talla','Tallas','Tono','Tonos'];
+    function tipoTienePrecio(tv){
+      if(!tv) return true;
+      return TIPOS_SIN_PRECIO.indexOf(tv) < 0;
+    }
+    function refreshPricesUI(){
+      if(tipoTienePrecio(p.tipoVariacion)){
+        varRowsEl.classList.remove('no-prices');
+      } else {
+        varRowsEl.classList.add('no-prices');
+        // Limpiar precios guardados (para que hereden del producto)
+        (p.variaciones||[]).forEach(function(v){
+          v.precioVenta = ''; v.precioMayorista = ''; v.costo = '';
+        });
+        varRowsEl.querySelectorAll('.var-prices input').forEach(function(i){ i.value=''; });
+      }
+    }
+    refreshPricesUI();
+
     tvPicker.addEventListener('click', function(e){
       var chip = e.target.closest('.tipo-var-chip'); if(!chip) return;
       var tv = chip.getAttribute('data-tv');
@@ -3014,8 +3036,9 @@ body.role-trabajador .pexp{display:none !important}
         tvCustom.style.display='none';
         p.tipoVariacion = tv;
       }
+      refreshPricesUI();
     });
-    tvCustom.addEventListener('input', function(){ p.tipoVariacion = tvCustom.value.trim(); });
+    tvCustom.addEventListener('input', function(){ p.tipoVariacion = tvCustom.value.trim(); refreshPricesUI(); });
 
     function varRowHTML(v, idx){
       var pv = (v.precioVenta!=null && v.precioVenta!=='') ? v.precioVenta : '';
