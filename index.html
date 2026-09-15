@@ -457,6 +457,7 @@ select.sort{padding:10px 12px; border-radius:10px; border:1px solid var(--border
 .var-thumb:hover img{border-color:var(--accent)}
 .var-thumb .var-ph{width:64px; height:64px; border-radius:10px; border:2px solid var(--border); display:flex; align-items:center; justify-content:center; background:var(--surface-2); font-size:22px}
 .var-thumb .var-nm{font-size:11px; font-weight:600; color:var(--muted); margin-top:3px; line-height:1.2; word-break:break-word; max-width:70px}
+.var-thumb .var-price{font-size:11px; font-weight:800; color:var(--accent); font-family:"JetBrains Mono",monospace; margin-top:1px}
 .var-thumb .var-dl{position:absolute; top:2px; right:2px; background:rgba(0,0,0,.55); color:#fff; border:none; border-radius:5px; padding:2px 5px; font-size:10px; cursor:pointer; line-height:1; opacity:0; transition:opacity .15s}
 .var-thumb:hover .var-dl{opacity:1}
 .var-badge{display:inline-flex; align-items:center; gap:3px; font-size:10px; font-weight:700; color:var(--muted); background:var(--surface-2); border:1px solid var(--border); padding:2px 7px; border-radius:6px; margin-top:4px}
@@ -469,6 +470,9 @@ select.sort{padding:10px 12px; border-radius:10px; border:1px solid var(--border
 .var-row .var-mini-img .ph{font-size:20px; opacity:.4}
 .var-row .var-fields{flex:1; display:flex; flex-direction:column; gap:4px}
 .var-row .var-fields input{padding:7px 10px; border-radius:8px; border:1px solid var(--border); background:var(--surface-2); color:var(--ink); font-size:13px; width:100%}
+.var-row .var-prices{display:grid; grid-template-columns:1fr 1fr 1fr; gap:5px; margin-top:2px}
+.var-row .var-prices input{padding:6px 8px; font-size:12px; font-family:"JetBrains Mono",monospace; font-weight:600}
+@media (max-width:640px){ .var-row .var-prices{grid-template-columns:1fr 1fr; gap:4px} }
 .var-row .var-rm{background:none; border:none; color:var(--bad); cursor:pointer; font-size:16px; padding:4px 8px; border-radius:6px; flex-shrink:0}
 .var-row .var-rm:hover{background:var(--bad-soft)}
 .tipo-var-picker{display:flex; gap:6px; flex-wrap:wrap}
@@ -501,6 +505,8 @@ select.sort{padding:10px 12px; border-radius:10px; border:1px solid var(--border
 .vp-card .vp-img img{width:100%; height:100%; object-fit:cover}
 .vp-card .vp-img .vp-ph{font-size:32px; opacity:.4}
 .vp-card .vp-nm{font-size:13px; font-weight:700; color:var(--ink); text-align:center; word-break:break-word; line-height:1.25}
+.vp-card .vp-price{font-family:"JetBrains Mono",monospace; font-size:13px; font-weight:800; color:var(--accent); text-align:center}
+.vp-card .vp-mayo{font-size:10.5px; font-weight:600; color:var(--muted); text-align:center; margin-top:-3px}
 .line .var-tag{display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:700; padding:2px 8px; border-radius:6px; background:var(--accent-soft); color:var(--accent-ink); margin-top:2px}
 
 @media (max-width:640px){
@@ -1145,13 +1151,42 @@ body.role-trabajador .pexp{display:none !important}
     else state.pedido={items:[],cliente:{nombre:'',tel:'',direccion:'',ciudad:'',notas:''}};
   }
   // Helpers de precios de producto (con fallback si el mayorista aún no está fijado)
-  function mayoristaOf(p){ var m=parseFloat(p&&p.precioMayorista); return (!isNaN(m)&&m>0)?m:(p&&p.precioVenta ? +p.precioVenta : 0); }
-  function ventaOf(p){ return p && p.precioVenta ? +p.precioVenta : 0; }
-  // Precio real de venta en una línea del carrito: usa el editado por el trabajador, si no el sugerido
+  function variacionDe(p, vid){
+    if(!p || !vid || !Array.isArray(p.variaciones)) return null;
+    return p.variaciones.find(function(v){ return v.id===vid; }) || null;
+  }
+  function mayoristaOf(p, vari){
+    if(vari){
+      var vm=parseFloat(vari.precioMayorista);
+      if(!isNaN(vm) && vm>0) return vm;
+      var vv=parseFloat(vari.precioVenta);
+      if(!isNaN(vv) && vv>0) return vv;
+    }
+    var m=parseFloat(p&&p.precioMayorista);
+    return (!isNaN(m)&&m>0)?m:(p&&p.precioVenta ? +p.precioVenta : 0);
+  }
+  function ventaOf(p, vari){
+    if(vari){
+      var v=parseFloat(vari.precioVenta);
+      if(!isNaN(v) && v>0) return v;
+    }
+    return p && p.precioVenta ? +p.precioVenta : 0;
+  }
+  function costoVariacion(vari){
+    if(!vari) return null;
+    var c=parseFloat(vari.costo);
+    return (!isNaN(c) && c>=0) ? c : null;
+  }
+  // Precio real de venta en una línea del carrito: usa el editado por el trabajador, si no el de la variación, si no el del producto
   function itemVenta(it, p){
     var v=parseFloat(it && it.precioVendido);
     if(!isNaN(v) && v>0) return v;
-    return ventaOf(p);
+    var vari = variacionDe(p, it && it.variacionId);
+    return ventaOf(p, vari);
+  }
+  function itemMayorista(it, p){
+    var vari = variacionDe(p, it && it.variacionId);
+    return mayoristaOf(p, vari);
   }
   function setCurrentCart(c){
     if(session) state.carritos[session.usuarioId]=c;
@@ -1365,10 +1400,12 @@ body.role-trabajador .pexp{display:none !important}
     var items=(currentCart().items||[]); var totC=0,totM=0,totV=0,units=0;
     items.forEach(function(it){
       var p=state.productos.find(function(x){return x.id===it.productId;}); if(!p) return;
+      var vari = variacionDe(p, it.variacionId);
+      var vc = costoVariacion(vari);
       var b=(p.costos||[]).find(function(c){return c.bodega===it.bodega;}) || best(p);
-      var cst=b?b.costo:0;
+      var cst = (vc!=null) ? vc : (b?b.costo:0);
       totC+= (cst||0)*it.cantidad;
-      totM+= mayoristaOf(p)*it.cantidad;
+      totM+= itemMayorista(it,p)*it.cantidad;
       totV+= itemVenta(it,p)*it.cantidad;
       units+=it.cantidad;
     });
@@ -1732,7 +1769,9 @@ body.role-trabajador .pexp{display:none !important}
           ? '<img src="'+esc(v.imagen)+'" alt="'+esc(v.nombre)+'" loading="lazy">'
           : '<div class="var-ph">🎨</div>';
         var dlb = v.imagen ? '<button class="var-dl" data-act="dl-var" data-pid="'+esc(p.id)+'" data-vid="'+esc(v.id)+'" title="Descargar">⬇</button>' : '';
-        return '<div class="var-thumb">'+thumb+dlb+'<div class="var-nm">'+esc(v.nombre||'')+'</div></div>';
+        var pv = ventaOf(p, v);
+        var pInfo = (pv>0 && (v.precioVenta||v.precioMayorista)) ? '<div class="var-price">'+fmt(pv)+'</div>' : '';
+        return '<div class="var-thumb">'+thumb+dlb+'<div class="var-nm">'+esc(v.nombre||'')+'</div>'+pInfo+'</div>';
       }).join('') + '</div>';
     }
     // Videos
@@ -2742,13 +2781,25 @@ body.role-trabajador .pexp{display:none !important}
         '</div>'+
         '<div data-role="var-rows">'+
           (p.variaciones||[]).map(function(v,i){
+            var pv = (v.precioVenta!=null && v.precioVenta!=='') ? v.precioVenta : '';
+            var pm = (v.precioMayorista!=null && v.precioMayorista!=='') ? v.precioMayorista : '';
+            var vco = (v.costo!=null && v.costo!=='') ? v.costo : '';
             return '<div class="var-row" data-vi="'+i+'">'+
               '<div class="var-mini-img" data-role="var-img" data-vi="'+i+'">'+(v.imagen?'<img src="'+esc(v.imagen)+'" alt="">':'<span class="ph">📷</span>')+'</div>'+
-              '<div class="var-fields"><input type="text" data-role="vname" placeholder="Nombre (ej: Rojo, S, 30ml)" value="'+esc(v.nombre||'')+'"><input type="file" accept="image/*" data-role="vfile" style="display:none"></div>'+
+              '<div class="var-fields">'+
+                '<input type="text" data-role="vname" placeholder="Nombre (ej: 30ml, S, Rojo)" value="'+esc(v.nombre||'')+'">'+
+                '<div class="var-prices">'+
+                  '<input type="number" inputmode="numeric" data-role="vpv" placeholder="Venta '+state.moneda+'" value="'+esc(pv)+'" title="Precio de venta (deja vacío para usar el del producto)">'+
+                  '<input type="number" inputmode="numeric" data-role="vpm" placeholder="Mayorista" value="'+esc(pm)+'" title="Precio mayorista">'+
+                  '<input type="number" inputmode="numeric" data-role="vco" placeholder="Costo" value="'+esc(vco)+'" title="Costo (opcional)">'+
+                '</div>'+
+                '<input type="file" accept="image/*" data-role="vfile" style="display:none">'+
+              '</div>'+
               '<button type="button" class="var-rm" data-role="vrm">✕</button>'+
             '</div>';
           }).join('')+
         '</div>'+
+        '<span class="help">💡 Deja los precios vacíos para usar el precio del producto. Útil para variaciones por gramaje (100g, 250g, 500g) donde el precio cambia.</span>'+
         '<button type="button" class="add-cost" data-role="addvar">＋ Agregar variación</button>'+
         '<div class="sub" style="margin-top:14px">🎬 Videos <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--faint)">(opcional · máx 8MB c/u)</span></div>'+
         '<div data-role="vid-rows">'+
@@ -2892,9 +2943,20 @@ body.role-trabajador .pexp{display:none !important}
     tvCustom.addEventListener('input', function(){ p.tipoVariacion = tvCustom.value.trim(); });
 
     function varRowHTML(v, idx){
+      var pv = (v.precioVenta!=null && v.precioVenta!=='') ? v.precioVenta : '';
+      var pm = (v.precioMayorista!=null && v.precioMayorista!=='') ? v.precioMayorista : '';
+      var vco = (v.costo!=null && v.costo!=='') ? v.costo : '';
       return '<div class="var-row" data-vi="'+idx+'">'+
         '<div class="var-mini-img" data-role="var-img" data-vi="'+idx+'">'+(v.imagen?'<img src="'+esc(v.imagen)+'" alt="">':'<span class="ph">📷</span>')+'</div>'+
-        '<div class="var-fields"><input type="text" data-role="vname" placeholder="Nombre (ej: Rojo, S, 30ml)" value="'+esc(v.nombre||'')+'"><input type="file" accept="image/*" data-role="vfile" style="display:none"></div>'+
+        '<div class="var-fields">'+
+          '<input type="text" data-role="vname" placeholder="Nombre (ej: 30ml, S, Rojo)" value="'+esc(v.nombre||'')+'">'+
+          '<div class="var-prices">'+
+            '<input type="number" inputmode="numeric" data-role="vpv" placeholder="Venta '+state.moneda+'" value="'+esc(pv)+'" title="Precio de venta">'+
+            '<input type="number" inputmode="numeric" data-role="vpm" placeholder="Mayorista" value="'+esc(pm)+'" title="Precio mayorista">'+
+            '<input type="number" inputmode="numeric" data-role="vco" placeholder="Costo" value="'+esc(vco)+'" title="Costo">'+
+          '</div>'+
+          '<input type="file" accept="image/*" data-role="vfile" style="display:none">'+
+        '</div>'+
         '<button type="button" class="var-rm" data-role="vrm">✕</button>'+
       '</div>';
     }
@@ -3009,12 +3071,19 @@ body.role-trabajador .pexp{display:none !important}
         });
       }
       p.componentes=comps;
-      // Recoger nombres de variaciones desde los inputs
+      // Recoger nombres y precios de variaciones desde los inputs
       varRowsEl.querySelectorAll('.var-row').forEach(function(r, idx){
         var nameInp = r.querySelector('[data-role="vname"]');
-        if(p.variaciones[idx] && nameInp) p.variaciones[idx].nombre = nameInp.value.trim();
+        var pvInp = r.querySelector('[data-role="vpv"]');
+        var pmInp = r.querySelector('[data-role="vpm"]');
+        var coInp = r.querySelector('[data-role="vco"]');
+        if(!p.variaciones[idx]) return;
+        if(nameInp) p.variaciones[idx].nombre = nameInp.value.trim();
+        if(pvInp){ var pvV = parseFloat(pvInp.value); p.variaciones[idx].precioVenta = (!isNaN(pvV)&&pvV>0) ? pvV : ''; }
+        if(pmInp){ var pmV = parseFloat(pmInp.value); p.variaciones[idx].precioMayorista = (!isNaN(pmV)&&pmV>0) ? pmV : ''; }
+        if(coInp){ var coV = parseFloat(coInp.value); p.variaciones[idx].costo = (!isNaN(coV)&&coV>=0) ? coV : ''; }
       });
-      p.variaciones = p.variaciones.filter(function(v){ return v.nombre || v.imagen; });
+      p.variaciones = p.variaciones.filter(function(v){ return v.nombre || v.imagen || v.precioVenta || v.precioMayorista; });
       if(!p.variaciones.length) p.tipoVariacion = '';
       if(!p.nombre){ modal.querySelector('[data-f="nombre"]').focus(); return; }
       if(p.tipo==='combo' && !comps.length){ showToast('El combo necesita al menos un producto', false); return; }
@@ -3993,9 +4062,19 @@ body.role-trabajador .pexp{display:none !important}
             var thumb = v.imagen
               ? '<img src="'+esc(v.imagen)+'" alt="'+esc(v.nombre)+'">'
               : '<div class="vp-ph">🎨</div>';
+            var pv = ventaOf(p, v);
+            var pm = mayoristaOf(p, v);
+            var priceInfo = '';
+            if(pv > 0){
+              priceInfo = '<div class="vp-price">'+fmt(pv)+'</div>';
+              if(isAdmin() && pm && pm !== pv){
+                priceInfo += '<div class="vp-mayo">Mayor. '+fmt(pm)+'</div>';
+              }
+            }
             return '<button type="button" class="vp-card" data-role="pickvar" data-vid="'+esc(v.id)+'">'+
               '<div class="vp-img">'+thumb+'</div>'+
               '<div class="vp-nm">'+esc(v.nombre||'(sin nombre)')+'</div>'+
+              priceInfo+
             '</button>';
           }).join('')+
         '</div>'+
@@ -4031,7 +4110,8 @@ body.role-trabajador .pexp{display:none !important}
     var p=state.productos.find(function(x){return x.id===it.productId;});
     if(!p) return '';
     var admin=isAdmin();
-    var mayo=mayoristaOf(p); var venta=ventaOf(p);
+    var vari = variacionDe(p, it.variacionId);
+    var mayo=itemMayorista(it,p); var venta=ventaOf(p, vari);
     var precioReal=itemVenta(it,p);
     var subV=precioReal*it.cantidad;
     var subM=mayo*it.cantidad;
@@ -4041,7 +4121,8 @@ body.role-trabajador .pexp{display:none !important}
     if(admin){
       var opciones=(p.costos||[]).slice().sort(function(a,b){return a.costo-b.costo;});
       var b=opciones.find(function(c){return c.bodega===it.bodega;}) || opciones[0];
-      var costo=b?b.costo:0;
+      var vc = costoVariacion(vari);
+      var costo = (vc!=null) ? vc : (b?b.costo:0);
       var subC=costo*it.cantidad;
       var mg=marginPct(venta,costo);
       var bodSel=opciones.length?opciones.map(function(c){
@@ -4152,10 +4233,12 @@ body.role-trabajador .pexp{display:none !important}
     var map={};
     (currentCart().items||[]).forEach(function(it){
       var p=state.productos.find(function(x){return x.id===it.productId;}); if(!p) return;
+      var vari = variacionDe(p, it.variacionId);
+      var vc = costoVariacion(vari);
       var b=(p.costos||[]).find(function(c){return c.bodega===it.bodega;}) || best(p);
       var bodega= b ? b.bodega : (it.bodega||'(sin bodega)');
       if(!map[bodega]) map[bodega]={bodega:bodega, items:[], subCosto:0, unidades:0};
-      var costo=b?b.costo:0;
+      var costo = (vc!=null) ? vc : (b?b.costo:0);
       map[bodega].items.push({p:p, cantidad:it.cantidad, costo:costo, variacionNombre:it.variacionNombre||'', tipoVariacion: it.variacionId?(p.tipoVariacion||''):''});
       map[bodega].subCosto += costo*it.cantidad;
       map[bodega].unidades += it.cantidad;
@@ -4214,8 +4297,9 @@ body.role-trabajador .pexp{display:none !important}
       if(!it || !p) return;
       var precio=itemVenta(it,p);
       var sub=precio*it.cantidad;
-      var venta=ventaOf(p);
-      var mayo=mayoristaOf(p);
+      var vari = variacionDe(p, it.variacionId);
+      var venta=ventaOf(p, vari);
+      var mayo=itemMayorista(it,p);
       var subM=mayo*it.cantidad;
       var custom=(it.precioVendido && +it.precioVendido>0 && +it.precioVendido!==venta);
       var footer=line.lastElementChild;
@@ -4328,15 +4412,17 @@ body.role-trabajador .pexp{display:none !important}
     }
     var items=currentCart().items.map(function(it){
       var p=state.productos.find(function(x){return x.id===it.productId;}) || {};
+      var vari = variacionDe(p, it.variacionId);
       var b=(p.costos||[]).find(function(c){return c.bodega===it.bodega;}) || best(p) || {};
+      var vc = costoVariacion(vari);
       var precioReal=itemVenta(it,p);
-      var sug=ventaOf(p);
+      var sug=ventaOf(p, vari);
       return {
         productId:it.productId,
         nombre:p.nombre||'(producto borrado)',
         bodega:it.bodega||(b.bodega||''),
-        costo:b.costo||0,
-        mayorista:mayoristaOf(p),
+        costo: (vc!=null) ? vc : (b.costo||0),
+        mayorista:itemMayorista(it,p),
         precio:precioReal,
         precioSugerido:sug,
         cantidad:it.cantidad,
