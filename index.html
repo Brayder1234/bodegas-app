@@ -449,6 +449,50 @@ select.sort{padding:10px 12px; border-radius:10px; border:1px solid var(--border
 .pcard .pexp table td{padding:5px 6px; border-bottom:1px solid var(--border)}
 .pcard .pexp table td.best{color:var(--good); font-weight:700}
 .pcard .pexp .note{margin-top:8px; padding:8px 10px; background:var(--surface-2); border-radius:8px; font-size:12.5px; color:var(--muted)}
+
+/* ---- Variaciones ---- */
+.var-gallery{display:flex; gap:8px; flex-wrap:wrap; margin-top:8px}
+.var-thumb{position:relative; width:70px; text-align:center; cursor:pointer}
+.var-thumb img{width:64px; height:64px; object-fit:cover; border-radius:10px; border:2px solid var(--border); transition:border-color .15s}
+.var-thumb:hover img{border-color:var(--accent)}
+.var-thumb .var-ph{width:64px; height:64px; border-radius:10px; border:2px solid var(--border); display:flex; align-items:center; justify-content:center; background:var(--surface-2); font-size:22px}
+.var-thumb .var-nm{font-size:11px; font-weight:600; color:var(--muted); margin-top:3px; line-height:1.2; word-break:break-word; max-width:70px}
+.var-thumb .var-dl{position:absolute; top:2px; right:2px; background:rgba(0,0,0,.55); color:#fff; border:none; border-radius:5px; padding:2px 5px; font-size:10px; cursor:pointer; line-height:1; opacity:0; transition:opacity .15s}
+.var-thumb:hover .var-dl{opacity:1}
+.var-badge{display:inline-flex; align-items:center; gap:3px; font-size:10px; font-weight:700; color:var(--muted); background:var(--surface-2); border:1px solid var(--border); padding:2px 7px; border-radius:6px; margin-top:4px}
+.pcard-badges{display:flex; gap:5px; flex-wrap:wrap; margin-top:2px}
+.var-row{display:flex; gap:8px; align-items:center; padding:8px 0; border-bottom:1px solid var(--border)}
+.var-row:last-child{border-bottom:none}
+.var-row .var-mini-img{width:56px; height:56px; border-radius:8px; border:2px dashed var(--border); overflow:hidden; flex-shrink:0; display:flex; align-items:center; justify-content:center; cursor:pointer; background:var(--surface-2); transition:border-color .15s; position:relative}
+.var-row .var-mini-img:hover{border-color:var(--accent)}
+.var-row .var-mini-img img{width:100%; height:100%; object-fit:cover}
+.var-row .var-mini-img .ph{font-size:20px; opacity:.4}
+.var-row .var-fields{flex:1; display:flex; flex-direction:column; gap:4px}
+.var-row .var-fields input{padding:7px 10px; border-radius:8px; border:1px solid var(--border); background:var(--surface-2); color:var(--ink); font-size:13px; width:100%}
+.var-row .var-rm{background:none; border:none; color:var(--bad); cursor:pointer; font-size:16px; padding:4px 8px; border-radius:6px; flex-shrink:0}
+.var-row .var-rm:hover{background:var(--bad-soft)}
+.tipo-var-picker{display:flex; gap:6px; flex-wrap:wrap}
+.tipo-var-chip{padding:6px 12px; border-radius:20px; border:2px solid var(--border); background:var(--surface); cursor:pointer; font-size:13px; font-weight:600; transition:all .12s; font-family:inherit; color:var(--ink)}
+.tipo-var-chip:hover{border-color:var(--accent)}
+.tipo-var-chip.on{background:var(--accent); color:#fff; border-color:var(--accent)}
+
+/* ---- Videos ---- */
+.vid-list{display:flex; flex-direction:column; gap:8px; margin-top:8px}
+.vid-item{display:flex; align-items:center; gap:10px; padding:8px 12px; background:var(--surface-2); border:1px solid var(--border); border-radius:10px}
+.vid-item .vid-ico{font-size:24px; flex-shrink:0}
+.vid-item .vid-name{flex:1; font-size:13px; font-weight:600; color:var(--ink); word-break:break-word}
+.vid-item .vid-size{font-size:11px; color:var(--faint); font-family:"JetBrains Mono",monospace}
+.vid-item .vid-dl{background:var(--accent); color:#fff; border:none; border-radius:8px; padding:6px 12px; font-size:12px; font-weight:700; cursor:pointer; font-family:inherit}
+.vid-item .vid-dl:hover{filter:brightness(1.08)}
+.vid-item .vid-rm{background:none; border:none; color:var(--bad); cursor:pointer; font-size:15px; padding:4px 6px; border-radius:6px}
+.vid-item .vid-rm:hover{background:var(--bad-soft)}
+.vid-row-edit{display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid var(--border)}
+.vid-row-edit:last-child{border-bottom:none}
+.vid-row-edit .vid-info{flex:1; display:flex; flex-direction:column; gap:2px}
+.vid-row-edit .vid-info .vid-fname{font-size:13px; font-weight:600; color:var(--ink)}
+.vid-row-edit .vid-info .vid-fsize{font-size:11px; color:var(--faint)}
+.vid-preview{width:100%; max-height:180px; border-radius:10px; border:1px solid var(--border); background:#000; margin-top:6px}
+
 @media (max-width:640px){
   .pgrid{grid-template-columns:repeat(2, 1fr); gap:10px; padding:10px}
   .pcard-body{padding:10px 10px 12px; gap:7px}
@@ -972,8 +1016,10 @@ body.role-trabajador .pexp{display:none !important}
           var n = parseInt(p.stock, 10);
           p.stock = isNaN(n) ? null : Math.max(0, n);
         }
-        // Migración: productos sin sección explícita van a maquillaje (default histórico)
         if(!p.seccion) p.seccion = 'maquillaje';
+        if(!Array.isArray(p.variaciones)) p.variaciones = [];
+        if(!p.tipoVariacion) p.tipoVariacion = '';
+        if(!Array.isArray(p.videos)) p.videos = [];
         return p;
       }),
       pedido:pedido, // legado (compatibilidad)
@@ -1612,6 +1658,7 @@ body.role-trabajador .pexp{display:none !important}
       '</div>'+
       '<div class="pcard-body">'+
         '<div class="pcard-name" data-act="tg-row">'+esc(p.nombre||'(sin nombre)')+ (p.sku?'<small>'+esc(p.sku)+'</small>':'') +'</div>'+
+        ((p.variaciones&&p.variaciones.length)||(p.videos&&p.videos.length) ? '<div class="pcard-badges">'+(p.variaciones&&p.variaciones.length?'<span class="var-badge">🎨 '+p.variaciones.length+' '+(p.tipoVariacion||'var.')+'</span>':'')+(p.videos&&p.videos.length?'<span class="var-badge">🎬 '+p.videos.length+' video'+(p.videos.length===1?'':'s')+'</span>':'')+'</div>':'')+
         '<div class="pcard-prices">'+pricesHTML+'</div>'+
         stockBtn+
         addBtn+
@@ -1666,6 +1713,27 @@ body.role-trabajador .pexp{display:none !important}
         }).join('')+'</tbody></table>';
     }
     if(p.notas) body+='<div class="note">📝 '+esc(p.notas)+'</div>';
+    // Variaciones
+    var vars = Array.isArray(p.variaciones) ? p.variaciones : [];
+    if(vars.length){
+      body += '<div class="sub" style="margin-top:10px">🎨 '+(p.tipoVariacion||'Variaciones')+' ('+vars.length+')</div>';
+      body += '<div class="var-gallery">' + vars.map(function(v){
+        var thumb = v.imagen
+          ? '<img src="'+esc(v.imagen)+'" alt="'+esc(v.nombre)+'" loading="lazy">'
+          : '<div class="var-ph">🎨</div>';
+        var dlb = v.imagen ? '<button class="var-dl" data-act="dl-var" data-pid="'+esc(p.id)+'" data-vid="'+esc(v.id)+'" title="Descargar">⬇</button>' : '';
+        return '<div class="var-thumb">'+thumb+dlb+'<div class="var-nm">'+esc(v.nombre||'')+'</div></div>';
+      }).join('') + '</div>';
+    }
+    // Videos
+    var vids = Array.isArray(p.videos) ? p.videos : [];
+    if(vids.length){
+      body += '<div class="sub" style="margin-top:10px">🎬 Videos ('+vids.length+')</div>';
+      body += '<div class="vid-list">' + vids.map(function(v){
+        var sz = v.dataURL ? (Math.round(v.dataURL.length * 3/4 / 1024 / 1024 * 10)/10)+'MB' : '';
+        return '<div class="vid-item"><span class="vid-ico">🎬</span><span class="vid-name">'+esc(v.nombre||'Video')+'</span><span class="vid-size">'+sz+'</span><button class="vid-dl" data-act="dl-video" data-pid="'+esc(p.id)+'" data-vidid="'+esc(v.id)+'">⬇ Descargar</button></div>';
+      }).join('') + '</div>';
+    }
     return body;
   }
 
@@ -2654,6 +2722,34 @@ body.role-trabajador .pexp{display:none !important}
         '<div data-role="wrap-extra"'+(p.tipo!=='extra'?' style="display:none"':'')+'>'+
           '<div class="note">📦 Los extras (cajas, decoración, empaques…) no llevan bodega. Solo se cobran al cliente y se pueden añadir a cualquier pedido.</div>'+
         '</div>'+
+        '<div class="sub">🎨 Variaciones <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--faint)">(opcional)</span></div>'+
+        '<div class="field"><label>Tipo de variación</label>'+
+          '<div class="tipo-var-picker" data-role="tvpicker">'+
+            ['Color','Talla','Tono','ml','gr'].map(function(t){ return '<button type="button" class="tipo-var-chip'+(p.tipoVariacion===t?' on':'')+'" data-tv="'+t+'">'+t+'</button>'; }).join('')+
+            '<button type="button" class="tipo-var-chip'+(p.tipoVariacion&&['Color','Talla','Tono','ml','gr'].indexOf(p.tipoVariacion)<0?' on':'')+'" data-tv="__custom__">Otro…</button>'+
+          '</div>'+
+          '<input type="text" data-role="tv-custom" placeholder="Escribe el tipo de variación…" value="'+esc(p.tipoVariacion&&['Color','Talla','Tono','ml','gr'].indexOf(p.tipoVariacion)<0?p.tipoVariacion:'')+'" style="margin-top:6px;'+(p.tipoVariacion&&['Color','Talla','Tono','ml','gr'].indexOf(p.tipoVariacion)<0?'':'display:none')+'">'+
+        '</div>'+
+        '<div data-role="var-rows">'+
+          (p.variaciones||[]).map(function(v,i){
+            return '<div class="var-row" data-vi="'+i+'">'+
+              '<div class="var-mini-img" data-role="var-img" data-vi="'+i+'">'+(v.imagen?'<img src="'+esc(v.imagen)+'" alt="">':'<span class="ph">📷</span>')+'</div>'+
+              '<div class="var-fields"><input type="text" data-role="vname" placeholder="Nombre (ej: Rojo, S, 30ml)" value="'+esc(v.nombre||'')+'"><input type="file" accept="image/*" data-role="vfile" style="display:none"></div>'+
+              '<button type="button" class="var-rm" data-role="vrm">✕</button>'+
+            '</div>';
+          }).join('')+
+        '</div>'+
+        '<button type="button" class="add-cost" data-role="addvar">＋ Agregar variación</button>'+
+        '<div class="sub" style="margin-top:14px">🎬 Videos <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--faint)">(opcional · máx 8MB c/u)</span></div>'+
+        '<div data-role="vid-rows">'+
+          (p.videos||[]).map(function(v){
+            var sz = v.dataURL ? (Math.round(v.dataURL.length * 3/4 / 1024 / 1024 * 10)/10)+'MB' : '';
+            return '<div class="vid-row-edit"><span style="font-size:22px;flex-shrink:0">🎬</span><div class="vid-info"><span class="vid-fname">'+esc(v.nombre||'Video')+'</span><span class="vid-fsize">'+sz+'</span></div><button type="button" class="var-rm" data-role="vidrm" data-vidid="'+esc(v.id)+'">✕</button></div>';
+          }).join('')+
+        '</div>'+
+        '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
+          '<label class="btn ghost" style="cursor:pointer;margin:0"><input type="file" accept="video/*" data-role="vidfile" style="display:none" multiple>🎬 Agregar video</label>'+
+        '</div>'+
         '<div class="field"><label>Notas (opcional)</label><textarea data-f="notas" placeholder="Proveedor, tiempos de entrega, observaciones…">'+esc(p.notas||'')+'</textarea></div>'+
       '</div>'+
       '<div class="modal-ft"><button class="btn ghost" data-role="close">Cancelar</button><button class="btn primary" data-role="save">'+(isNew?'Agregar producto':'Guardar cambios')+'</button></div>'+
@@ -2765,6 +2861,113 @@ body.role-trabajador .pexp{display:none !important}
     crowsEl.addEventListener('click', function(e){
       if(e.target.matches('[data-role="crm"]')){ e.target.closest('.comp-row').remove(); }
     });
+
+    // ---- Variaciones ----
+    var varRowsEl = host.querySelector('[data-role="var-rows"]');
+    var tvPicker = host.querySelector('[data-role="tvpicker"]');
+    var tvCustom = host.querySelector('[data-role="tv-custom"]');
+    tvPicker.addEventListener('click', function(e){
+      var chip = e.target.closest('.tipo-var-chip'); if(!chip) return;
+      var tv = chip.getAttribute('data-tv');
+      tvPicker.querySelectorAll('.tipo-var-chip').forEach(function(c){ c.classList.remove('on'); });
+      chip.classList.add('on');
+      if(tv==='__custom__'){
+        tvCustom.style.display=''; tvCustom.focus();
+        p.tipoVariacion = tvCustom.value.trim() || '';
+      } else {
+        tvCustom.style.display='none';
+        p.tipoVariacion = tv;
+      }
+    });
+    tvCustom.addEventListener('input', function(){ p.tipoVariacion = tvCustom.value.trim(); });
+
+    function varRowHTML(v, idx){
+      return '<div class="var-row" data-vi="'+idx+'">'+
+        '<div class="var-mini-img" data-role="var-img" data-vi="'+idx+'">'+(v.imagen?'<img src="'+esc(v.imagen)+'" alt="">':'<span class="ph">📷</span>')+'</div>'+
+        '<div class="var-fields"><input type="text" data-role="vname" placeholder="Nombre (ej: Rojo, S, 30ml)" value="'+esc(v.nombre||'')+'"><input type="file" accept="image/*" data-role="vfile" style="display:none"></div>'+
+        '<button type="button" class="var-rm" data-role="vrm">✕</button>'+
+      '</div>';
+    }
+
+    host.querySelector('[data-role="addvar"]').addEventListener('click', function(){
+      var nv = {id: uid(), nombre:'', imagen:''};
+      p.variaciones.push(nv);
+      varRowsEl.insertAdjacentHTML('beforeend', varRowHTML(nv, p.variaciones.length-1));
+      var lastRow = varRowsEl.lastElementChild;
+      if(lastRow){ var ni = lastRow.querySelector('[data-role="vname"]'); if(ni) ni.focus(); }
+    });
+
+    varRowsEl.addEventListener('click', function(e){
+      var rmBtn = e.target.closest('[data-role="vrm"]');
+      if(rmBtn){
+        var row = rmBtn.closest('.var-row');
+        var vi = parseInt(row.getAttribute('data-vi'),10);
+        if(!isNaN(vi) && p.variaciones[vi]) p.variaciones.splice(vi, 1);
+        row.remove();
+        // Re-index
+        varRowsEl.querySelectorAll('.var-row').forEach(function(r,i){ r.setAttribute('data-vi', i); r.querySelector('[data-role="var-img"]').setAttribute('data-vi', i); });
+        return;
+      }
+      var imgBox = e.target.closest('[data-role="var-img"]');
+      if(imgBox){
+        var vi2 = parseInt(imgBox.getAttribute('data-vi'),10);
+        var row2 = imgBox.closest('.var-row');
+        var fileInp = row2.querySelector('[data-role="vfile"]');
+        if(fileInp) fileInp.click();
+      }
+    });
+
+    varRowsEl.addEventListener('change', function(e){
+      if(e.target.matches('[data-role="vfile"]')){
+        var f = e.target.files && e.target.files[0]; if(!f) return;
+        var row = e.target.closest('.var-row');
+        var vi = parseInt(row.getAttribute('data-vi'),10);
+        if(isNaN(vi) || !p.variaciones[vi]) return;
+        var imgBox = row.querySelector('[data-role="var-img"]');
+        imgBox.innerHTML = '<span class="ph" style="font-size:12px">…</span>';
+        fileToCompressedDataURL(f, 600, 0.78).then(function(dataURL){
+          p.variaciones[vi].imagen = dataURL;
+          imgBox.innerHTML = '<img src="'+dataURL+'" alt="">';
+        }).catch(function(){ imgBox.innerHTML = '<span class="ph">⚠️</span>'; });
+        e.target.value = '';
+      }
+    });
+
+    // ---- Videos ----
+    var vidRowsEl = host.querySelector('[data-role="vid-rows"]');
+    var vidFileEl = host.querySelector('[data-role="vidfile"]');
+
+    function vidRowEditHTML(v){
+      var sz = v.dataURL ? (Math.round(v.dataURL.length * 3/4 / 1024 / 1024 * 10)/10)+'MB' : '';
+      return '<div class="vid-row-edit"><span style="font-size:22px;flex-shrink:0">🎬</span><div class="vid-info"><span class="vid-fname">'+esc(v.nombre||'Video')+'</span><span class="vid-fsize">'+sz+'</span></div><button type="button" class="var-rm" data-role="vidrm" data-vidid="'+esc(v.id)+'">✕</button></div>';
+    }
+
+    vidFileEl.addEventListener('change', function(e){
+      var files = e.target.files; if(!files||!files.length) return;
+      Array.prototype.forEach.call(files, function(f){
+        if(!/^video\//.test(f.type)){ showToast('Solo archivos de video', false); return; }
+        if(f.size > 8 * 1024 * 1024){ showToast(f.name+' excede 8MB', false); return; }
+        if(p.videos.length >= 5){ showToast('Máximo 5 videos por producto', false); return; }
+        var reader = new FileReader();
+        reader.onload = function(){
+          var vid = {id: uid(), nombre: f.name.replace(/\.[^.]+$/, ''), dataURL: reader.result};
+          p.videos.push(vid);
+          vidRowsEl.insertAdjacentHTML('beforeend', vidRowEditHTML(vid));
+        };
+        reader.readAsDataURL(f);
+      });
+      e.target.value = '';
+    });
+
+    vidRowsEl.addEventListener('click', function(e){
+      var rmBtn = e.target.closest('[data-role="vidrm"]');
+      if(rmBtn){
+        var vidid = rmBtn.getAttribute('data-vidid');
+        p.videos = p.videos.filter(function(v){ return v.id !== vidid; });
+        rmBtn.closest('.vid-row-edit').remove();
+      }
+    });
+
     function doClose(){ closeModal(); }
     host.querySelectorAll('[data-role="close"]').forEach(function(b){ b.addEventListener('click',doClose); });
     host.querySelector('[data-role="scrim"]').addEventListener('mousedown',function(e){ if(e.target===e.currentTarget) doClose(); });
@@ -2796,6 +2999,13 @@ body.role-trabajador .pexp{display:none !important}
         });
       }
       p.componentes=comps;
+      // Recoger nombres de variaciones desde los inputs
+      varRowsEl.querySelectorAll('.var-row').forEach(function(r, idx){
+        var nameInp = r.querySelector('[data-role="vname"]');
+        if(p.variaciones[idx] && nameInp) p.variaciones[idx].nombre = nameInp.value.trim();
+      });
+      p.variaciones = p.variaciones.filter(function(v){ return v.nombre || v.imagen; });
+      if(!p.variaciones.length) p.tipoVariacion = '';
       if(!p.nombre){ modal.querySelector('[data-f="nombre"]').focus(); return; }
       if(p.tipo==='combo' && !comps.length){ showToast('El combo necesita al menos un producto', false); return; }
       if(isNew) state.productos.push(p); else { var i=state.productos.findIndex(function(x){return x.id===p.id;}); if(i>=0) state.productos[i]=p; else state.productos.push(p); }
@@ -3172,6 +3382,25 @@ body.role-trabajador .pexp{display:none !important}
       var pr=state.productos.find(function(x){return x.id===pid3;});
       if(!pr || !pr.imagen){ showToast('Este producto no tiene imagen', false); return; }
       downloadDataURL(pr.imagen, slugifyName(pr.nombre)+'.jpg');
+    }
+    else if(a==='dl-var'){
+      e.stopPropagation();
+      var pvid=act.getAttribute('data-pid'), varid=act.getAttribute('data-vid');
+      var prv=state.productos.find(function(x){return x.id===pvid;});
+      if(!prv) return;
+      var vari=(prv.variaciones||[]).find(function(v){return v.id===varid;});
+      if(vari && vari.imagen) downloadDataURL(vari.imagen, slugifyName(prv.nombre)+'-'+slugifyName(vari.nombre)+'.jpg');
+    }
+    else if(a==='dl-video'){
+      e.stopPropagation();
+      var pvid2=act.getAttribute('data-pid'), vidid=act.getAttribute('data-vidid');
+      var prv2=state.productos.find(function(x){return x.id===pvid2;});
+      if(!prv2) return;
+      var vid=(prv2.videos||[]).find(function(v){return v.id===vidid;});
+      if(vid && vid.dataURL){
+        var ext = vid.dataURL.match(/^data:video\/([a-z0-9]+)/); ext = ext ? ext[1] : 'mp4';
+        downloadDataURL(vid.dataURL, slugifyName(prv2.nombre)+'-'+slugifyName(vid.nombre)+'.'+ext);
+      }
     }
     else if(a==='stock-add'){
       if(!isAdmin()){ showToast('Solo el admin puede modificar el inventario', false); return; }
