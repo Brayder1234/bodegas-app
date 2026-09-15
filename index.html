@@ -550,6 +550,12 @@ select.sort{padding:10px 12px; border-radius:10px; border:1px solid var(--border
 .vid-row-edit .vid-info .vid-fname{font-size:13px; font-weight:600; color:var(--ink)}
 .vid-row-edit .vid-info .vid-fsize{font-size:11px; color:var(--faint)}
 .vid-preview{width:100%; max-height:180px; border-radius:10px; border:1px solid var(--border); background:#000; margin-top:6px}
+.vid-dropzone{display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; padding:20px 12px; border:2px dashed var(--border); border-radius:12px; background:var(--surface-2); cursor:pointer; transition:all .18s ease; text-align:center; margin-top:6px}
+.vid-dropzone:hover{border-color:var(--accent); background:var(--accent-soft)}
+.vid-dropzone.drag-over{border-color:var(--accent); border-style:solid; background:var(--accent-soft); transform:scale(1.01)}
+.vid-dropzone .vid-dz-ico{font-size:32px; opacity:.55}
+.vid-dropzone .vid-dz-hd{font-weight:700; color:var(--ink); font-size:14px}
+.vid-dropzone .vid-dz-sb{color:var(--muted); font-size:12px}
 
 /* Variation picker modal */
 .var-picker-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(110px, 1fr)); gap:10px; margin-top:8px}
@@ -2875,9 +2881,11 @@ body.role-trabajador .pexp{display:none !important}
             return '<div class="vid-row-edit"><span style="font-size:22px;flex-shrink:0">🎬</span><div class="vid-info"><span class="vid-fname">'+esc(v.nombre||'Video')+'</span><span class="vid-fsize">'+sz+'</span></div><button type="button" class="var-rm" data-role="vidrm" data-vidid="'+esc(v.id)+'">✕</button></div>';
           }).join('')+
         '</div>'+
-        '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
-          '<label class="btn ghost" style="cursor:pointer;margin:0"><input type="file" accept="video/*" data-role="vidfile" style="display:none" multiple>🎬 Agregar video</label>'+
-        '</div>'+
+        '<label class="vid-dropzone" data-role="vid-drop"><input type="file" accept="video/*" data-role="vidfile" style="display:none" multiple>'+
+          '<div class="vid-dz-ico">🎬</div>'+
+          '<div class="vid-dz-hd">Arrastra un video aquí</div>'+
+          '<div class="vid-dz-sb">o toca para elegir · máx 8MB c/u</div>'+
+        '</label>'+
         '<div class="field"><label>Notas (opcional)</label><textarea data-f="notas" placeholder="Proveedor, tiempos de entrega, observaciones…">'+esc(p.notas||'')+'</textarea></div>'+
       '</div>'+
       '<div class="modal-ft"><button class="btn ghost" data-role="close">Cancelar</button><button class="btn primary" data-role="save">'+(isNew?'Agregar producto':'Guardar cambios')+'</button></div>'+
@@ -3107,14 +3115,15 @@ body.role-trabajador .pexp{display:none !important}
     // ---- Videos ----
     var vidRowsEl = host.querySelector('[data-role="vid-rows"]');
     var vidFileEl = host.querySelector('[data-role="vidfile"]');
+    var vidDropEl = host.querySelector('[data-role="vid-drop"]');
 
     function vidRowEditHTML(v){
       var sz = v.dataURL ? (Math.round(v.dataURL.length * 3/4 / 1024 / 1024 * 10)/10)+'MB' : '';
       return '<div class="vid-row-edit"><span style="font-size:22px;flex-shrink:0">🎬</span><div class="vid-info"><span class="vid-fname">'+esc(v.nombre||'Video')+'</span><span class="vid-fsize">'+sz+'</span></div><button type="button" class="var-rm" data-role="vidrm" data-vidid="'+esc(v.id)+'">✕</button></div>';
     }
 
-    vidFileEl.addEventListener('change', function(e){
-      var files = e.target.files; if(!files||!files.length) return;
+    function loadVideoFiles(files){
+      if(!files || !files.length) return;
       Array.prototype.forEach.call(files, function(f){
         if(!/^video\//.test(f.type)){ showToast('Solo archivos de video', false); return; }
         if(f.size > 8 * 1024 * 1024){ showToast(f.name+' excede 8MB', false); return; }
@@ -3124,10 +3133,29 @@ body.role-trabajador .pexp{display:none !important}
           var vid = {id: uid(), nombre: f.name.replace(/\.[^.]+$/, ''), dataURL: reader.result};
           p.videos.push(vid);
           vidRowsEl.insertAdjacentHTML('beforeend', vidRowEditHTML(vid));
+          showToast('Video "'+vid.nombre+'" agregado', false);
         };
         reader.readAsDataURL(f);
       });
+    }
+
+    vidFileEl.addEventListener('change', function(e){
+      loadVideoFiles(e.target.files);
       e.target.value = '';
+    });
+
+    // Drag & drop de videos
+    ;['dragenter','dragover'].forEach(function(ev){
+      vidDropEl.addEventListener(ev, function(e){ e.preventDefault(); e.stopPropagation(); vidDropEl.classList.add('drag-over'); });
+    });
+    ;['dragleave','dragend'].forEach(function(ev){
+      vidDropEl.addEventListener(ev, function(e){ e.preventDefault(); e.stopPropagation(); vidDropEl.classList.remove('drag-over'); });
+    });
+    vidDropEl.addEventListener('drop', function(e){
+      e.preventDefault(); e.stopPropagation();
+      vidDropEl.classList.remove('drag-over');
+      var files = e.dataTransfer && e.dataTransfer.files;
+      loadVideoFiles(files);
     });
 
     vidRowsEl.addEventListener('click', function(e){
