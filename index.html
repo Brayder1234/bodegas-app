@@ -1100,7 +1100,13 @@ body.role-trabajador .pexp{display:none !important}
       if(!dirty){
         var d=row.data||row;
         if(d._ts) delete d._ts;
-        state=sanitize(d);
+        var serverState=sanitize(d);
+        // No reemplazar datos locales con datos vacíos/menores del servidor
+        if(state.productos.length>0 && serverState.productos.length===0){
+          await sbSave();
+          return true;
+        }
+        state=serverState;
         lastServerStamp=row.updated_at;
         cacheState();
         return true;
@@ -1340,6 +1346,22 @@ body.role-trabajador .pexp{display:none !important}
     if(!cfg){ setConn('off'); return; }
     setConn('saving');
     try{
+      // Antes de guardar, verificar si el servidor tiene datos más nuevos
+      var serverRow=await sbGet();
+      if(serverRow && serverRow.updated_at && lastServerStamp && serverRow.updated_at!==lastServerStamp){
+        // El servidor cambió desde nuestra última lectura — mergear
+        var sd=serverRow.data||serverRow;
+        if(sd._ts) delete sd._ts;
+        var serverState=sanitize(sd);
+        // Si el servidor tiene más productos, tomar los del servidor como base
+        if(serverState.productos.length > state.productos.length){
+          // Mantener nuestros cambios locales de usuarios/pedidos pero tomar productos del server
+          state.productos=serverState.productos;
+          state.marcas=serverState.marcas.length>=state.marcas.length?serverState.marcas:state.marcas;
+          state.bodegas=serverState.bodegas.length>=state.bodegas.length?serverState.bodegas:state.bodegas;
+        }
+        lastServerStamp=serverRow.updated_at;
+      }
       await sbSave();
       dirty=false; setConn('ok');
       showToast('Guardado y sincronizado', false);
