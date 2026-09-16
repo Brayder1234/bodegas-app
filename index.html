@@ -838,6 +838,25 @@ body.role-trabajador .pexp{display:none !important}
 }
 
 /* Carrito flotante */
+/* Sidebar menu */
+.sidebar-scrim{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.45);opacity:0;transition:opacity .25s ease;pointer-events:none}
+.sidebar-scrim.open{opacity:1;pointer-events:auto}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:min(300px,82vw);z-index:101;background:var(--surface);box-shadow:6px 0 30px rgba(0,0,0,.3);transform:translateX(-105%);transition:transform .3s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.sidebar-scrim.open .sidebar{transform:translateX(0)}
+.sidebar-hd{padding:20px 18px 10px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)}
+.sidebar-hd h2{font-size:17px;margin:0;font-weight:700}
+.sidebar-hd .close-sb{background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;padding:4px 8px;border-radius:8px}
+.sidebar-hd .close-sb:hover{background:var(--surface-2)}
+.sidebar-group{padding:10px 14px 6px}
+.sidebar-group-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--faint);padding:6px 6px 4px;margin:0}
+.sidebar-item{display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:10px;font-size:14.5px;font-weight:500;color:var(--ink);cursor:pointer;border:none;background:none;width:100%;text-align:left;transition:background .12s}
+.sidebar-item:hover,.sidebar-item:active{background:var(--surface-2)}
+.sidebar-item .sb-icon{font-size:18px;width:24px;text-align:center;flex-shrink:0}
+.sidebar-item .sb-badge{margin-left:auto;font-size:12px;color:var(--muted);font-weight:400}
+.sidebar-item.danger{color:var(--bad)}
+.sidebar-sep{height:1px;background:var(--border);margin:4px 14px}
+.hamburger{background:none;border:none;color:var(--ink);font-size:22px;cursor:pointer;padding:6px 10px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;transition:background .12s}
+.hamburger:hover{background:var(--surface-2)}
 .fab-cart{
   position:fixed; right:22px; bottom:22px; z-index:40;
   background:var(--accent); color:var(--accent-contrast); border:none; border-radius:999px;
@@ -1490,7 +1509,6 @@ body.role-trabajador .pexp{display:none !important}
           '<select class="sort" id="sort">'+opt('marca','Agrupado por marca')+opt('nombre','Ordenar: Nombre A→Z')+ (admin?(opt('margen','Ordenar: Mejor margen')+opt('costo','Ordenar: Menor costo')):'') +opt('precio','Ordenar: Mayor precio')+'</select>'+
           (admin?'<button class="btn ghost" data-act="bodegas">🏬 Bodegas</button>':'')+
           (admin?'<button class="btn ghost'+(ui.selectMode?' on':'')+'" data-act="toggle-select">'+(ui.selectMode?'✕ Salir':'☑ Seleccionar')+'</button>':'')+
-          '<button class="btn ghost" data-act="menu">⋯ Más</button>'+
           (admin?'<button class="btn primary" data-act="new">＋ Producto</button>':'')+
         '</div>'+
         '<div id="prods">'+productsHTML()+'</div>'+
@@ -1593,7 +1611,9 @@ body.role-trabajador .pexp{display:none !important}
     }
     return '<div class="top">'+
       '<div class="brand"><h1>'+esc((secActiva.marca||secActiva.nombre||'').toUpperCase())+ (secActiva.sublabel?' <span style="font-weight:400;color:var(--muted);letter-spacing:0">'+esc(secActiva.sublabel)+'</span>':'') +'</h1><p>'+esc(lead)+' <button class="change-sect" data-act="change-section" title="Cambiar de sección">Cambiar</button></p></div>'+
-      '<div class="top-tools">'+whoLine+connHTML()+
+      '<div class="top-tools">'+
+        '<button class="hamburger" data-act="menu" title="Menú">☰</button>'+
+        whoLine+connHTML()+
         (admin?'<button class="icon-btn" data-act="toggle-moneda" title="Cambiar moneda">'+(state.moneda==='USD'?'US$':'COP')+'</button>':'')+
         '<button class="icon-btn" data-act="toggle-theme" title="Tema claro/oscuro" aria-label="Cambiar tema">◐</button>'+
       '</div></div>'+ statsHTML;
@@ -3477,35 +3497,82 @@ body.role-trabajador .pexp{display:none !important}
   }
 
   function openMenu(){
-    host.innerHTML='<div class="scrim" data-role="scrim"><div class="modal" role="dialog" aria-modal="true" style="width:min(440px,100%)">'+
-      '<div class="modal-hd"><h2>Más opciones</h2><button class="mini" data-role="close">×</button></div>'+
-      '<div class="modal-bd">'+
-        (function(){
-          var admin=isAdmin();
-          var _secPeds=pedidosDeSeccion();
-          var mine=session?_secPeds.filter(function(o){return o.usuarioId===session.usuarioId;}).length:0;
-          var pedCount = admin ? _secPeds.length : mine;
-          var pedLabel = admin ? 'Ventas guardadas' : 'Mis pedidos';
-          return '<button class="btn ghost" data-act="history" style="justify-content:flex-start">📋 '+pedLabel+' ('+pedCount+')</button>'+
-          '<button class="btn ghost" data-act="ranking" style="justify-content:flex-start">🏆 Ranking de vendedores</button>'+
-          '<button class="btn ghost" data-act="mi-perfil" style="justify-content:flex-start">👤 Mi perfil</button>'+
-          '<button class="btn ghost" data-act="tutorial" style="justify-content:flex-start">🎓 Ver tutorial</button>'+
-          (admin?'<button class="btn ghost" data-act="users" style="justify-content:flex-start">👥 Trabajadores ('+state.usuarios.length+')</button>':'')+
-          (admin?'<button class="btn ghost" data-act="marcas-visibles" style="justify-content:flex-start">🏷️ Marcas (agregar / editar / visibilidad)</button>':'')+
-          (admin?'<button class="btn ghost" data-act="notifs" style="justify-content:flex-start">🔔 Notificaciones por email'+(state.notifEmail&&state.notifEmail.accessKey?' <span style="color:var(--good);font-size:11px;margin-left:auto">activas</span>':' <span style="color:var(--warn);font-size:11px;margin-left:auto">sin configurar</span>')+'</button>':'')+
-          (puedeEditarMeta()?'<button class="btn ghost" data-act="edit-meta" style="justify-content:flex-start">🎯 Meta mensual del equipo <span style="color:var(--muted);font-size:11.5px;margin-left:auto">'+fmt(state.metaMensual||600000)+'</span></button>':'')+
-          (admin?'<button class="btn ghost" data-act="export" style="justify-content:flex-start">⬇ Exportar a CSV (Excel)</button>':'')+
-          (admin?'<button class="btn ghost" data-act="backup" style="justify-content:flex-start">💾 Descargar respaldo (JSON)</button>':'')+
-          (admin?'<button class="btn ghost" data-act="import" style="justify-content:flex-start">📂 Restaurar respaldo</button>':'')+
-          '<hr style="border:none;border-top:1px solid var(--border);margin:4px 0">'+
-          '<button class="btn ghost" data-act="logout" style="justify-content:flex-start">🚪 Cerrar sesión</button>'+
-          (admin?'<button class="btn ghost" data-act="config" style="justify-content:flex-start">🔌 Datos de conexión (Cloudflare)</button>':'')+
-          (admin?'<button class="btn ghost" data-act="disconnect" style="justify-content:flex-start;color:var(--bad)">Desconectar este dispositivo</button>':'');
-        })()+
-        '<p class="hint" style="margin-top:6px">El respaldo JSON es tu copia de seguridad: guárdalo de vez en cuando. La conexión se guarda solo en este dispositivo.</p>'+
-      '</div></div></div>';
-    host.querySelectorAll('[data-role="close"]').forEach(function(b){ b.addEventListener('click',closeModal); });
-    host.querySelector('[data-role="scrim"]').addEventListener('mousedown',function(e){ if(e.target===e.currentTarget) closeModal(); });
+    var admin=isAdmin();
+    var _secPeds=pedidosDeSeccion();
+    var mine=session?_secPeds.filter(function(o){return o.usuarioId===session.usuarioId;}).length:0;
+    var pedCount = admin ? _secPeds.length : mine;
+    var pedLabel = admin ? 'Ventas guardadas' : 'Mis pedidos';
+    var notifStatus = state.notifEmail&&state.notifEmail.accessKey
+      ? '<span class="sb-badge" style="color:var(--good)">activas</span>'
+      : '<span class="sb-badge" style="color:var(--warn)">sin configurar</span>';
+    function item(icon, label, act, badge, cls){
+      return '<button class="sidebar-item'+(cls?' '+cls:'')+'" data-act="'+act+'"><span class="sb-icon">'+icon+'</span>'+esc(label)+(badge||'')+'</button>';
+    }
+    function group(title, items){
+      return '<div class="sidebar-group"><div class="sidebar-group-title">'+esc(title)+'</div>'+items+'</div>';
+    }
+    var ventas = group('Ventas',
+      item('📋', pedLabel, 'history', '<span class="sb-badge">'+pedCount+'</span>')+
+      item('🏆', 'Ranking de vendedores', 'ranking')
+    );
+    var cuenta = group('Mi cuenta',
+      item('👤', 'Mi perfil', 'mi-perfil')+
+      item('🎓', 'Ver tutorial', 'tutorial')+
+      item('🚪', 'Cerrar sesión', 'logout')
+    );
+    var adminSection = admin ? group('Administración',
+      item('👥', 'Trabajadores', 'users', '<span class="sb-badge">'+state.usuarios.length+'</span>')+
+      item('🏷️', 'Marcas', 'marcas-visibles')+
+      item('🔔', 'Notificaciones', 'notifs', notifStatus)+
+      (puedeEditarMeta()?item('🎯', 'Meta mensual', 'edit-meta', '<span class="sb-badge">'+fmt(state.metaMensual||600000)+'</span>'):'')
+    ) : '';
+    var datos = admin ? group('Datos',
+      item('⬇', 'Exportar a CSV', 'export')+
+      item('💾', 'Descargar respaldo', 'backup')+
+      item('📂', 'Restaurar respaldo', 'import')
+    ) : '';
+    var conexion = admin ? group('Conexión',
+      item('🔌', 'Datos de conexión', 'config')+
+      item('⛔', 'Desconectar dispositivo', 'disconnect', '', 'danger')
+    ) : '';
+    var sb = document.createElement('div');
+    sb.className = 'sidebar-scrim';
+    sb.innerHTML = '<div class="sidebar">'+
+      '<div class="sidebar-hd"><h2>Menú</h2><button class="close-sb" data-role="close-sb">✕</button></div>'+
+      ventas + cuenta + adminSection + datos + conexion +
+    '</div>';
+    document.body.appendChild(sb);
+    requestAnimationFrame(function(){ sb.classList.add('open'); });
+    function closeSidebar(){
+      sb.classList.remove('open');
+      setTimeout(function(){ if(sb.parentNode) sb.parentNode.removeChild(sb); }, 300);
+    }
+    sb.addEventListener('click', function(e){
+      if(e.target===sb) closeSidebar();
+    });
+    sb.querySelector('[data-role="close-sb"]').addEventListener('click', closeSidebar);
+    sb.querySelectorAll('[data-act]').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var act = btn.getAttribute('data-act');
+        closeSidebar();
+        setTimeout(function(){
+          if(act==='history') openHistory();
+          else if(act==='ranking') openRanking();
+          else if(act==='mi-perfil') openProfile();
+          else if(act==='tutorial') startTutorial();
+          else if(act==='logout') doLogout();
+          else if(act==='users') openUsers && openUsers();
+          else if(act==='marcas-visibles') openMarcasVisibles && openMarcasVisibles();
+          else if(act==='notifs') openNotifs && openNotifs();
+          else if(act==='edit-meta') openEditMeta && openEditMeta();
+          else if(act==='export') exportCSV();
+          else if(act==='backup') backup();
+          else if(act==='import') doImport();
+          else if(act==='config') renderSetup(cfg||{});
+          else if(act==='disconnect'){ if(confirm('Se borrará la conexión de ESTE dispositivo (tus datos en la nube quedan intactos). ¿Continuar?')){ try{localStorage.removeItem(CFG_KEY);}catch(x){} cfg=null; stopPolling(); render(); } }
+        }, 200);
+      });
+    });
   }
 
   /* ---------- exportar / respaldo ---------- */
