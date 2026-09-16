@@ -1504,7 +1504,12 @@ body.role-trabajador .pexp{display:none !important}
     if(!cfg){ renderSetup(); return; }
     if(bootstrapping){ renderBootSplash(); return; }
     if(!session){ renderLogin(); return; }
-    if(!activeSection){ renderSectionPicker(); return; }
+    if(!activeSection){
+      var secs=state.secciones||[];
+      if(secs.length===1){ setActiveSection(secs[0].id); }
+      else if(secs.length===0){ setActiveSection('maquillaje'); }
+      else { renderSectionPicker(); return; }
+    }
     // valida que el usuario sigue existiendo (por si otro admin lo borró)
     // Solo validar si ya hay usuarios cargados (no durante bootstrap)
     if(state.usuarios.length && !state.usuarios.find(function(u){return u.id===session.usuarioId;})){
