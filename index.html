@@ -2063,11 +2063,15 @@ body.role-trabajador .pexp{display:none !important}
       '<div style="display:flex; gap:10px; margin-top:16px">'+
         '<button class="btn primary" id="lg-btn" style="flex:1;justify-content:center">'+(needsAdmin?'Crear administrador':'Entrar')+'</button>'+
       '</div>'+
-      (needsAdmin ? '' :
-        '<div style="text-align:center; margin-top:18px; padding-top:16px; border-top:1px solid var(--border); font-size:13px; color:var(--muted)">'+
-          '¿Aún no tienes cuenta? '+
-          '<button type="button" data-act="show-register" style="background:none; border:none; color:var(--accent); font-weight:600; cursor:pointer; font-family:inherit; font-size:13px; padding:2px 6px">Regístrate aquí</button>'+
-        '</div>'
+      (needsAdmin
+        ? '<div style="text-align:center; margin-top:18px; padding-top:16px; border-top:1px solid var(--border); font-size:13px; color:var(--muted)">'+
+            '¿Ya tienes cuenta? '+
+            '<button type="button" id="force-reload-btn" style="background:none; border:none; color:var(--accent); font-weight:600; cursor:pointer; font-family:inherit; font-size:13px; padding:2px 6px">Iniciar sesión</button>'+
+          '</div>'
+        : '<div style="text-align:center; margin-top:18px; padding-top:16px; border-top:1px solid var(--border); font-size:13px; color:var(--muted)">'+
+            '¿Aún no tienes cuenta? '+
+            '<button type="button" data-act="show-register" style="background:none; border:none; color:var(--accent); font-weight:600; cursor:pointer; font-family:inherit; font-size:13px; padding:2px 6px">Regístrate aquí</button>'+
+          '</div>'
       )+
     '</div></div>';
     var doLogin=function(){ if(needsAdmin) tryCreateFirstAdmin(); else tryLogin(); };
@@ -2075,6 +2079,15 @@ body.role-trabajador .pexp{display:none !important}
     var focusEl=document.getElementById('lg-name'); if(focusEl) focusEl.focus();
     ['lg-name','lg-pwd','lg-pwd2'].forEach(function(id){
       var el=document.getElementById(id); if(el) el.addEventListener('keydown', function(e){ if(e.key==='Enter') doLogin(); });
+    });
+    var frBtn=document.getElementById('force-reload-btn');
+    if(frBtn) frBtn.addEventListener('click', async function(){
+      frBtn.textContent='Cargando…'; frBtn.disabled=true;
+      try{
+        await pullFromServer(false);
+        if(state.usuarios.length) renderLogin();
+        else { frBtn.textContent='No se encontraron datos. Intenta de nuevo.'; frBtn.disabled=false; }
+      }catch(e){ frBtn.textContent='Error de conexión. Intenta de nuevo.'; frBtn.disabled=false; }
     });
   }
 
