@@ -1506,7 +1506,8 @@ body.role-trabajador .pexp{display:none !important}
     if(!session){ renderLogin(); return; }
     if(!activeSection){ renderSectionPicker(); return; }
     // valida que el usuario sigue existiendo (por si otro admin lo borró)
-    if(!state.usuarios.find(function(u){return u.id===session.usuarioId;})){
+    // Solo validar si ya hay usuarios cargados (no durante bootstrap)
+    if(state.usuarios.length && !state.usuarios.find(function(u){return u.id===session.usuarioId;})){
       clearSession(); renderLogin(); return;
     }
     var s=summary();
