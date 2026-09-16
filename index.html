@@ -1032,11 +1032,11 @@ body.role-trabajador .pexp{display:none !important}
   function normUrl(u){ u=(u||'').trim().replace(/\/+$/,''); return u; }
   /* ---------- config ---------- */
   function loadCfg(){
-    try{ var c=JSON.parse(localStorage.getItem(CFG_KEY)); if(c&&c.url&&c.key) return c; }catch(e){}
     if(DEFAULT_CFG.url && DEFAULT_CFG.key){
       try{ localStorage.setItem(CFG_KEY, JSON.stringify(DEFAULT_CFG)); }catch(e){}
       return DEFAULT_CFG;
     }
+    try{ var c=JSON.parse(localStorage.getItem(CFG_KEY)); if(c&&c.url&&c.key) return c; }catch(e){}
     return null;
   }
   function saveCfg(c){ try{ localStorage.setItem(CFG_KEY, JSON.stringify(c)); }catch(e){} }
