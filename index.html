@@ -2087,7 +2087,7 @@ body.role-trabajador .pexp{display:none !important}
         await pullFromServer(false);
         if(state.usuarios.length) renderLogin();
         else { frBtn.textContent='No se encontraron datos. Intenta de nuevo.'; frBtn.disabled=false; }
-      }catch(e){ frBtn.textContent='Error de conexión. Intenta de nuevo.'; frBtn.disabled=false; }
+      }catch(e){ frBtn.textContent='Error: '+e.message+'. Toca para reintentar.'; frBtn.disabled=false; }
     });
   }
 
