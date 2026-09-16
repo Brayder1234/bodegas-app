@@ -971,10 +971,10 @@ body.role-trabajador .pexp{display:none !important}
   "use strict";
 
   var CFG_KEY='bm-supabase', THEME_KEY='bm-theme', CACHE_KEY='bm-cache', ROW_ID='main', SESSION_KEY='bm-session', SECTION_KEY='bm-section';
-  // Configuración fija de VELORA — así los trabajadores no tienen que pegar nada al entrar
+  // Configuración fija de VELORA — Cloudflare Workers KV
   var DEFAULT_CFG={
-    url:'https://ubiingxrbjpiqlgqrewe.supabase.co',
-    key:'sb_publishable_GO5vsVIFg2OEko1YuoUVSg__OKzxm4h'
+    url:'',
+    key:''
   };
   var state={moneda:'COP', bodegas:[], bodegaTels:{}, productos:[], pedido:{items:[],cliente:{nombre:'',tel:''}}, pedidos:[], usuarios:[], carritos:{}, notifEmail:{enabled:true, accessKey:'', destinatario:'', extras:[]}, metaMensual:600000, secciones:[], marcas:[]};
   var session=null; // {usuarioId, usuarioNombre, role}
@@ -1027,50 +1027,44 @@ body.role-trabajador .pexp{display:none !important}
   function marginPct(precio,costo){ if(!precio||precio<=0) return null; return (precio-costo)/precio*100; }
   function mgClass(m){ if(m==null) return ''; if(m>=40) return 'good'; if(m>=20) return 'warn'; return 'bad'; }
   function normUrl(u){ u=(u||'').trim().replace(/\/+$/,''); return u; }
-  function autoUrl(){ try{ var o=location.origin; return /^https:\/\/[a-z0-9-]+\.supabase\.co$/.test(o)?o:''; }catch(e){ return ''; } }
-
   /* ---------- config ---------- */
   function loadCfg(){
     try{ var c=JSON.parse(localStorage.getItem(CFG_KEY)); if(c&&c.url&&c.key) return c; }catch(e){}
-    // Sin config guardada → usar la default y guardarla automáticamente
-    try{ localStorage.setItem(CFG_KEY, JSON.stringify(DEFAULT_CFG)); }catch(e){}
-    return DEFAULT_CFG;
+    if(DEFAULT_CFG.url && DEFAULT_CFG.key){
+      try{ localStorage.setItem(CFG_KEY, JSON.stringify(DEFAULT_CFG)); }catch(e){}
+      return DEFAULT_CFG;
+    }
+    return null;
   }
   function saveCfg(c){ try{ localStorage.setItem(CFG_KEY, JSON.stringify(c)); }catch(e){} }
   function cacheState(){ try{ localStorage.setItem(CACHE_KEY, JSON.stringify(state)); }catch(e){} }
   function loadCache(){ try{ var s=JSON.parse(localStorage.getItem(CACHE_KEY)); if(s&&s.productos) return s; }catch(e){} return null; }
 
-  /* ---------- Supabase REST ---------- */
-  function authFor(key){ var h={apikey:key}; if(/^eyJ/.test(key)) h.Authorization='Bearer '+key; return h; }
-  function headers(){ return Object.assign({'Content-Type':'application/json'}, authFor(cfg.key)); }
+  /* ---------- Cloudflare Workers KV ---------- */
+  function cfHeaders(){ return {'Content-Type':'application/json','X-API-Key':cfg.key}; }
   async function sbGet(){
-    var r=await fetch(cfg.url+'/rest/v1/bodegas_data?id=eq.'+ROW_ID+'&select=data,updated_at',{headers:headers()});
+    var r=await fetch(cfg.url+'/data',{headers:cfHeaders()});
     if(!r.ok) throw new Error('HTTP '+r.status);
-    var rows=await r.json();
-    return rows&&rows[0]?rows[0]:null;
+    var row=await r.json();
+    return row&&row.data?row:null;
   }
   async function sbSave(){
-    var body={data:state, updated_at:new Date().toISOString()};
-    var r=await fetch(cfg.url+'/rest/v1/bodegas_data?id=eq.'+ROW_ID,{method:'PATCH',headers:Object.assign({Prefer:'return=representation'},headers()),body:JSON.stringify(body)});
-    if(r.status===404 || r.status===406){ throw new Error('no-row'); }
+    var body=Object.assign({}, state);
+    var r=await fetch(cfg.url+'/data',{method:'PUT',headers:cfHeaders(),body:JSON.stringify(body)});
     if(!r.ok) throw new Error('HTTP '+r.status);
-    var rows=await r.json();
-    var row=rows&&rows[0];
-    if(row) lastServerStamp=row.updated_at;
-    if(!row){ // fila no existía: crearla
-      var r2=await fetch(cfg.url+'/rest/v1/bodegas_data',{method:'POST',headers:Object.assign({Prefer:'resolution=merge-duplicates,return=representation'},headers()),body:JSON.stringify([{id:ROW_ID,data:state,updated_at:body.updated_at}])});
-      if(!r2.ok) throw new Error('HTTP '+r2.status);
-      var rr=await r2.json(); if(rr&&rr[0]) lastServerStamp=rr[0].updated_at;
-    }
+    var res=await r.json();
+    if(res.updated_at) lastServerStamp=res.updated_at;
   }
 
   async function pullFromServer(applyIfNewer){
     try{
       var row=await sbGet();
-      if(!row){ await sbSave(); return true; } // fila vacía -> siembra
-      if(applyIfNewer && row.updated_at===lastServerStamp && !dirty) return false; // sin cambios
+      if(!row){ await sbSave(); return true; }
+      if(applyIfNewer && row.updated_at===lastServerStamp && !dirty) return false;
       if(!dirty){
-        state=sanitize(row.data);
+        var d=row.data||row;
+        if(d._ts) delete d._ts;
+        state=sanitize(d);
         lastServerStamp=row.updated_at;
         cacheState();
         return true;
@@ -1295,7 +1289,7 @@ body.role-trabajador .pexp{display:none !important}
   function connHTML(){
     var map={off:['off','Sin conexión','Conectar'],connecting:['saving','Conectando…',''],ok:['ok','Sincronizado',''],saving:['saving','Guardando…',''],err:['err','Error de conexión','']};
     var m=map[conn]||map.off;
-    var label = conn==='off' ? 'Conectar Supabase' : m[1];
+    var label = conn==='off' ? 'Conectar' : m[1];
     return '<button class="status '+m[0]+'" id="conn" data-act="config"><span class="led"></span>'+esc(label)+'</button>';
   }
 
@@ -1889,15 +1883,15 @@ body.role-trabajador .pexp{display:none !important}
     pre=pre||{};
     app.innerHTML='<div class="setup"><div class="card2">'+
       '<h1>Conecta tu base de datos</h1>'+
-      '<p class="lead">Pega los 2 datos de tu proyecto Supabase para activar la sincronización entre dispositivos. Se guardan solo en este dispositivo.</p>'+
-      '<div class="field"><label>Project URL</label><input type="text" id="s-url" placeholder="https://xxxxx.supabase.co" value="'+esc(pre.url||autoUrl()||'https://ubiingxrbjpiqlgqrewe.supabase.co')+'"><span class="help">Supabase → Project Settings → Data API → Project URL</span></div>'+
-      '<div class="field" style="margin-top:14px"><label>Clave anon public</label><input type="text" id="s-key" placeholder="eyJhbGciOi..." value="'+esc(pre.key||'')+'"><span class="help">Supabase → Project Settings → API Keys → clave <b>anon</b> / <b>public</b></span></div>'+
+      '<p class="lead">Pega los datos de tu Worker en Cloudflare para activar la sincronización. Se guardan solo en este dispositivo.</p>'+
+      '<div class="field"><label>Worker URL</label><input type="text" id="s-url" placeholder="https://velora-data.tu-usuario.workers.dev" value="'+esc(pre.url||'')+'"><span class="help">Cloudflare → Workers → tu worker → la URL que aparece arriba</span></div>'+
+      '<div class="field" style="margin-top:14px"><label>API Key</label><input type="text" id="s-key" placeholder="tu-clave-secreta" value="'+esc(pre.key||'')+'"><span class="help">La clave que pusiste como variable API_KEY en el Worker</span></div>'+
       '<div id="s-msg" style="margin-top:14px"></div>'+
       '<div style="display:flex; gap:10px; margin-top:18px; flex-wrap:wrap">'+
         '<button class="btn primary" id="s-connect">Conectar</button>'+
         '<button class="btn ghost" data-act="import">Restaurar respaldo</button>'+
       '</div>'+
-      '<ol class="steps"><li>Crea tu proyecto gratis en supabase.com</li><li>Corre el texto SQL que te pasé (crea la base)</li><li>Copia aquí la URL y la clave anon</li></ol>'+
+      '<ol class="steps"><li>Crea cuenta gratis en dash.cloudflare.com</li><li>Ve a Workers & Pages → crear Worker</li><li>Pega el código del worker y despliégalo</li><li>Copia aquí la URL y la API Key</li></ol>'+
     '</div></div>';
     document.getElementById('s-connect').addEventListener('click', tryConnect);
   }
@@ -1905,29 +1899,29 @@ body.role-trabajador .pexp{display:none !important}
     var url=normUrl(document.getElementById('s-url').value);
     var key=(document.getElementById('s-key').value||'').trim();
     var msg=document.getElementById('s-msg');
-    if(!/^https:\/\/.+\.supabase\.co$/.test(url)){ msg.innerHTML='<div class="callout warn">La URL debe verse como <b>https://xxxxx.supabase.co</b> (sin barra al final).</div>'; return; }
-    if(!key||key.length<20){ msg.innerHTML='<div class="callout warn">La clave anon parece incompleta. Cópiala completa.</div>'; return; }
+    if(!/^https:\/\/.+/.test(url)){ msg.innerHTML='<div class="callout warn">La URL debe empezar con <b>https://</b></div>'; return; }
+    if(!key||key.length<4){ msg.innerHTML='<div class="callout warn">La API Key parece incompleta.</div>'; return; }
     msg.innerHTML='<div class="callout"><span class="spin" style="display:inline-block;vertical-align:-2px"></span> Probando conexión…</div>';
     var testCfg={url:url,key:key};
     try{
-      var r=await fetch(url+'/rest/v1/bodegas_data?id=eq.'+ROW_ID+'&select=data,updated_at',{headers:authFor(key)});
-      if(r.status===401||r.status===403){ msg.innerHTML='<div class="callout warn">La clave no tiene acceso. Revisa que copiaste la clave <b>anon/public</b> y que corriste el SQL.</div>'; return; }
-      if(r.status===404){ msg.innerHTML='<div class="callout warn">No encuentro la tabla <b>bodegas_data</b>. ¿Corriste el texto SQL del Paso 2?</div>'; return; }
-      if(!r.ok){ msg.innerHTML='<div class="callout warn">Error '+r.status+'. Revisa la URL y la clave.</div>'; return; }
-      var rows=await r.json();
+      var r=await fetch(url+'/data',{headers:{'Content-Type':'application/json','X-API-Key':key}});
+      if(r.status===401||r.status===403){ msg.innerHTML='<div class="callout warn">API Key incorrecta. Revisa que sea la misma que configuraste en el Worker.</div>'; return; }
+      if(!r.ok){ msg.innerHTML='<div class="callout warn">Error '+r.status+'. Revisa la URL del Worker.</div>'; return; }
+      var row=await r.json();
       cfg=testCfg; saveCfg(cfg);
-      if(rows&&rows[0]){ state=sanitize(rows[0].data); lastServerStamp=rows[0].updated_at; }
-      else { state=sanitize({}); await sbSave(); }
-      // ¿hay respaldo local con datos y el servidor está vacío? ofrecer subirlo
+      if(row&&row.data){
+        var d=row.data; if(d._ts) delete d._ts;
+        state=sanitize(d); lastServerStamp=row.updated_at;
+      } else { state=sanitize({}); await sbSave(); }
       var cache=loadCache();
       if(cache && cache.productos && cache.productos.length && (!state.productos || !state.productos.length)){
-        if(confirm('Encontré '+cache.productos.length+' producto(s) guardados en este dispositivo y la base en la nube está vacía. ¿Subirlos a la nube?')){
+        if(confirm('Encontré '+cache.productos.length+' producto(s) guardados en este dispositivo y la nube está vacía. ¿Subirlos?')){
           state=sanitize(cache); dirty=true; await commit();
         }
       }
       cacheState(); setConn('ok'); render(); startPolling();
-      showToast('¡Conectado! Sincronización activa', false);
-    }catch(e){ msg.innerHTML='<div class="callout warn">No pude conectar. Revisa tu internet y que la URL sea correcta.</div>'; }
+      showToast('¡Conectado a Cloudflare! Sincronización activa', false);
+    }catch(e){ msg.innerHTML='<div class="callout warn">No pude conectar. Revisa tu internet y la URL del Worker.</div>'; }
   }
 
   /* ---------- login ---------- */
@@ -3423,7 +3417,7 @@ body.role-trabajador .pexp{display:none !important}
           (admin?'<button class="btn ghost" data-act="import" style="justify-content:flex-start">📂 Restaurar respaldo</button>':'')+
           '<hr style="border:none;border-top:1px solid var(--border);margin:4px 0">'+
           '<button class="btn ghost" data-act="logout" style="justify-content:flex-start">🚪 Cerrar sesión</button>'+
-          (admin?'<button class="btn ghost" data-act="config" style="justify-content:flex-start">🔌 Datos de conexión (Supabase)</button>':'')+
+          (admin?'<button class="btn ghost" data-act="config" style="justify-content:flex-start">🔌 Datos de conexión (Cloudflare)</button>':'')+
           (admin?'<button class="btn ghost" data-act="disconnect" style="justify-content:flex-start;color:var(--bad)">Desconectar este dispositivo</button>':'');
         })()+
         '<p class="hint" style="margin-top:6px">El respaldo JSON es tu copia de seguridad: guárdalo de vez en cuando. La conexión se guarda solo en este dispositivo.</p>'+
