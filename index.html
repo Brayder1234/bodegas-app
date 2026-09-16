@@ -245,6 +245,20 @@ select.sort{padding:10px 12px; border-radius:10px; border:1px solid var(--border
 @media (prefers-reduced-motion: reduce){ .spin,.status.saving .led{animation:none} .toast{transition:none} }
 
 /* Widget de meta mensual */
+.rank-header,.rank-row{display:grid; grid-template-columns:36px 1fr 90px; gap:6px; align-items:center; padding:8px 10px}
+.rank-admin .rank-header,.rank-admin .rank-row{grid-template-columns:36px 1fr 80px 90px}
+.rank-header{border-bottom:1px solid var(--border); padding-bottom:6px; margin-bottom:2px}
+.rank-row{border-radius:10px; transition:background .15s}
+.rank-row:nth-child(even){background:var(--surface-2)}
+.rank-first{background:linear-gradient(135deg, rgba(255,215,0,.08), rgba(255,215,0,.02))!important; border:1px solid rgba(255,215,0,.2)}
+.rank-pos{font-size:20px; text-align:center}
+.rank-name{font-weight:600; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.rank-sales{font-weight:700; font-size:15px; text-align:right; color:var(--accent)}
+.rank-total{font-weight:600; font-size:13px; text-align:right; color:var(--muted)}
+.rank-premio{margin-top:18px; padding-top:14px; border-top:1px solid var(--border)}
+.rank-premio label{display:block; font-weight:600; font-size:13px; margin-bottom:8px; color:var(--muted); text-transform:uppercase; letter-spacing:.03em}
+.rank-premio input{padding:9px 12px; border-radius:9px; border:1px solid var(--border); background:var(--surface-2); color:var(--ink); font-size:15px}
+.rank-premio-banner{background:linear-gradient(135deg, rgba(255,215,0,.12), rgba(255,180,0,.06)); border:1px solid rgba(255,215,0,.25); border-radius:10px; padding:10px 14px; font-size:14px; text-align:center; margin-bottom:10px}
 .meta-card{
   background:var(--surface); border:1px solid var(--border); border-radius:14px;
   padding:12px 16px; box-shadow:var(--shadow); margin-bottom:16px;
@@ -979,7 +993,7 @@ body.role-trabajador .pexp{display:none !important}
     url:'https://velora-data.sarmientobrayder10.workers.dev',
     key:'velora-2024-kv-secreto-x9m4p7'
   };
-  var state={moneda:'COP', bodegas:[], bodegaTels:{}, productos:[], pedido:{items:[],cliente:{nombre:'',tel:''}}, pedidos:[], usuarios:[], carritos:{}, notifEmail:{enabled:true, accessKey:'', destinatario:'', extras:[]}, metaMensual:600000, secciones:[], marcas:[]};
+  var state={moneda:'COP', bodegas:[], bodegaTels:{}, productos:[], pedido:{items:[],cliente:{nombre:'',tel:''}}, pedidos:[], usuarios:[], carritos:{}, notifEmail:{enabled:true, accessKey:'', destinatario:'', extras:[]}, metaMensual:600000, secciones:[], marcas:[], premioVendedor:0};
   var session=null; // {usuarioId, usuarioNombre, role}
   var cfg=null;              // {url,key}
   var GROUPS_KEY='bm-collapsed';
@@ -1193,6 +1207,7 @@ body.role-trabajador .pexp{display:none !important}
           };
         });
       })(),
+      premioVendedor: (typeof d.premioVendedor==='number' && d.premioVendedor>=0) ? d.premioVendedor : 0,
       notifEmail:{
         enabled: ne.enabled!==false,
         accessKey: ne.accessKey || '',
@@ -3398,6 +3413,69 @@ body.role-trabajador .pexp{display:none !important}
   }
 
   /* ---------- menú (más): exportar, respaldo, ajustes ---------- */
+  function openRanking(){
+    var admin=isAdmin();
+    var mesKey=new Date().toISOString().slice(0,7);
+    var mesNombre=new Date().toLocaleDateString('es-CO',{month:'long',year:'numeric'});
+    var peds=pedidosDeSeccion().filter(function(o){ return (o.fecha||'').slice(0,7)===mesKey; });
+    var vendedores={};
+    state.usuarios.filter(function(u){return u.role!=='admin';}).forEach(function(u){
+      vendedores[u.id]={nombre:u.nombre, ventas:0, total:0};
+    });
+    peds.forEach(function(o){
+      if(!vendedores[o.usuarioId]) vendedores[o.usuarioId]={nombre:o.usuarioNombre||'(sin nombre)', ventas:0, total:0};
+      vendedores[o.usuarioId].ventas++;
+      vendedores[o.usuarioId].total+=(o.ventaTotal||0);
+    });
+    var arr=Object.keys(vendedores).map(function(k){return vendedores[k];});
+    arr.sort(function(a,b){return b.ventas-a.ventas;});
+    var premio=state.premioVendedor||0;
+    var medals=['🥇','🥈','🥉'];
+    var rows=arr.map(function(v,i){
+      var medal=i<3?medals[i]:'<span style="color:var(--muted);width:24px;display:inline-block;text-align:center">'+(i+1)+'</span>';
+      var isFirst=i===0&&v.ventas>0;
+      return '<div class="rank-row'+(isFirst?' rank-first':'')+'">'+
+        '<span class="rank-pos">'+medal+'</span>'+
+        '<span class="rank-name">'+esc(v.nombre)+'</span>'+
+        '<span class="rank-sales">'+v.ventas+' venta'+(v.ventas!==1?'s':'')+'</span>'+
+        (admin?'<span class="rank-total">'+fmt(v.total)+'</span>':'')+
+      '</div>';
+    }).join('');
+    if(!arr.length) rows='<p class="hint" style="text-align:center;padding:20px">No hay vendedores registrados.</p>';
+    var premioHTML=admin?
+      '<div class="rank-premio">'+
+        '<label>🎁 Premio al mejor vendedor</label>'+
+        '<div style="display:flex;gap:8px;align-items:center">'+
+          '<input type="number" inputmode="numeric" id="rank-premio" value="'+(premio||'')+'" placeholder="0" style="flex:1">'+
+          '<span>'+state.moneda+'</span>'+
+          '<button class="btn primary" id="rank-premio-save" style="padding:6px 14px">Guardar</button>'+
+        '</div>'+
+      '</div>':'';
+    var premioShow=premio>0?'<div class="rank-premio-banner">🎁 Premio: <b>'+fmt(premio)+'</b> para el mayor vendedor del mes</div>':'';
+    host.innerHTML='<div class="scrim" data-role="scrim"><div class="modal" role="dialog" aria-modal="true" style="width:min(500px,100%)">'+
+      '<div class="modal-hd"><h2>🏆 Ranking · '+esc(mesNombre)+'</h2><button class="mini" data-role="close">×</button></div>'+
+      '<div class="modal-bd'+(admin?' rank-admin':'')+'">'+
+        premioShow+
+        '<div class="rank-header">'+
+          '<span class="rank-pos"></span>'+
+          '<span class="rank-name" style="font-weight:600;font-size:12px;text-transform:uppercase;color:var(--muted)">Vendedor</span>'+
+          '<span class="rank-sales" style="font-weight:600;font-size:12px;text-transform:uppercase;color:var(--muted)">Ventas</span>'+
+          (admin?'<span class="rank-total" style="font-weight:600;font-size:12px;text-transform:uppercase;color:var(--muted)">Total</span>':'')+
+        '</div>'+
+        rows+
+        premioHTML+
+      '</div></div></div>';
+    host.querySelectorAll('[data-role="close"]').forEach(function(b){b.addEventListener('click',closeModal);});
+    host.querySelector('[data-role="scrim"]').addEventListener('mousedown',function(e){if(e.target===e.currentTarget)closeModal();});
+    var saveBtn=document.getElementById('rank-premio-save');
+    if(saveBtn) saveBtn.addEventListener('click',function(){
+      var v=parseFloat(document.getElementById('rank-premio').value);
+      state.premioVendedor=isNaN(v)||v<0?0:v;
+      scheduleSave(); showToast('Premio actualizado: '+fmt(state.premioVendedor),false);
+      openRanking();
+    });
+  }
+
   function openMenu(){
     host.innerHTML='<div class="scrim" data-role="scrim"><div class="modal" role="dialog" aria-modal="true" style="width:min(440px,100%)">'+
       '<div class="modal-hd"><h2>Más opciones</h2><button class="mini" data-role="close">×</button></div>'+
@@ -3409,6 +3487,7 @@ body.role-trabajador .pexp{display:none !important}
           var pedCount = admin ? _secPeds.length : mine;
           var pedLabel = admin ? 'Ventas guardadas' : 'Mis pedidos';
           return '<button class="btn ghost" data-act="history" style="justify-content:flex-start">📋 '+pedLabel+' ('+pedCount+')</button>'+
+          '<button class="btn ghost" data-act="ranking" style="justify-content:flex-start">🏆 Ranking de vendedores</button>'+
           '<button class="btn ghost" data-act="mi-perfil" style="justify-content:flex-start">👤 Mi perfil</button>'+
           '<button class="btn ghost" data-act="tutorial" style="justify-content:flex-start">🎓 Ver tutorial</button>'+
           (admin?'<button class="btn ghost" data-act="users" style="justify-content:flex-start">👥 Trabajadores ('+state.usuarios.length+')</button>':'')+
@@ -3480,6 +3559,7 @@ body.role-trabajador .pexp{display:none !important}
     else if(a==='backup'){ closeModal(); backup(); }
     else if(a==='import') doImport();
     else if(a==='config'){ closeModal(); renderSetup(cfg||{}); }
+    else if(a==='ranking'){ closeModal(); openRanking(); }
     else if(a==='disconnect'){ if(confirm('Se borrará la conexión de ESTE dispositivo (tus datos en la nube quedan intactos). ¿Continuar?')){ try{localStorage.removeItem(CFG_KEY);}catch(x){} cfg=null; stopPolling(); render(); } }
     else if(a==='toggle-moneda'){ state.moneda=state.moneda==='USD'?'COP':'USD'; render(); scheduleSave(); }
     else if(a==='toggle-theme') toggleTheme();
