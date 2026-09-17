@@ -1372,6 +1372,31 @@ body.role-trabajador .pexp{display:none !important}
     }
   }
 
+  /* ---------- ajuste de stock por pedido ---------- */
+  // sign: -1 al crear pedido (descuenta), +1 al eliminar (repone)
+  function ajustarStockPorPedido(order, sign){
+    if(!order || !Array.isArray(order.items)) return;
+    order.items.forEach(function(it){
+      var p = state.productos.find(function(x){ return x.id === it.productId; });
+      if(!p) return;
+      // Solo ajustar productos que manejan stock (no null)
+      if(typeof p.stock !== 'number') return;
+      var cant = parseInt(it.cantidad, 10) || 0;
+      if(!cant) return;
+      // Si es combo, descontar el stock de cada componente
+      if(p.tipo === 'combo' && Array.isArray(p.componentes) && p.componentes.length){
+        p.componentes.forEach(function(c){
+          var comp = state.productos.find(function(x){ return x.id === c.productoId; });
+          if(!comp || typeof comp.stock !== 'number') return;
+          var q = (parseInt(c.cantidad,10)||1) * cant;
+          comp.stock = Math.max(0, comp.stock + (sign * q));
+        });
+      } else {
+        p.stock = Math.max(0, p.stock + (sign * cant));
+      }
+    });
+  }
+
   /* ---------- estados del pedido/venta ---------- */
   function ensureEstado(o){
     if(!o.estado || typeof o.estado!=='object'){
@@ -4024,7 +4049,9 @@ body.role-trabajador .pexp{display:none !important}
       var oid=hi.getAttribute('data-oid');
       if(a==='hist-view'){ historyDetail(oid); }
       else if(a==='hist-del'){
-        if(confirm('¿Eliminar esta '+tPed('sg')+' del historial?')){
+        if(confirm('¿Eliminar esta '+tPed('sg')+' del historial? Se devolverá el stock al inventario.')){
+          var oDel=state.pedidos.find(function(x){return x.id===oid;});
+          if(oDel) ajustarStockPorPedido(oDel, +1);
           state.pedidos=state.pedidos.filter(function(x){return x.id!==oid;});
           openHistory(); scheduleSave();
         }
@@ -4945,6 +4972,7 @@ body.role-trabajador .pexp{display:none !important}
       estado: { realizado:{at:now, by:byName}, envio:null, venta:null }
     };
     state.pedidos.unshift(order);
+    ajustarStockPorPedido(order, -1);
     resetCurrentCart();
     closeCart(); render(); scheduleSave();
     showToast(tPed('SG')+' guardad'+(isAdmin()?'a':'o')+' ✓',false);
