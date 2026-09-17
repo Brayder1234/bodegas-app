@@ -2884,13 +2884,18 @@ body.role-trabajador .pexp{display:none !important}
 
   function openProduct(prod){
     var isNew=!prod;
-    var p=prod?JSON.parse(JSON.stringify(prod)):{id:uid(),nombre:'',marca:'',sku:'',precioMayorista:'',precioVenta:'',notas:'',imagen:'',tipo:'normal',componentes:[],costos:[{bodega:'',costo:''}],seccion:(activeSection||'maquillaje')};
+    var p=prod?JSON.parse(JSON.stringify(prod)):{id:uid(),nombre:'',marca:'',sku:'',precioMayorista:'',precioVenta:'',notas:'',imagen:'',tipo:'normal',componentes:[],costos:[{bodega:'',costo:''}],seccion:(activeSection||'maquillaje'),variaciones:[],tipoVariacion:'',variacionesColor:[],tipoVariacionColor:'',videos:[]};
     if(p.marca==null) p.marca='';
     if(p.precioMayorista==null) p.precioMayorista='';
     if(p.imagen==null) p.imagen='';
     if(!p.tipo || (p.tipo!=='combo' && p.tipo!=='extra')) p.tipo='normal';
     if(!Array.isArray(p.componentes)) p.componentes=[];
     if(!p.costos||!p.costos.length) p.costos=[{bodega:'',costo:''}];
+    if(!Array.isArray(p.variaciones)) p.variaciones=[];
+    if(!p.tipoVariacion) p.tipoVariacion='';
+    if(!Array.isArray(p.variacionesColor)) p.variacionesColor=[];
+    if(!p.tipoVariacionColor) p.tipoVariacionColor='';
+    if(!Array.isArray(p.videos)) p.videos=[];
     var imgPreview = p.imagen ? '<img src="'+esc(p.imagen)+'" alt="" style="width:100%;max-height:200px;object-fit:contain;border-radius:10px;border:1px solid var(--border);background:#fff">' : '<div class="img-placeholder">Sin imagen</div>';
     host.innerHTML='<div class="scrim" data-role="scrim"><div class="modal" role="dialog" aria-modal="true">'+
       '<div class="modal-hd"><h2>'+(isNew?'Nuevo producto':'Editar producto')+'</h2><button class="mini" data-role="close" aria-label="Cerrar">×</button></div>'+
