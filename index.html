@@ -2666,7 +2666,9 @@ body::before{
     var stockChip = '';
     if(stock!=null){
       var cls = soldOut ? 'stock-out' : (stock<=5 ? 'stock-low' : 'stock-ok');
-      stockChip = '<span class="pcard-stock '+cls+'">'+(soldOut?'Agotado':stock+' ud')+'</span>';
+      // Solo los admins ven la cantidad; los trabajadores ven Disponible / Agotado
+      if(!isAdmin()) cls = soldOut ? 'stock-out' : 'stock-ok';
+      stockChip = '<span class="pcard-stock '+cls+'">'+(soldOut?'Agotado':(isAdmin()?stock+' ud':'Disponible'))+'</span>';
     }
     var soldOutOverlay = soldOut ? '<div class="sold-out-overlay">AGOTADO</div>' : '';
     var inCart=(currentCart().items||[]).some(function(it){return it.productId===p.id;});
@@ -5416,6 +5418,7 @@ body::before{
               '<div class="vp-img">'+thumb+'</div>'+
               '<div class="vp-nm">'+esc(nombreDisplay||'(sin nombre)')+'</div>'+
               priceInfo+
+              ((kind==='p' && varStockOn(p) && !(v.stock>0)) ? '<div class="vp-mayo" style="color:var(--bad);font-weight:700">Agotado</div>' : '')+
             '</button>';
           }).join('')+
         '</div>'+
