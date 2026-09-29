@@ -161,7 +161,7 @@ input,select,textarea{font-family:inherit}
 .status.off{cursor:pointer}
 @keyframes pulse{50%{opacity:.35}}
 
-.stats{display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:20px}
+.stats{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:20px}
 .stat{background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:14px 16px; box-shadow:var(--shadow); position:relative; overflow:hidden}
 .stat .k{font-size:12px; color:var(--muted); letter-spacing:.03em; text-transform:uppercase; font-weight:600}
 .stat .v{font-family:var(--font-display); font-weight:700; font-size:26px; letter-spacing:-.02em; margin-top:4px}
@@ -1845,6 +1845,16 @@ body::before{
     return new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP',maximumFractionDigits:0}).format(n); }
   function pct(n){ return (n>=0?'':'−')+Math.abs(Math.round(n))+'%'; }
   function validCostos(p){ return (p.costos||[]).filter(function(c){ return c.bodega && typeof c.costo==='number' && c.costo>0; }); }
+  // Stock por tamaño: si alguna variación con precio tiene stock numérico, el stock del producto es la suma
+  function varStockOn(p){ return !!(p && Array.isArray(p.variaciones) && p.variaciones.some(function(v){ return typeof v.stock==='number'; })); }
+  function syncStock(p){ if(varStockOn(p)) p.stock = p.variaciones.reduce(function(a,v){ return a + (typeof v.stock==='number' ? v.stock : 0); },0); }
+  function valorMercancia(p){
+    var b=best(p), base=b?b.costo:0;
+    if(varStockOn(p)){
+      return p.variaciones.reduce(function(a,v){ var st=(typeof v.stock==='number')?v.stock:0; var c=(typeof v.costo==='number' && v.costo>0)?v.costo:base; return a+st*c; },0);
+    }
+    return (typeof p.stock==='number' && p.stock>0) ? p.stock*base : 0;
+  }
   function best(p){ var v=validCostos(p); if(!v.length) return null; return v.reduce(function(a,b){ return b.costo<a.costo?b:a; }); }
   function comboCostoTotal(p){
     if(!p || p.tipo!=='combo' || !Array.isArray(p.componentes)) return null;
@@ -1877,7 +1887,10 @@ body::before{
     return null;
   }
   function saveCfg(c){ try{ localStorage.setItem(CFG_KEY, JSON.stringify(c)); }catch(e){} }
-  function cacheState(){ try{ localStorage.setItem(CACHE_KEY, JSON.stringify(state)); }catch(e){} }
+  function cacheState(){
+    try{ localStorage.setItem(CACHE_KEY, JSON.stringify(state)); }
+    catch(e){ try{ localStorage.removeItem(CACHE_KEY); }catch(x){} }  // no cabe (Safari ~5MB): no dejar una copia vieja ocupando espacio
+  }
   function loadCache(){ try{ var s=JSON.parse(localStorage.getItem(CACHE_KEY)); if(s&&s.productos) return s; }catch(e){} return null; }
 
   /* ---------- Cloudflare Workers KV ---------- */
@@ -2064,9 +2077,18 @@ body::before{
   function uidUser(){ return 'u'+Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
   function normNombre(n){ return String(n||'').trim().toLowerCase(); }
   function findUser(nombre){ var k=normNombre(nombre); return state.usuarios.find(function(u){return normNombre(u.nombre)===k;}); }
-  function loadSession(){ try{ var s=JSON.parse(localStorage.getItem(SESSION_KEY)); if(s && s.usuarioId) return s; }catch(e){} return null; }
-  function saveSession(s){ try{ localStorage.setItem(SESSION_KEY, JSON.stringify(s)); }catch(e){} }
-  function clearSession(){ try{ localStorage.removeItem(SESSION_KEY); }catch(e){} session=null; }
+  function loadSession(){
+    try{ var s=JSON.parse(localStorage.getItem(SESSION_KEY)); if(s && s.usuarioId) return s; }catch(e){}
+    try{ var m=document.cookie.match(/(?:^|; )bm_session=([^;]*)/); if(m){ var c=JSON.parse(decodeURIComponent(m[1])); if(c && c.usuarioId) return c; } }catch(e){}
+    return null;
+  }
+  function saveSession(s){
+    var v=JSON.stringify(s);
+    try{ localStorage.setItem(SESSION_KEY, v); }
+    catch(e){ try{ localStorage.removeItem(CACHE_KEY); localStorage.setItem(SESSION_KEY, v); }catch(x){} }
+    try{ document.cookie='bm_session='+encodeURIComponent(v)+'; max-age=31536000; path=/; SameSite=Lax'; }catch(e){}
+  }
+  function clearSession(){ try{ localStorage.removeItem(SESSION_KEY); }catch(e){} try{ document.cookie='bm_session=; max-age=0; path=/'; }catch(e){} session=null; }
   function isAdmin(){ return session && session.role==='admin'; }
   function currentCart(){
     if(!session) return state.pedido; // fallback
@@ -2195,6 +2217,10 @@ body::before{
           var q = (parseInt(c.cantidad,10)||1) * cant;
           comp.stock = Math.max(0, comp.stock + (sign * q));
         });
+      } else if(varStockOn(p) && it.variacionId){
+        var v = p.variaciones.find(function(x){ return x.id === it.variacionId; });
+        if(v){ v.stock = Math.max(0, (typeof v.stock==='number' ? v.stock : 0) + (sign * cant)); syncStock(p); }
+        else p.stock = Math.max(0, p.stock + (sign * cant));
       } else {
         p.stock = Math.max(0, p.stock + (sign * cant));
       }
@@ -2318,7 +2344,9 @@ body::before{
     var prods = productosDeSeccion();
     prods.forEach(function(p){ var b=best(p); if(b){ var m=marginPct(p.precioVenta,b.costo); if(m!=null){ margins.push(m); if(m<20) low++; } } });
     var avg=margins.length?margins.reduce(function(a,b){return a+b;},0)/margins.length:null;
-    return {nprod:prods.length, nbod:bodegasDeSeccion().length, avg:avg, low:low};
+    var merc=0, mercUd=0;
+    prods.forEach(function(p){ if(typeof p.stock==='number' && p.stock>0){ merc+=valorMercancia(p); mercUd+=p.stock; } });
+    return {nprod:prods.length, nbod:bodegasDeSeccion().length, avg:avg, low:low, merc:merc, mercUd:mercUd};
   }
 
   /* ---------- render principal ---------- */
@@ -2440,10 +2468,12 @@ body::before{
         stat('Productos',s.nprod)+
         stat('Ventas ('+pedMes.length+' mes)', pedsSec.length)+
         stat('Trabajadores', nTrab)+
+        bigStat('Valor de mercancía (costo)', fmt(s.merc))+
         bigStat('Mi ganancia total', fmt(gTot))+
       '</div>'+
       '<div class="hint stat-notes">'+
         '<span>🏬 '+s.nbod+' bodegas</span>'+
+        '<span>📦 '+s.mercUd+' unidades en inventario</span>'+
         (s.avg!=null?'<span>margen prom. '+pct(s.avg)+'</span>':'')+
         (s.low>0?'<span style="color:var(--bad)">⚠ '+s.low+' con margen bajo</span>':'<span style="color:var(--good)">✓ sin productos con margen bajo</span>')+
         (gPend>0?'<span style="color:var(--warn)">⏳ Pendiente de pago: <b>'+fmt(gPend)+'</b></span>':'')+
@@ -3016,7 +3046,13 @@ body::before{
     if(!name||!pwd){ msg.innerHTML='<div class="callout warn">Escribe usuario y contraseña.</div>'; return; }
     msg.innerHTML='<div class="callout"><span class="spin" style="display:inline-block;vertical-align:-2px"></span> Verificando…</div>';
     // sincroniza el estado antes de validar (para respetar cambios recientes del admin)
-    try{ await pullFromServer(false); }catch(e){}
+    var fresh=null;
+    try{ var row=await sbGet(); if(row){ var d=row.data||row; if(d._ts) delete d._ts; fresh=sanitize(d); } }catch(e){}
+    if(fresh && fresh.usuarios.length){
+      if(!dirty){ state=fresh; cacheState(); } else { state.usuarios=fresh.usuarios; }
+    } else if(!state.usuarios.length){
+      msg.innerHTML='<div class="callout warn">No se pudo conectar con el servidor. Revisa tu internet e intenta de nuevo.</div>'; return;
+    }
     var u=findUser(name);
     if(!u){ msg.innerHTML='<div class="callout warn">Usuario o contraseña incorrectos.</div>'; return; }
     var ok=await verifyPwd(pwd, u.salt, u.hash);
@@ -3520,6 +3556,13 @@ body::before{
     var p = state.productos.find(function(x){return x.id===pid;});
     if(!p){ showToast('Producto no encontrado', false); return; }
     var actual = (typeof p.stock==='number') ? p.stock : 0;
+    var vars = (Array.isArray(p.variaciones) ? p.variaciones : []).filter(function(v){ return v && v.nombre; });
+    var selVar = vars.length ? vars[0] : null;
+    function stOf(v){ return (typeof v.stock==='number') ? v.stock : 0; }
+    if(selVar) actual = stOf(selVar);
+    var varPicker = vars.length ? '<div class="field" style="margin-top:16px"><label>Tamaño</label><div class="tipo-picker" id="stk-vars">'+
+      vars.map(function(v,i){ return '<label class="tipo-opt'+(i===0?' on':'')+'"><input type="radio" name="stk-var" value="'+esc(v.id)+'"'+(i===0?' checked':'')+'><span>'+esc(v.nombre)+' '+esc(p.tipoVariacion||'')+'</span><small>'+stOf(v)+' ud</small></label>'; }).join('')+
+      '</div></div>' : '';
     host.innerHTML='<div class="scrim" data-role="scrim"><div class="modal" role="dialog" aria-modal="true" style="width:min(440px,100%)">'+
       '<div class="modal-hd"><h2>Inventario</h2><button class="mini" data-role="close">×</button></div>'+
       '<div class="modal-bd">'+
@@ -3528,7 +3571,8 @@ body::before{
           '<div><div class="stock-name">'+esc(p.nombre||'(sin nombre)')+'</div>'+
           (p.marca?'<div class="stock-marca">'+esc(p.marca)+'</div>':'')+'</div>'+
         '</div>'+
-        '<div class="stock-current"><span class="lb">Cantidad actual</span><span class="v num'+(actual===0?' out':'')+'">'+(actual===0?'AGOTADO':actual)+'</span></div>'+
+        varPicker+
+        '<div class="stock-current" id="stk-current"></div>'+
         '<div class="field" style="margin-top:16px"><label>Cantidad</label><input type="number" inputmode="numeric" min="0" step="1" id="stk-qty" value="1" autofocus></div>'+
         '<div class="field" style="margin-top:12px"><label>Acción</label>'+
           '<div class="tipo-picker">'+
@@ -3548,6 +3592,17 @@ body::before{
     var qtyEl=host.querySelector('#stk-qty');
     var previewEl=host.querySelector('#stk-preview');
     function currentMode(){ var r=modal.querySelector('input[name="stk-mode"]:checked'); return r?r.value:'add'; }
+    var curEl=host.querySelector('#stk-current');
+    function refreshCurrent(){ curEl.innerHTML='<span class="lb">Cantidad actual'+(selVar?' · '+esc(selVar.nombre)+' '+esc(p.tipoVariacion||''):'')+'</span><span class="v num'+(actual===0?' out':'')+'">'+(actual===0?'AGOTADO':actual)+'</span>'; }
+    refreshCurrent();
+    modal.querySelectorAll('input[name="stk-var"]').forEach(function(r){
+      r.addEventListener('change', function(){
+        selVar = vars.find(function(v){ return v.id===r.value; }) || selVar;
+        actual = stOf(selVar);
+        modal.querySelectorAll('#stk-vars .tipo-opt').forEach(function(el){ var inp=el.querySelector('input'); el.classList.toggle('on', inp && inp.checked); });
+        refreshCurrent(); refreshPreview();
+      });
+    });
     function refreshPreview(){
       var q=parseInt(qtyEl.value,10); if(isNaN(q)||q<0) q=0;
       var mode=currentMode();
@@ -3561,8 +3616,8 @@ body::before{
     modal.querySelectorAll('input[name="stk-mode"]').forEach(function(r){
       r.addEventListener('change', function(){
         modal.querySelectorAll('.tipo-opt').forEach(function(el){
-          var inp=el.querySelector('input');
-          el.classList.toggle('on', inp && inp.checked);
+          var inp=el.querySelector('input[name="stk-mode"]');
+          if(inp) el.classList.toggle('on', inp.checked);
         });
         refreshPreview();
       });
@@ -3577,9 +3632,12 @@ body::before{
       if(mode==='add') result = actual + q;
       else if(mode==='sub') result = Math.max(0, actual - q);
       else result = q;
-      p.stock = result;
-      closeModal(); refreshProds(); scheduleSave();
-      showToast('Inventario actualizado: '+(result===0?'AGOTADO':result), false);
+      if(selVar){
+        vars.forEach(function(v){ if(typeof v.stock!=='number') v.stock=0; });
+        selVar.stock = result; syncStock(p);
+      } else p.stock = result;
+      closeModal(); render(); scheduleSave();
+      showToast('Inventario actualizado'+(selVar?' ('+selVar.nombre+' '+(p.tipoVariacion||'')+')':'')+': '+(result===0?'AGOTADO':result), false);
     });
   }
 
@@ -4211,6 +4269,7 @@ body::before{
       });
       p.variaciones = p.variaciones.filter(function(v){ return v.nombre || v.precioVenta || v.precioMayorista; });
       if(!p.variaciones.length) p.tipoVariacion = '';
+      syncStock(p);
 
       // Recoger variaciones visuales (color/talla)
       varRowsColor.querySelectorAll('.var-row').forEach(function(r, idx){
@@ -5273,6 +5332,10 @@ body::before{
     // Si tiene variaciones y no se pasaron todas las necesarias, abrir el selector
     if((hasVarPrecio && !variacion) || (hasVarColor && !variacionColor)){
       openVariacionPicker(p, variacion, variacionColor); return;
+    }
+    if(variacion && varStockOn(p) && !isAdmin()){
+      var vSt = p.variaciones.find(function(x){ return x.id===variacion.id; });
+      if(vSt && !(vSt.stock>0)){ showToast('Ese tamaño está agotado', false); return; }
     }
     var varId = variacion ? variacion.id : '';
     var varNm = variacion ? variacion.nombre : '';
