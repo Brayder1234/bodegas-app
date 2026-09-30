@@ -741,6 +741,11 @@ body.role-trabajador .pexp{display:none !important}
 .user-row .rl{font-size:11.5px; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:.03em}
 .user-row .rl.a{color:var(--warn)}
 .user-row .acts{display:flex; gap:4px}
+.av{display:inline-flex; align-items:center; justify-content:center; border-radius:50%; overflow:hidden; flex-shrink:0; background:var(--accent); color:#fff; font-weight:800; vertical-align:middle; object-fit:cover}
+.av img{width:100%; height:100%; object-fit:cover; display:block}
+.user-row .nmrow{display:flex; align-items:center; gap:10px}
+.av-edit{display:flex; align-items:center; gap:16px; margin-bottom:18px}
+.av-edit .btns{display:flex; flex-direction:column; gap:8px}
 .user-row .acts button{background:transparent; border:none; color:var(--muted); padding:6px 8px; border-radius:6px; font-size:12.5px; cursor:pointer}
 .user-row .acts button:hover{background:var(--border); color:var(--ink)}
 .user-row .acts button.del:hover{background:var(--bad-soft); color:var(--bad)}
@@ -1989,6 +1994,7 @@ body::before{
         u.telefono = u.telefono || '';
         u.correo = u.correo || '';
         u.cuentaPago = u.cuentaPago || '';
+        u.foto = (typeof u.foto==='string' && u.foto.indexOf('data:image/')===0) ? u.foto : '';
         u.tutorialVisto = u.tutorialVisto || false;
         // Trabajadores: array de secciones (ids). Admin no se filtra por sección.
         if(!Array.isArray(u.secciones)){
@@ -2075,6 +2081,36 @@ body::before{
     return h===hashB64;
   }
   function uidUser(){ return 'u'+Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+  // Avatar: foto de perfil (u.foto) o inicial del nombre
+  function avatarHTML(u, size){
+    size = size || 32;
+    var nm = (u && (u.nombre||u.usuarioNombre)) || '?';
+    var st = 'width:'+size+'px;height:'+size+'px;font-size:'+Math.round(size*0.42)+'px';
+    if(u && u.foto) return '<span class="av" style="'+st+'"><img src="'+esc(u.foto)+'" alt=""></span>';
+    return '<span class="av" style="'+st+(u && u.role==='admin'?';background:var(--warn)':'')+'">'+esc(String(nm).charAt(0).toUpperCase())+'</span>';
+  }
+  function userById(id){ return (state.usuarios||[]).find(function(x){return x.id===id;}); }
+  // Recorta al centro en cuadrado y comprime (≈15-25 KB) para no llenar el almacenamiento
+  function fotoPerfilDataURL(file){
+    return new Promise(function(resolve, reject){
+      if(!file || !/^image\//.test(file.type)){ reject(new Error('no es imagen')); return; }
+      var rd=new FileReader();
+      rd.onerror=function(){ reject(new Error('error leyendo')); };
+      rd.onload=function(){
+        var img=new Image();
+        img.onerror=function(){ reject(new Error('imagen inválida')); };
+        img.onload=function(){
+          var side=Math.min(img.width,img.height), sx=(img.width-side)/2, sy=(img.height-side)/2, N=256;
+          var cv=document.createElement('canvas'); cv.width=N; cv.height=N;
+          var cx=cv.getContext('2d'); cx.fillStyle='#fff'; cx.fillRect(0,0,N,N);
+          cx.drawImage(img,sx,sy,side,side,0,0,N,N);
+          try{ resolve(cv.toDataURL('image/jpeg',0.82)); }catch(e){ reject(e); }
+        };
+        img.src=rd.result;
+      };
+      rd.readAsDataURL(file);
+    });
+  }
   function normNombre(n){ return String(n||'').trim().toLowerCase(); }
   function findUser(nombre){ var k=normNombre(nombre); return state.usuarios.find(function(u){return normNombre(u.nombre)===k;}); }
   function loadSession(){
@@ -2445,7 +2481,7 @@ body::before{
     var admin=isAdmin();
     var whoIni=(session && session.usuarioNombre) ? session.usuarioNombre.charAt(0).toUpperCase() : '?';
     var whoLine='<button class="who-chip'+(admin?' admin':'')+'" data-act="who" title="Cerrar sesión">'+
-      '<span class="avat">'+esc(whoIni)+'</span>'+esc(session?session.usuarioNombre:'')+
+      (function(){ var me=session?userById(session.usuarioId):null; return (me && me.foto) ? '<span class="avat" style="padding:0;overflow:hidden;background:none"><img src="'+esc(me.foto)+'" alt="" style="width:100%;height:100%;object-fit:cover;display:block"></span>' : '<span class="avat">'+esc(whoIni)+'</span>'; })()+esc(session?session.usuarioNombre:'')+
       ' <span class="role">'+(admin?'admin':'trabajador')+'</span>'+
     '</button>';
     var secActiva = (state.secciones||[]).find(function(x){return x.id===activeSection;}) || {nombre:activeSection||'', emoji:''};
@@ -3125,7 +3161,7 @@ body::before{
         var otrasSecs = (u.role!=='admin' && Array.isArray(u.secciones)) ? u.secciones.filter(function(x){return x!==secKeyU;}).length : 0;
         var otrasSecsTag = otrasSecs>0 ? ' <span class="hint" style="color:var(--accent)">+'+otrasSecs+' sección(es)</span>' : '';
         return '<div class="user-row" data-uid="'+esc(u.id)+'">'+
-          '<div><div class="nm">'+esc(u.nombre)+ (isMe?' <span class="hint">(tú)</span>':'') + otrasSecsTag + (perfilInc && u.role==='trabajador'?' <span class="hint" style="color:var(--warn)">⚠ perfil incompleto</span>':'') +'</div>'+
+          '<div><div class="nmrow">'+avatarHTML(u,40)+'<div class="nm">'+esc(u.nombre)+ (isMe?' <span class="hint">(tú)</span>':'') + otrasSecsTag + (perfilInc && u.role==='trabajador'?' <span class="hint" style="color:var(--warn)">⚠ perfil incompleto</span>':'') +'</div></div>'+
             '<div class="rl '+(u.role==='admin'?'a':'')+'">'+esc(u.role)+' · '+mine.length+' pedidos en '+esc(secNombreU)+'</div>'+
             '<div style="font-size:12.5px;color:var(--muted);margin-top:2px">💰 Este mes: <b style="color:var(--good)">'+fmt(vendidoMes)+'</b> · Total: <b style="color:var(--ink)">'+fmt(vendidoTotal)+'</b></div></div>'+
           '<div class="acts">'+
@@ -3224,6 +3260,7 @@ body::before{
     host.innerHTML='<div class="scrim" data-role="scrim"><div class="modal" role="dialog" aria-modal="true" style="width:min(520px,100%)">'+
       '<div class="modal-hd"><h2>'+esc(u.nombre)+'</h2><button class="mini" data-role="close">×</button></div>'+
       '<div class="modal-bd">'+
+        '<div style="display:flex;justify-content:center;margin-bottom:14px">'+avatarHTML(u,88)+'</div>'+
         '<div class="hint" style="display:flex;gap:8px;align-items:center;margin-bottom:6px"><span class="rl '+(u.role==='admin'?'a':'')+'" style="font-size:11.5px;font-weight:700;text-transform:uppercase">'+esc(u.role)+'</span> · '+mine.length+' pedidos realizados</div>'+
         line('📄','Cédula', u.cedula)+
         line('📱','Teléfono', u.telefono)+
@@ -3242,6 +3279,10 @@ body::before{
     host.innerHTML='<div class="scrim" data-role="scrim"><div class="modal" role="dialog" aria-modal="true" style="width:min(540px,100%)">'+
       '<div class="modal-hd"><h2>Editar datos de '+esc(u.nombre)+'</h2><button class="mini" data-role="close">×</button></div>'+
       '<div class="modal-bd">'+
+        '<div class="av-edit"><span id="ue-av">'+avatarHTML(u,84)+'</span>'+
+          '<div class="btns"><button type="button" class="btn ghost" id="ue-foto-btn">📷 '+(u.foto?'Cambiar foto':'Subir foto')+'</button>'+
+          '<button type="button" class="btn ghost" id="ue-foto-del"'+(u.foto?'':' style="display:none"')+'>Quitar foto</button>'+
+          '<input type="file" id="ue-foto-file" accept="image/*" style="display:none"></div></div>'+
         '<div class="field"><label>Nombre completo</label><input type="text" id="ue-name" value="'+esc(u.nombre)+'"></div>'+
         '<div class="f2"><div class="field"><label>Cédula</label><input type="text" inputmode="numeric" id="ue-cedula" value="'+esc(u.cedula||'')+'"></div>'+
           '<div class="field"><label>Teléfono</label><input type="tel" inputmode="tel" id="ue-tel" value="'+esc(u.telefono||'')+'"></div></div>'+
@@ -3250,7 +3291,24 @@ body::before{
       '</div>'+
       '<div class="modal-ft"><button class="btn ghost" data-role="close">Cancelar</button><button class="btn primary" data-act="us-savedata" data-uid="'+esc(u.id)+'">Guardar</button></div>'+
     '</div></div>';
+    // foto de perfil (se aplica al pulsar Guardar)
+    _fotoPend = undefined;
+    var fInp=document.getElementById('ue-foto-file'), fBtn=document.getElementById('ue-foto-btn'), fDel=document.getElementById('ue-foto-del'), fAv=document.getElementById('ue-av');
+    function pintaFoto(src){
+      fAv.innerHTML = avatarHTML({nombre:u.nombre, role:u.role, foto:src}, 84);
+      fBtn.textContent = '📷 ' + (src ? 'Cambiar foto' : 'Subir foto');
+      fDel.style.display = src ? '' : 'none';
+    }
+    fBtn.addEventListener('click', function(){ fInp.click(); });
+    fInp.addEventListener('change', async function(){
+      var f=fInp.files && fInp.files[0]; if(!f) return;
+      try{ _fotoPend = await fotoPerfilDataURL(f); pintaFoto(_fotoPend); }
+      catch(e){ showToast('No se pudo leer esa imagen', false); }
+      fInp.value='';
+    });
+    fDel.addEventListener('click', function(){ _fotoPend = ''; pintaFoto(''); });
   }
+  var _fotoPend;
   function saveUserData(uid){
     var u=state.usuarios.find(function(x){return x.id===uid;}); if(!u) return;
     var nv=(document.getElementById('ue-name').value||'').trim();
@@ -3265,6 +3323,7 @@ body::before{
     u.telefono=(document.getElementById('ue-tel').value||'').trim();
     u.correo=(document.getElementById('ue-correo').value||'').trim();
     u.cuentaPago=(document.getElementById('ue-pago').value||'').trim();
+    if(_fotoPend !== undefined){ u.foto = _fotoPend; _fotoPend = undefined; }
     scheduleSave();
     showToast('Datos guardados',false);
     if(isAdmin()) viewUser(u.id); else closeModal();
@@ -4382,7 +4441,7 @@ body::before{
       vendedores[u.id]={nombre:u.nombre, ventas:0, total:0};
     });
     peds.forEach(function(o){
-      if(!vendedores[o.usuarioId]) vendedores[o.usuarioId]={nombre:o.usuarioNombre||'(sin nombre)', ventas:0, total:0};
+      if(!vendedores[o.usuarioId]) vendedores[o.usuarioId]={uid:o.usuarioId, nombre:o.usuarioNombre||'(sin nombre)', ventas:0, total:0};
       vendedores[o.usuarioId].ventas++;
       vendedores[o.usuarioId].total+=(o.ventaTotal||0);
     });
@@ -4395,7 +4454,7 @@ body::before{
       var isFirst=i===0&&v.ventas>0;
       return '<div class="rank-row'+(isFirst?' rank-first':'')+'">'+
         '<span class="rank-pos">'+medal+'</span>'+
-        '<span class="rank-name">'+esc(v.nombre)+'</span>'+
+        '<span class="rank-name" style="display:flex;align-items:center;gap:8px">'+avatarHTML(userById(v.uid)||{nombre:v.nombre},26)+'<span style="overflow:hidden;text-overflow:ellipsis">'+esc(v.nombre)+'</span></span>'+
         '<span class="rank-sales">'+v.ventas+' venta'+(v.ventas!==1?'s':'')+'</span>'+
         (admin?'<span class="rank-total">'+fmt(v.total)+'</span>':'')+
       '</div>';
