@@ -1754,6 +1754,14 @@ body::before{
   .fab-cart, .sel-bar{ bottom:calc(env(safe-area-inset-bottom) + 60px) }
 }
 
+/* Foto de perfil ampliada */
+.av img{ cursor:zoom-in }
+.foto-ov{ position:fixed; inset:0; z-index:400; display:grid; place-items:center; background:rgba(0,0,0,.72); opacity:0; transition:opacity .3s var(--ease-soft); -webkit-backdrop-filter:blur(14px); backdrop-filter:blur(14px) }
+.foto-ov.on{ opacity:1 }
+.foto-ov img{ width:min(86vw,420px); height:min(86vw,420px); object-fit:cover; border-radius:28px; box-shadow:var(--shadow-lg); transform:scale(.85); transition:transform .5s var(--ease-spring) }
+.foto-ov.on img{ transform:none }
+.foto-x{ position:absolute; top:calc(env(safe-area-inset-top) + 16px); right:16px; width:36px; height:36px; border:none; border-radius:50%; background:rgba(255,255,255,.22); color:#fff; font-size:16px; cursor:pointer }
+
 /* ---------- Accesibilidad ---------- */
 @media (prefers-reduced-transparency: reduce){
   :root{ --glass:var(--surface); --glass-thick:var(--surface); --glass-grouped:var(--ground) }
@@ -4603,6 +4611,16 @@ body::before{
     b.classList.add('rippling');
     setTimeout(function(){ b.classList.remove('rippling'); }, 600);
   });
+
+  /* ---------- foto de perfil en grande ---------- */
+  document.addEventListener('click',function(e){
+    var im=e.target.closest && e.target.closest('.av img'); if(!im) return;
+    e.stopPropagation();
+    var ov=document.createElement('div'); ov.className='foto-ov';
+    ov.innerHTML='<img src="'+esc(im.getAttribute('src'))+'" alt="Foto de perfil"><button type="button" class="foto-x" aria-label="Cerrar">✕</button>';
+    ov.addEventListener('click',function(){ ov.classList.remove('on'); setTimeout(function(){ ov.remove(); },300); });
+    document.body.appendChild(ov); void ov.offsetWidth; ov.classList.add('on');
+  }, true);
 
   /* ---------- eventos globales ---------- */
   document.addEventListener('click',function(e){
