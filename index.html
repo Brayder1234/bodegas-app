@@ -4452,7 +4452,7 @@ body::before{
     var peds=pedidosDeSeccion().filter(function(o){ return (o.fecha||'').slice(0,7)===mesKey; });
     var vendedores={};
     state.usuarios.filter(function(u){return u.role!=='admin';}).forEach(function(u){
-      vendedores[u.id]={nombre:u.nombre, ventas:0, total:0};
+      vendedores[u.id]={uid:u.id, nombre:u.nombre, ventas:0, total:0};
     });
     peds.forEach(function(o){
       if(!vendedores[o.usuarioId]) vendedores[o.usuarioId]={uid:o.usuarioId, nombre:o.usuarioNombre||'(sin nombre)', ventas:0, total:0};
