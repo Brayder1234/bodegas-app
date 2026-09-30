@@ -1754,6 +1754,11 @@ body::before{
   .fab-cart, .sel-bar{ bottom:calc(env(safe-area-inset-bottom) + 60px) }
 }
 
+/* Afiliación a grupos (secciones) */
+.sect-members{ position:relative; z-index:2; font-size:13px; color:rgba(255,255,255,.85); letter-spacing:-.005em }
+.sect-card.not-joined.has-bg::after{ background:linear-gradient(180deg, rgba(15,10,15,.35) 0%, rgba(15,10,15,.65) 55%, rgba(15,10,15,.88) 100%) }
+.badge.join{ background:var(--accent) !important; color:#fff !important; border:none !important; font-weight:600 }
+
 /* Foto de perfil ampliada */
 .av img{ cursor:zoom-in }
 .foto-ov{ position:fixed; inset:0; z-index:400; display:grid; place-items:center; background:rgba(0,0,0,.72); opacity:0; transition:opacity .3s var(--ease-soft); -webkit-backdrop-filter:blur(14px); backdrop-filter:blur(14px) }
@@ -2411,8 +2416,14 @@ body::before{
     if(!cfg){ renderSetup(); return; }
     if(bootstrapping){ renderBootSplash(); return; }
     if(!session){ renderLogin(); return; }
+    if(!isAdmin() && activeSection && state.usuarios.length){
+      var meSec=userById(session.usuarioId);
+      if(meSec && Array.isArray(meSec.secciones) && meSec.secciones.indexOf(activeSection)<0) setActiveSection(null);
+    }
     if(!activeSection){
       var secs=state.secciones||[];
+      if(!secs.length && !state.usuarios.length){ renderBootSplash(); return; }
+      if(!isAdmin() && secs.length){ renderSectionPicker(); return; }
       if(secs.length===1){ setActiveSection(secs[0].id); }
       else if(secs.length===0){ setActiveSection('maquillaje'); }
       else { renderSectionPicker(); return; }
@@ -2916,37 +2927,36 @@ body::before{
     var nombre = session ? session.usuarioNombre : '';
     var admin = isAdmin();
     var secsAll = state.secciones || [];
-    // Trabajadores: solo ven las secciones asignadas
+    // Trabajadores: ven todas las secciones y deciden a cuáles afiliarse
     var secs = secsAll;
+    var mySecs = [];
     if(!admin && session){
       var u = state.usuarios.find(function(x){return x.id===session.usuarioId;});
-      var mySecs = u && Array.isArray(u.secciones) ? u.secciones : ['maquillaje'];
-      secs = secsAll.filter(function(s){ return mySecs.indexOf(s.id)>=0; });
-      // Si solo tiene una sección disponible, entrar directo sin pasar por el picker
-      if(secs.length===1){
-        setActiveSection(secs[0].id);
-        render();
-        return;
-      }
+      mySecs = u && Array.isArray(u.secciones) ? u.secciones : ['maquillaje'];
     }
     var cardsHTML = secs.map(function(s){
       var bgStyle = s.imagen ? ' style="background-image:url(\''+esc(s.imagen).replace(/'/g,"%27")+'\')"' : '';
       var disabled = !s.disponible;
       // Admin puede entrar aunque esté como próximamente (para preparar el catálogo)
+      var joined = admin || mySecs.indexOf(s.id)>=0;
       var canEnter = admin || !disabled;
-      var clickAttrs = canEnter ? ' data-act="pick-section" data-section="'+esc(s.id)+'"' : '';
+      var clickAttrs = !canEnter ? '' : (joined
+        ? ' data-act="pick-section" data-section="'+esc(s.id)+'"'
+        : ' data-act="join-section" data-section="'+esc(s.id)+'"');
+      var nMiembros = trabajadoresSoloDe(s.id).length;
       var adminBtns = admin ? (
         '<div class="sect-admin" data-role="sect-admin">'+
           '<button class="mini" data-act="edit-section" data-sid="'+esc(s.id)+'" title="Editar sección">✎</button>'+
           '<button class="mini del" data-act="del-section" data-sid="'+esc(s.id)+'" title="Eliminar sección">🗑</button>'+
         '</div>'
       ) : '';
-      var badgeText = disabled ? (admin?'🔒 Próximamente · Entrar como admin':'Próximamente') : 'Disponible';
-      return '<div class="sect-card has-bg'+(disabled && !admin?' disabled':'')+(disabled && admin?' admin-preview':'')+'" role="button" tabindex="0"'+clickAttrs+bgStyle+'>'+
+      var badgeText = disabled ? (admin?'🔒 Próximamente · Entrar como admin':'Próximamente') : (admin ? 'Disponible' : (joined ? 'Afiliado · Entrar' : 'Unirme al grupo'));
+      return '<div class="sect-card has-bg'+(disabled && !admin?' disabled':'')+(disabled && admin?' admin-preview':'')+(!joined?' not-joined':'')+'" role="button" tabindex="0"'+clickAttrs+bgStyle+'>'+
         adminBtns+
         '<h3>'+esc(s.nombre)+'</h3>'+
         '<p>'+esc(s.descripcion||'')+'</p>'+
-        '<span class="badge">'+badgeText+'</span>'+
+        '<span class="sect-members">'+nMiembros+' trabajador'+(nMiembros===1?'':'es')+' en el grupo</span>'+
+        '<span class="badge'+(joined?'':' join')+'">'+badgeText+'</span>'+
       '</div>';
     }).join('');
     var addCard = admin ? (
@@ -2974,7 +2984,7 @@ body::before{
       '</div>'+
       '<div class="sect-hero">'+
         '<h1>Elige una sección</h1>'+
-        '<p>'+(admin?'Selecciona una tienda o crea una nueva sección.':'Selecciona la tienda con la que vas a trabajar')+'</p>'+
+        '<p>'+(admin?'Selecciona una tienda o crea una nueva sección.':'Únete a los grupos con los que quieras trabajar y entra a cada tienda.')+'</p>'+
       '</div>'+
       totalesHTML+
       '<div class="sect-grid">'+cardsHTML+addCard+'</div>'+
@@ -3081,7 +3091,7 @@ body::before{
       role:'trabajador', createdAt:new Date().toISOString(),
       cedula:'', telefono:'', correo:'', cuentaPago:'',
       tutorialVisto:false,
-      secciones: ['maquillaje']
+      secciones: []
     };
     state.usuarios.push(u);
     session={usuarioId:u.id, usuarioNombre:u.nombre, role:u.role};
@@ -4532,6 +4542,7 @@ body::before{
     var cuenta = group('Mi cuenta',
       item('person', '#8e8e93', 'Mi perfil', 'mi-perfil')+
       item('grad', '#af52de', 'Ver tutorial', 'tutorial')+
+      (!admin?item('xmark', '#ff9500', 'Salir de este grupo', 'leave-section'):'')+
       item('logout', '#ff3b30', 'Cerrar sesión', 'logout')
     );
     var adminSection = admin ? group('Administración',
@@ -4832,6 +4843,31 @@ body::before{
       if(s){ setActiveSection(s); render(); showToast('Sección: '+s, false); }
     }
     else if(a==='change-section'){ setActiveSection(null); render(); }
+    else if(a==='join-section'){
+      var jid=act.getAttribute('data-section'); var jsec=(state.secciones||[]).find(function(x){return x.id===jid;}); if(!jsec) return;
+      host.innerHTML='<div class="scrim" data-role="scrim"><div class="modal" role="dialog" aria-modal="true" style="width:min(420px,100%)">'+
+        '<div class="modal-hd"><h2>Unirte a '+esc(jsec.nombre)+'</h2><button class="mini" data-role="close">×</button></div>'+
+        '<div class="modal-bd"><p style="margin:0;color:var(--muted)">Serás parte del grupo de <b style="color:var(--ink)">'+esc(jsec.nombre)+'</b>: verás sus productos, podrás hacer pedidos y aparecerás en su ranking. Puedes salirte cuando quieras.</p></div>'+
+        '<div class="modal-ft"><button class="btn ghost" data-role="close">Ahora no</button><button class="btn primary" data-act="join-confirm" data-section="'+esc(jid)+'">Unirme</button></div>'+
+      '</div></div>';
+      host.querySelectorAll('[data-role="close"]').forEach(function(b){ b.addEventListener('click',closeModal); });
+      host.querySelector('[data-role="scrim"]').addEventListener('mousedown',function(ev){ if(ev.target===ev.currentTarget) closeModal(); });
+    }
+    else if(a==='join-confirm'){
+      var cid=act.getAttribute('data-section'); var me1=userById(session&&session.usuarioId); if(!me1||!cid) return;
+      if(!Array.isArray(me1.secciones)) me1.secciones=[];
+      if(me1.secciones.indexOf(cid)<0) me1.secciones.push(cid);
+      closeModal(); setActiveSection(cid); scheduleSave(); render();
+      showToast('Te uniste al grupo',false);
+    }
+    else if(a==='leave-section'){
+      var me2=userById(session&&session.usuarioId); var lid=activeSection; if(!me2||!lid||isAdmin()) return;
+      var lsec=(state.secciones||[]).find(function(x){return x.id===lid;})||{nombre:lid};
+      if(!confirm('¿Salir del grupo de '+lsec.nombre+'? Dejarás de ver sus productos. Tus pedidos anteriores se conservan.')) return;
+      me2.secciones=(me2.secciones||[]).filter(function(x){return x!==lid;});
+      setActiveSection(null); scheduleSave(); render();
+      showToast('Saliste del grupo',false);
+    }
     else if(a==='new-section'){
       if(!isAdmin()){ showToast('Solo el admin puede crear secciones', false); return; }
       openSeccion(null);
