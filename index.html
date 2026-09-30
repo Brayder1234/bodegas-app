@@ -2382,7 +2382,13 @@ body::before{
     var avg=margins.length?margins.reduce(function(a,b){return a+b;},0)/margins.length:null;
     var merc=0, mercUd=0;
     prods.forEach(function(p){ if(typeof p.stock==='number' && p.stock>0){ merc+=valorMercancia(p); mercUd+=p.stock; } });
-    return {nprod:prods.length, nbod:bodegasDeSeccion().length, avg:avg, low:low, merc:merc, mercUd:mercUd};
+    // Trabajadores: solo cuentan los productos de marcas habilitadas (las ocultas no se ven)
+    var nVisibles = prods.length;
+    if(!isAdmin()){
+      var ocU=(state.marcasOcultas||[]).map(function(x){return String(x).trim().toUpperCase();});
+      nVisibles = prods.filter(function(p){ return ocU.indexOf(String(p.marca||'').trim().toUpperCase())<0; }).length;
+    }
+    return {nprod:nVisibles, nbod:bodegasDeSeccion().length, avg:avg, low:low, merc:merc, mercUd:mercUd};
   }
 
   /* ---------- render principal ---------- */
