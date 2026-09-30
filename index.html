@@ -2138,7 +2138,25 @@ body::before{
     try{ document.cookie='bm_session='+encodeURIComponent(v)+'; max-age=31536000; path=/; SameSite=Lax'; }catch(e){}
   }
   function clearSession(){ try{ localStorage.removeItem(SESSION_KEY); }catch(e){} try{ document.cookie='bm_session=; max-age=0; path=/'; }catch(e){} session=null; }
-  function isAdmin(){ return session && session.role==='admin'; }
+  function myUser(){ return session ? userById(session.usuarioId) : null; }
+  function myRole(){ var me=myUser(); return me ? me.role : (session ? session.role : ''); }
+  function isAdmin(){ return !!session && myRole()==='admin'; }
+  // Admin principal: admin sin secciones asignadas (ve todo). Admin de sección: admin con secciones asignadas.
+  function adminScope(){
+    if(!isAdmin()) return null;
+    var me=myUser(); var arr=me && Array.isArray(me.secciones) ? me.secciones : [];
+    return arr.length ? arr : null;
+  }
+  function isSuper(){ return isAdmin() && !adminScope(); }
+  function isScopedAdmin(){ return isAdmin() && !!adminScope(); }
+  function puedeGestionar(u){
+    if(!u) return false;
+    if(isSuper()) return true;
+    var me=myUser(); if(me && u.id===me.id) return true;
+    if(!isScopedAdmin() || u.role==='admin') return false;
+    var sc=adminScope(); var us=Array.isArray(u.secciones)?u.secciones:[];
+    return us.some(function(x){ return sc.indexOf(x)>=0; });
+  }
   function currentCart(){
     if(!session) return state.pedido; // fallback
     if(!state.carritos[session.usuarioId]) state.carritos[session.usuarioId]={items:[],cliente:{nombre:'',tel:''}};
@@ -2320,7 +2338,7 @@ body::before{
   /* ---------- meta mensual ---------- */
   // Solo Brayder01 (nombre exacto) puede editar la meta
   function puedeEditarMeta(){
-    return session && session.role==='admin' && normNombre(session.usuarioNombre)==='brayder01';
+    return isSuper() && normNombre(session.usuarioNombre)==='brayder01';
   }
   function metaWidgetHTML(){
     if(!session) return '';
@@ -2329,7 +2347,7 @@ body::before{
     var meta = (typeof state.metaMensual==='number' && state.metaMensual>0) ? state.metaMensual : 600000;
     var mesKey = new Date().toISOString().slice(0,7);
     // Ventas totales del mes: si es trabajador, solo las suyas; si es admin, todas
-    var admin = session.role==='admin';
+    var admin = isAdmin();
     var mesPed = pedidosDeSeccion().filter(function(o){
       if((o.fecha||'').slice(0,7)!==mesKey) return false;
       if(admin) return true;
@@ -2409,22 +2427,26 @@ body::before{
 
   function applyRoleClass(){
     document.body.classList.remove('role-admin','role-trabajador');
-    if(session) document.body.classList.add('role-'+session.role);
+    if(session) document.body.classList.add('role-'+(myRole()||session.role));
   }
   function render(){
     applyRoleClass();
     if(!cfg){ renderSetup(); return; }
     if(bootstrapping){ renderBootSplash(); return; }
     if(!session){ renderLogin(); return; }
-    if(!isAdmin() && activeSection && state.usuarios.length){
-      var meSec=userById(session.usuarioId);
-      if(meSec && Array.isArray(meSec.secciones) && meSec.secciones.indexOf(activeSection)<0) setActiveSection(null);
+    if(state.usuarios.length && activeSection){
+      var meSec=myUser();
+      if(meSec && Array.isArray(meSec.secciones) && (!isAdmin() || meSec.secciones.length) && meSec.secciones.indexOf(activeSection)<0) setActiveSection(null);
     }
     if(!activeSection){
       var secs=state.secciones||[];
       if(!secs.length && !state.usuarios.length){ renderBootSplash(); return; }
-      if(!isAdmin() && secs.length){ renderSectionPicker(); return; }
-      if(secs.length===1){ setActiveSection(secs[0].id); }
+      if(isScopedAdmin()){
+        var permitidas=secs.filter(function(x){ return adminScope().indexOf(x.id)>=0; });
+        if(permitidas.length===1){ setActiveSection(permitidas[0].id); }
+        else { renderSectionPicker(); return; }
+      } else if(!isAdmin() && secs.length){ renderSectionPicker(); return; }
+      else if(secs.length===1){ setActiveSection(secs[0].id); }
       else if(secs.length===0){ setActiveSection('maquillaje'); }
       else { renderSectionPicker(); return; }
     }
@@ -2558,11 +2580,11 @@ body::before{
       }
     }
     return '<div class="top">'+
-      '<div class="brand"><h1>'+esc((secActiva.marca||secActiva.nombre||'').toUpperCase())+ (secActiva.sublabel?' <span style="font-weight:400;color:var(--muted);letter-spacing:0">'+esc(secActiva.sublabel)+'</span>':'') +'</h1><p>'+esc(lead)+' <button class="change-sect" data-act="change-section" title="Cambiar de sección">Cambiar</button></p></div>'+
+      '<div class="brand"><h1>'+esc((secActiva.marca||secActiva.nombre||'').toUpperCase())+ (secActiva.sublabel?' <span style="font-weight:400;color:var(--muted);letter-spacing:0">'+esc(secActiva.sublabel)+'</span>':'') +'</h1><p>'+esc(lead)+' '+((isScopedAdmin() && adminScope().length<2)?'':'<button class="change-sect" data-act="change-section" title="Cambiar de sección">Cambiar</button>')+'</p></div>'+
       '<div class="top-tools">'+
         '<button class="hamburger" data-act="menu" title="Menú" aria-label="Menú">'+sf('menu')+'</button>'+
         whoLine+connHTML()+
-        (admin?'<button class="icon-btn" data-act="toggle-moneda" title="Cambiar moneda">'+(state.moneda==='USD'?'US$':'COP')+'</button>':'')+
+        (isSuper()?'<button class="icon-btn" data-act="toggle-moneda" title="Cambiar moneda">'+(state.moneda==='USD'?'US$':'COP')+'</button>':'')+
         '<button class="icon-btn" data-act="toggle-theme" title="Tema claro/oscuro" aria-label="Cambiar tema">'+sf('theme')+'</button>'+
       '</div></div>'+ statsHTML;
   }
@@ -2930,6 +2952,7 @@ body::before{
     // Trabajadores: ven todas las secciones y deciden a cuáles afiliarse
     var secs = secsAll;
     var mySecs = [];
+    if(isScopedAdmin()){ var _sc=adminScope(); secs = secsAll.filter(function(x){ return _sc.indexOf(x.id)>=0; }); }
     if(!admin && session){
       var u = state.usuarios.find(function(x){return x.id===session.usuarioId;});
       mySecs = u && Array.isArray(u.secciones) ? u.secciones : ['maquillaje'];
@@ -2944,7 +2967,7 @@ body::before{
         ? ' data-act="pick-section" data-section="'+esc(s.id)+'"'
         : ' data-act="join-section" data-section="'+esc(s.id)+'"');
       var nMiembros = trabajadoresSoloDe(s.id).length;
-      var adminBtns = admin ? (
+      var adminBtns = isSuper() ? (
         '<div class="sect-admin" data-role="sect-admin">'+
           '<button class="mini" data-act="edit-section" data-sid="'+esc(s.id)+'" title="Editar sección">✎</button>'+
           '<button class="mini del" data-act="del-section" data-sid="'+esc(s.id)+'" title="Eliminar sección">🗑</button>'+
@@ -2959,7 +2982,7 @@ body::before{
         '<span class="badge'+(joined?'':' join')+'">'+badgeText+'</span>'+
       '</div>';
     }).join('');
-    var addCard = admin ? (
+    var addCard = isSuper() ? (
       '<div class="sect-card sect-add" role="button" tabindex="0" data-act="new-section" title="Agregar nueva sección">'+
         '<div class="sect-add-ico">＋</div>'+
         '<h3>Agregar sección</h3>'+
@@ -2968,7 +2991,7 @@ body::before{
     ) : '';
     // Totales globales (solo admin)
     var totalesHTML = '';
-    if(admin){
+    if(isSuper()){
       var ventasTot = (state.pedidos||[]).length;
       var vTotal = (state.pedidos||[]).reduce(function(a,o){return a+(o.ventaTotal||0);},0);
       var nTrabTotal = (state.usuarios||[]).filter(function(u){return u.role==='trabajador';}).length;
@@ -3161,13 +3184,17 @@ body::before{
     var secKeyU = activeSection || 'maquillaje';
     var secNombreU = ((state.secciones||[]).find(function(x){return x.id===secKeyU;})||{}).nombre || secKeyU;
     // Solo trabajadores de la sección activa (más los admins)
+    var scopedV = isScopedAdmin();
     var visibles = (state.usuarios||[]).filter(function(u){
-      if(u.role==='admin') return true;
+      if(u.role==='admin'){
+        if(!scopedV) return true;
+        return u.id===session.usuarioId || (Array.isArray(u.secciones) && u.secciones.indexOf(secKeyU)>=0);
+      }
       var arr = Array.isArray(u.secciones) ? u.secciones : ['maquillaje'];
       return arr.indexOf(secKeyU) >= 0;
     });
     var body='<div class="modal-bd" style="gap:10px">';
-    body+='<p class="hint">Trabajadores asignados a la sección <b>'+esc(secNombreU)+'</b>. Los admins ven todas las secciones. Crea trabajadores nuevos abajo — quedarán asignados a esta sección.</p>';
+    body+='<p class="hint">Trabajadores asignados a la sección <b>'+esc(secNombreU)+'</b>.'+(scopedV?'':' Los admins principales ven todas las secciones; un admin de sección solo ve la suya.')+' Crea trabajadores nuevos abajo — quedarán asignados a esta sección.</p>';
     if(visibles.length){
       var mesKey=new Date().toISOString().slice(0,7);
       body+= visibles.slice().sort(function(a,b){
@@ -3182,18 +3209,21 @@ body::before{
         var vendidoMes=mineMes.reduce(function(a,o){return a+(o.ventaTotal||0);},0);
         var isMe = session && session.usuarioId===u.id;
         var perfilInc = !u.cedula || !u.correo || !u.telefono || !u.cuentaPago;
-        var otrasSecs = (u.role!=='admin' && Array.isArray(u.secciones)) ? u.secciones.filter(function(x){return x!==secKeyU;}).length : 0;
+        var otrasSecs = (!scopedV && u.role!=='admin' && Array.isArray(u.secciones)) ? u.secciones.filter(function(x){return x!==secKeyU;}).length : 0;
         var otrasSecsTag = otrasSecs>0 ? ' <span class="hint" style="color:var(--accent)">+'+otrasSecs+' sección(es)</span>' : '';
         return '<div class="user-row" data-uid="'+esc(u.id)+'">'+
           '<div><div class="nmrow">'+avatarHTML(u,40)+'<div class="nm">'+esc(u.nombre)+ (isMe?' <span class="hint">(tú)</span>':'') + otrasSecsTag + (perfilInc && u.role==='trabajador'?' <span class="hint" style="color:var(--warn)">⚠ perfil incompleto</span>':'') +'</div></div>'+
-            '<div class="rl '+(u.role==='admin'?'a':'')+'">'+esc(u.role)+' · '+mine.length+' pedidos en '+esc(secNombreU)+'</div>'+
+            '<div class="rl '+(u.role==='admin'?'a':'')+'">'+esc(u.role==='admin'?(Array.isArray(u.secciones)&&u.secciones.length?'admin de sección':'admin principal'):u.role)+' · '+mine.length+' pedidos en '+esc(secNombreU)+'</div>'+
             '<div style="font-size:12.5px;color:var(--muted);margin-top:2px">💰 Este mes: <b style="color:var(--good)">'+fmt(vendidoMes)+'</b> · Total: <b style="color:var(--ink)">'+fmt(vendidoTotal)+'</b></div></div>'+
           '<div class="acts">'+
             '<button data-act="us-view">👤 Ver datos</button>'+
-            (u.role!=='admin'?'<button data-act="us-secs">🗂 Secciones</button>':'')+
+            ((u.role!=='admin' && !scopedV) || (u.role==='admin' && !scopedV && !isMe)?'<button data-act="us-secs">🗂 '+(u.role==='admin'?'Alcance':'Secciones')+'</button>':'')+
             '<button data-act="us-pwd">🔑 Contraseña</button>'+
-            (u.role!=='admin'?'<button data-act="us-mkadmin">Hacer admin</button>':(state.usuarios.filter(function(x){return x.role==='admin';}).length>1?'<button data-act="us-mkuser">Quitar admin</button>':''))+
-            (!isMe?'<button class="del" data-act="us-del">🗑</button>':'')+
+            (!scopedV ? (u.role!=='admin'
+              ? '<button data-act="us-mkadmin">Admin total</button><button data-act="us-mkscoped">Admin de esta sección</button>'
+              : (!isMe ? ((Array.isArray(u.secciones)&&u.secciones.length?'<button data-act="us-mkadmin">Dar acceso total</button>':'')+(state.usuarios.filter(function(x){return x.role==='admin' && !(Array.isArray(x.secciones)&&x.secciones.length);}).length>1 || (Array.isArray(u.secciones)&&u.secciones.length)?'<button data-act="us-mkuser">Quitar admin</button>':'')) : ''))
+              : (u.role!=='admin' ? '<button class="del" data-act="us-rmsec">Quitar del grupo</button>' : ''))+
+            (!isMe && !scopedV?'<button class="del" data-act="us-del">🗑</button>':'')+
           '</div>'+
         '</div>';
       }).join('');
@@ -3208,7 +3238,7 @@ body::before{
       '<div class="field"><label>Teléfono</label><input type="tel" inputmode="tel" id="nu-tel" placeholder="3001234567"></div></div>';
     body+='<div class="field"><label>Correo</label><input type="email" id="nu-correo" placeholder="maria@ejemplo.com"></div>';
     body+='<div class="field"><label>Nequi / Cuenta bancaria (para pagos)</label><input type="text" id="nu-pago" placeholder="Nequi 3001234567 · o Bancolombia 12345678"></div>';
-    body+='<div style="display:flex; gap:8px; align-items:center"><label style="display:inline-flex;gap:6px;align-items:center;font-size:13px;color:var(--muted)"><input type="checkbox" id="nu-admin"> Crear como admin</label>'+
+    body+='<div style="display:flex; gap:8px; align-items:center">'+(scopedV?'<input type="checkbox" id="nu-admin" style="display:none">':'<label style="display:inline-flex;gap:6px;align-items:center;font-size:13px;color:var(--muted)"><input type="checkbox" id="nu-admin"> Crear como admin</label>')+
       '<button class="btn primary" data-act="us-create" style="margin-left:auto">＋ Añadir trabajador</button></div>';
     body+='</div>';
     host.innerHTML='<div class="scrim" data-role="scrim"><div class="modal" role="dialog" aria-modal="true" style="width:min(600px,100%)">'+
@@ -3220,7 +3250,7 @@ body::before{
   async function createUser(){
     var name=(document.getElementById('nu-name').value||'').trim();
     var pwd=(document.getElementById('nu-pwd').value||'');
-    var asAdmin=document.getElementById('nu-admin').checked;
+    var asAdmin=document.getElementById('nu-admin').checked && !isScopedAdmin();
     if(name.length<2){ showToast('Nombre muy corto',false); return; }
     if(pwd.length<4){ showToast('La contraseña debe tener 4+ caracteres',false); return; }
     if(findUser(name)){ showToast('Ya existe un usuario con ese nombre',false); return; }
@@ -3242,13 +3272,13 @@ body::before{
   /* ---------- gestionar secciones de un trabajador ---------- */
   function openSeccionesUsuario(uid){
     var u=state.usuarios.find(function(x){return x.id===uid;}); if(!u) return;
-    if(u.role==='admin'){ showToast('Los admins ven todas las secciones', false); return; }
-    if(!Array.isArray(u.secciones)) u.secciones = ['maquillaje'];
+    if(!isSuper()) return;
+    if(!Array.isArray(u.secciones)) u.secciones = u.role==='admin' ? [] : ['maquillaje'];
     var secs = state.secciones||[];
     host.innerHTML='<div class="scrim" data-role="scrim"><div class="modal" role="dialog" aria-modal="true" style="width:min(460px,100%)">'+
       '<div class="modal-hd"><h2>Secciones de '+esc(u.nombre)+'</h2><button class="mini" data-role="close">×</button></div>'+
       '<div class="modal-bd">'+
-        '<p class="hint">Marca en qué secciones puede trabajar. Solo verá y podrá crear pedidos de las secciones marcadas.</p>'+
+        (u.role==='admin'?'<p class="hint">Marca las secciones que puede administrar. Solo verá la información de esas secciones. Si dejas todas sin marcar no se puede: usa "Dar acceso total" para que vea todo.</p>':'<p class="hint">Marca en qué secciones puede trabajar. Solo verá y podrá crear pedidos de las secciones marcadas.</p>')+
         '<div style="display:flex;flex-direction:column;gap:8px;margin-top:10px">'+
         secs.map(function(s){
           var checked = u.secciones.indexOf(s.id)>=0;
@@ -3267,7 +3297,7 @@ body::before{
       host.querySelectorAll('.secchk input[type="checkbox"]').forEach(function(inp){
         if(inp.checked) nuevas.push(inp.getAttribute('data-sid'));
       });
-      if(!nuevas.length){ showToast('El trabajador debe estar en al menos una sección', false); return; }
+      if(!nuevas.length){ showToast(u.role==='admin'?'Un admin de sección necesita al menos una sección':'El trabajador debe estar en al menos una sección', false); return; }
       u.secciones = nuevas;
       closeModal(); scheduleSave(); openUsers();
       showToast('Secciones actualizadas', false);
@@ -3277,6 +3307,7 @@ body::before{
   /* ---------- ver datos completos de un usuario ---------- */
   function viewUser(uid){
     var u=state.usuarios.find(function(x){return x.id===uid;}); if(!u) return;
+    if(!puedeGestionar(u)) return;
     function line(icon, k, v){
       return '<div style="display:flex;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)"><span style="width:22px">'+icon+'</span><b style="width:110px;color:var(--muted);font-size:12.5px;text-transform:uppercase;letter-spacing:.03em">'+esc(k)+'</b><span style="flex:1;color:var(--ink);font-weight:500">'+(v?esc(v):'<span style="color:var(--faint);font-style:italic">— sin dato —</span>')+'</span></div>';
     }
@@ -3300,6 +3331,7 @@ body::before{
   }
   function editUserData(uid){
     var u=state.usuarios.find(function(x){return x.id===uid;}); if(!u) return;
+    if(!puedeGestionar(u)) return;
     host.innerHTML='<div class="scrim" data-role="scrim"><div class="modal" role="dialog" aria-modal="true" style="width:min(540px,100%)">'+
       '<div class="modal-hd"><h2>Editar datos de '+esc(u.nombre)+'</h2><button class="mini" data-role="close">×</button></div>'+
       '<div class="modal-bd">'+
@@ -3450,6 +3482,7 @@ body::before{
   }
   async function changeUserPwd(uid){
     var u=state.usuarios.find(function(x){return x.id===uid;}); if(!u) return;
+    if(!puedeGestionar(u)) return;
     var np=prompt('Nueva contraseña para "'+u.nombre+'" (mínimo 4 caracteres):', '');
     if(np==null) return;
     np=String(np);
@@ -4461,7 +4494,7 @@ body::before{
     var mesNombre=new Date().toLocaleDateString('es-CO',{month:'long',year:'numeric'});
     var peds=pedidosDeSeccion().filter(function(o){ return (o.fecha||'').slice(0,7)===mesKey; });
     var vendedores={};
-    state.usuarios.filter(function(u){return u.role!=='admin';}).forEach(function(u){
+    trabajadoresSoloDe(activeSection||'maquillaje').forEach(function(u){
       vendedores[u.id]={uid:u.id, nombre:u.nombre, ventas:0, total:0};
     });
     peds.forEach(function(o){
@@ -4545,18 +4578,19 @@ body::before{
       (!admin?item('xmark', '#ff9500', 'Salir de este grupo', 'leave-section'):'')+
       item('logout', '#ff3b30', 'Cerrar sesión', 'logout')
     );
+    var sup = isSuper();
     var adminSection = admin ? group('Administración',
-      item('people', '#34c759', 'Trabajadores', 'users', '<span class="sb-badge">'+state.usuarios.length+'</span>')+
+      item('people', '#34c759', 'Trabajadores', 'users', '<span class="sb-badge">'+(isScopedAdmin()?trabajadoresSoloDe(activeSection||'maquillaje').length:state.usuarios.length)+'</span>')+
       item('tag', '#ff2d55', 'Marcas', 'marcas-visibles')+
-      item('bell', '#ff3b30', 'Notificaciones', 'notifs', notifStatus)+
+      (sup?item('bell', '#ff3b30', 'Notificaciones', 'notifs', notifStatus):'')+
       (puedeEditarMeta()?item('target', '#5856d6', 'Meta mensual', 'edit-meta', '<span class="sb-badge">'+fmt(state.metaMensual||600000)+'</span>'):'')
     ) : '';
-    var datos = admin ? group('Datos',
+    var datos = sup ? group('Datos',
       item('docdown', '#34c759', 'Exportar a CSV', 'export')+
       item('drive', '#30b0c7', 'Descargar respaldo', 'backup')+
       item('folder', '#007aff', 'Restaurar respaldo', 'import')
     ) : '';
-    var conexion = admin ? group('Conexión',
+    var conexion = sup ? group('Conexión',
       item('link', '#8e8e93', 'Datos de conexión', 'config')+
       item('power', '#ff3b30', 'Desconectar dispositivo', 'disconnect', '', 'danger')
     ) : '';
@@ -4640,13 +4674,13 @@ body::before{
     if(a==='new') openProduct(null);
     else if(a==='bodegas') openBodegas();
     else if(a==='menu') openMenu();
-    else if(a==='export'){ closeModal(); exportCSV(); }
-    else if(a==='backup'){ closeModal(); backup(); }
-    else if(a==='import') doImport();
-    else if(a==='config'){ closeModal(); renderSetup(cfg||{}); }
+    else if(a==='export'){ if(!isSuper()) return; closeModal(); exportCSV(); }
+    else if(a==='backup'){ if(!isSuper()) return; closeModal(); backup(); }
+    else if(a==='import'){ if(!isSuper()) return; doImport(); }
+    else if(a==='config'){ if(!isSuper()) return; closeModal(); renderSetup(cfg||{}); }
     else if(a==='ranking'){ closeModal(); openRanking(); }
-    else if(a==='disconnect'){ if(confirm('Se borrará la conexión de ESTE dispositivo (tus datos en la nube quedan intactos). ¿Continuar?')){ try{localStorage.removeItem(CFG_KEY);}catch(x){} cfg=null; stopPolling(); render(); } }
-    else if(a==='toggle-moneda'){ state.moneda=state.moneda==='USD'?'COP':'USD'; render(); scheduleSave(); }
+    else if(a==='disconnect'){ if(!isSuper()) return; if(confirm('Se borrará la conexión de ESTE dispositivo (tus datos en la nube quedan intactos). ¿Continuar?')){ try{localStorage.removeItem(CFG_KEY);}catch(x){} cfg=null; stopPolling(); render(); } }
+    else if(a==='toggle-moneda'){ if(!isSuper()) return; state.moneda=state.moneda==='USD'?'COP':'USD'; render(); scheduleSave(); }
     else if(a==='toggle-theme') toggleTheme();
     else if(a==='edit'||a==='del'||a==='add-cart'){
       var pcont=e.target.closest('.prow, .card, .pcard'); if(!pcont) return;
@@ -4869,16 +4903,16 @@ body::before{
       showToast('Saliste del grupo',false);
     }
     else if(a==='new-section'){
-      if(!isAdmin()){ showToast('Solo el admin puede crear secciones', false); return; }
+      if(!isSuper()){ showToast('Solo el admin principal puede crear secciones', false); return; }
       openSeccion(null);
     }
     else if(a==='edit-section'){
-      if(!isAdmin()) return;
+      if(!isSuper()) return;
       e.stopPropagation();
       var sid=act.getAttribute('data-sid'); if(sid) openSeccion(sid);
     }
     else if(a==='del-section'){
-      if(!isAdmin()) return;
+      if(!isSuper()) return;
       e.stopPropagation();
       var sid2=act.getAttribute('data-sid');
       var sec=(state.secciones||[]).find(function(x){return x.id===sid2;}); if(!sec) return;
@@ -4982,22 +5016,30 @@ body::before{
       showToast('Meta actualizada a '+fmt(n),false);
     }
     else if(a==='us-view'){ var ur=e.target.closest('.user-row'); if(!ur) return; viewUser(ur.getAttribute('data-uid')); }
-    else if(a==='us-secs'){ var ur2=e.target.closest('.user-row'); if(!ur2) return; openSeccionesUsuario(ur2.getAttribute('data-uid')); }
+    else if(a==='us-secs'){ if(isScopedAdmin()) return; var ur2=e.target.closest('.user-row'); if(!ur2) return; openSeccionesUsuario(ur2.getAttribute('data-uid')); }
     else if(a==='us-edit'){ var uid1=act.getAttribute('data-uid'); if(uid1) editUserData(uid1); }
     else if(a==='us-savedata'){ var uid2=act.getAttribute('data-uid'); if(uid2) saveUserData(uid2); }
-    else if(a==='us-del'||a==='us-mkadmin'||a==='us-mkuser'||a==='us-pwd'){
+    else if(a==='us-del'||a==='us-mkadmin'||a==='us-mkscoped'||a==='us-rmsec'||a==='us-mkuser'||a==='us-pwd'){
       var ur=e.target.closest('.user-row'); if(!ur) return;
       var uid=ur.getAttribute('data-uid'); var u=state.usuarios.find(function(x){return x.id===uid;}); if(!u) return;
+      if(!puedeGestionar(u)) { showToast('No tienes permiso sobre este usuario',false); return; }
+      if((a==='us-del'||a==='us-mkadmin'||a==='us-mkscoped'||a==='us-mkuser') && !isSuper()) return;
       if(a==='us-del'){
         var mine=state.pedidos.filter(function(o){return o.usuarioId===u.id;}).length;
         if(!confirm('¿Eliminar a "'+u.nombre+'"? '+(mine?'Tiene '+mine+' pedido(s) que se conservarán con su nombre pero perderán al usuario.':''))) return;
         state.usuarios=state.usuarios.filter(function(x){return x.id!==u.id;});
         delete state.carritos[u.id];
         openUsers(); scheduleSave();
-      }else if(a==='us-mkadmin'){ u.role='admin'; openUsers(); scheduleSave(); }
+      }else if(a==='us-mkadmin'){ u.role='admin'; u.secciones=[]; openUsers(); scheduleSave(); }
+      else if(a==='us-mkscoped'){ u.role='admin'; u.secciones=[activeSection||'maquillaje']; openUsers(); scheduleSave(); showToast('Ahora es admin solo de esta sección',false); }
+      else if(a==='us-rmsec'){
+        var sq=activeSection||'maquillaje';
+        if(!confirm('¿Quitar a "'+u.nombre+'" de este grupo? Sus pedidos anteriores se conservan.')) return;
+        u.secciones=(u.secciones||[]).filter(function(x){return x!==sq;}); openUsers(); scheduleSave();
+      }
       else if(a==='us-mkuser'){
-        if(state.usuarios.filter(function(x){return x.role==='admin';}).length<=1){ showToast('Debe quedar al menos un admin',false); return; }
-        u.role='trabajador'; openUsers(); scheduleSave();
+        if(state.usuarios.filter(function(x){return x.role==='admin' && !(Array.isArray(x.secciones)&&x.secciones.length);}).length<=1 && !(Array.isArray(u.secciones)&&u.secciones.length)){ showToast('Debe quedar al menos un admin principal',false); return; }
+        u.role='trabajador'; if(!Array.isArray(u.secciones)||!u.secciones.length) u.secciones=[activeSection||'maquillaje']; openUsers(); scheduleSave();
       }
       else if(a==='us-pwd'){ changeUserPwd(u.id); }
     }
@@ -5166,7 +5208,7 @@ body::before{
 
   /* ---------- panel de notificaciones (admin) ---------- */
   function openNotifs(){
-    if(!isAdmin()){ showToast('Solo el admin puede configurar esto', false); return; }
+    if(!isSuper()){ showToast('Solo el admin principal puede configurar esto', false); return; }
     var ne=state.notifEmail||{enabled:true, accessKey:'', keys:[], fromName:'VELORA'};
     var keys=(ne.keys||[]).filter(function(k){return k && k.key;});
     var keysHtml = keys.length
@@ -5988,8 +6030,8 @@ body::before{
     // Selector de usuario (solo admin) — solo si hay más de un usuario o filtro activo
     if(admin && state.usuarios.length>1){
       var opts='<option value="__all__">Todos los usuarios</option>'+
-        state.usuarios.slice().sort(function(a,b){return (a.nombre||"").localeCompare(b.nombre||"","es");}).map(function(u){
-          var n=state.pedidos.filter(function(o){return o.usuarioId===u.id;}).length;
+        state.usuarios.filter(function(u){ return secPeds.some(function(o){return o.usuarioId===u.id;}) || trabajadoresSoloDe(activeSection||'maquillaje').some(function(t){return t.id===u.id;}); }).slice().sort(function(a,b){return (a.nombre||"").localeCompare(b.nombre||"","es");}).map(function(u){
+          var n=secPeds.filter(function(o){return o.usuarioId===u.id;}).length;
           return '<option value="'+esc(u.id)+'"'+(histFilter===u.id?' selected':'')+'>'+esc(u.nombre)+' ('+n+')</option>';
         }).join('');
       head+='<div class="tabsrow" style="margin-bottom:0">'+
