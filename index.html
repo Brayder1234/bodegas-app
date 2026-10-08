@@ -2409,6 +2409,11 @@ body::before{
     if(o.gananciaEmpresa!=null) return o.gananciaEmpresa;
     return (o.mayoristaTotal||0) - (o.costoTotal||0);
   }
+  // ¿Se muestra la vista de empresa (mayorista − costo) o la de vendedor (venta − mayorista)?
+  // Admin principal: siempre empresa. Quien hizo la venta (trabajador o admin de sección): su propia ganancia.
+  function vistaAdminDe(o){ return isAdmin() && !(session && o.usuarioId && o.usuarioId===session.usuarioId && !isSuper()); }
+  function vendedorDe(o){ return o && o.usuarioId ? (state.usuarios||[]).find(function(x){ return x.id===o.usuarioId; }) || null : null; }
+  function hayGananciaVendedor(o){ var u=vendedorDe(o); return !!u && (u.role==='trabajador' || (o.origen==='web' && !!o.codigoVendedor)); }
   function gananciaAdminAll(list){ return list.reduce(function(a,o){return a+gananciaAdminDe(o);},0); }
   // Solo cuentan las ventas con pago confirmado
   function gananciaAdminConfirmada(list){
@@ -6185,7 +6190,7 @@ body::before{
     var mesList=list.filter(function(o){return (o.fecha||'').slice(0,7)===mes;});
     function sumV(a){return a.reduce(function(x,o){return x+(o.ventaTotal||0);},0);}
     function sumG(a){return a.reduce(function(x,o){
-      if(admin) return x + gananciaAdminDe(o);
+      if(vistaAdminDe(o)) return x + gananciaAdminDe(o);
       var mT=o.mayoristaTotal||0;
       var g=(o.gananciaTrabajador!=null)?o.gananciaTrabajador:((o.ventaTotal||0)-mT);
       return x+g;
@@ -6217,7 +6222,7 @@ body::before{
         ensureEstado(o);
         var mayoT=o.mayoristaTotal||0;
         var gTrab=(o.gananciaTrabajador!=null)?o.gananciaTrabajador:((o.ventaTotal||0)-mayoT);
-        var gShown = admin ? gananciaAdminDe(o) : gTrab;
+        var gShown = vistaAdminDe(o) ? gananciaAdminDe(o) : gTrab;
         var mg=o.ventaTotal?Math.round(gShown/o.ventaTotal*100):0;
         var fec=new Date(o.fecha||Date.now());
         var fs=fec.toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric'})+' '+fec.toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'});
@@ -6260,14 +6265,15 @@ body::before{
   function historyDetail(oid){
     var o=state.pedidos.find(function(x){return x.id===oid;}); if(!o) return;
     var admin=isAdmin();
+    var vAdm=vistaAdminDe(o);   // vista de empresa (mayorista − costo) o de vendedor (venta − mayorista)
     var mayoT = o.mayoristaTotal || 0;
     var gTrab = (o.gananciaTrabajador!=null) ? o.gananciaTrabajador : ((o.ventaTotal||0) - mayoT);
     var lines=o.items.map(function(it){
       var mayo=(it.mayorista!=null)?it.mayorista:it.precio;
       var extras=[]; if(it.variacionNombre) extras.push(it.variacionNombre+(it.tipoVariacion||'')); if(it.variacionColorNombre) extras.push((it.tipoVariacionColor?it.tipoVariacionColor+': ':'')+it.variacionColorNombre);
       var vext = extras.length ? ' <small style="color:var(--muted);font-weight:400">('+esc(extras.join(', '))+')</small>' : '';
-      if(admin){
-        return '<tr><td>'+esc(it.nombre)+vext+'</td><td class="r num">'+it.cantidad+'</td><td class="r num">'+fmt(it.costo)+'</td><td class="r num">'+fmt(mayo)+'</td><td class="r num">'+fmt(it.precio)+'</td><td class="r num">'+fmt((it.precio-it.costo)*it.cantidad)+'</td></tr>';
+      if(vAdm){
+        return '<tr><td>'+esc(it.nombre)+vext+'</td><td class="r num">'+it.cantidad+'</td><td class="r num">'+fmt(it.costo)+'</td><td class="r num">'+fmt(mayo)+'</td><td class="r num">'+fmt(it.precio)+'</td><td class="r num">'+fmt((mayo-it.costo)*it.cantidad)+'</td></tr>';
       }
       return '<tr><td>'+esc(it.nombre)+vext+'</td><td class="r num">'+it.cantidad+'</td><td class="r num">'+fmt(mayo)+'</td><td class="r num">'+fmt(it.precio)+'</td><td class="r num">'+fmt((it.precio-mayo)*it.cantidad)+'</td></tr>';
     }).join('');
@@ -6298,7 +6304,7 @@ body::before{
       '</div>';
     var mgT=o.ventaTotal?Math.round((o.gananciaTotal||o.ganancia||0)/o.ventaTotal*100):0;
     var mgTr=o.ventaTotal?Math.round(gTrab/o.ventaTotal*100):0;
-    var head=admin?'<th>Producto</th><th class="r">Cant.</th><th class="r">Costo</th><th class="r">Mayor.</th><th class="r">Cliente</th><th class="r">Ganancia</th>'
+    var head=vAdm?'<th>Producto</th><th class="r">Cant.</th><th class="r">Costo</th><th class="r">Mayor.</th><th class="r">Cliente</th><th class="r">Mi ganancia</th>'
                  :'<th>Producto</th><th class="r">Cant.</th><th class="r">Mi costo</th><th class="r">Al cliente</th><th class="r">Mi ganancia</th>';
     host.innerHTML='<div class="scrim" data-role="scrim"><div class="modal" role="dialog" aria-modal="true" data-oid="'+esc(o.id)+'" style="width:min(700px,100%)">'+
       '<div class="modal-hd"><h2>'+tPed('SG')+'</h2><button class="mini" data-role="close">×</button></div>'+
@@ -6308,17 +6314,19 @@ body::before{
           '<div class="hint">'+fec.toLocaleString('es-CO')+'</div></div>'+
         envioBlock+
         timeline+
-        '<div style="overflow-x:auto"><table class="btable" style="min-width:'+(admin?560:420)+'px"><thead><tr>'+head+'</tr></thead><tbody>'+lines+'</tbody></table></div>'+
+        '<div style="overflow-x:auto"><table class="btable" style="min-width:'+(vAdm?560:420)+'px"><thead><tr>'+head+'</tr></thead><tbody>'+lines+'</tbody></table></div>'+
         '<div class="side-tot" style="border-radius:10px">'+
-          (admin
+          (vAdm
             ? (function(){
                 var gAdm=gananciaAdminDe(o);
                 var mgAdm=o.ventaTotal?Math.round(gAdm/o.ventaTotal*100):0;
-                var hechoTrab = o.usuarioNombre && (function(){var u=state.usuarios.find(function(x){return x.id===o.usuarioId;}); return u && u.role==='trabajador';})();
+                var hechoTrab = hayGananciaVendedor(o);
+                var sinVend = (o.origen==='web' && !o.usuarioId);
                 return '<div class="r"><span>Costo (bodegas)</span><b class="num">'+fmt(o.costoTotal)+'</b></div>'+
                   '<div class="r"><span>Mayorista</span><b class="num">'+fmt(mayoT)+'</b></div>'+
                   '<div class="r"><span>Al cliente</span><b class="num">'+fmt(o.ventaTotal)+'</b></div>'+
-                  (hechoTrab?'<div class="r" style="color:var(--muted);font-size:12.5px"><span>↳ Ganancia trabajador</span><b class="num">'+fmt(gTrab)+'</b></div>':'')+
+                  (hechoTrab?'<div class="r" style="color:var(--muted);font-size:12.5px"><span>↳ Ganancia de '+esc(o.usuarioNombre||'vendedor')+' (venta − mayorista)</span><b class="num">'+fmt(gTrab)+'</b></div>':'')+
+                  (sinVend?'<div class="r" style="color:var(--muted);font-size:12.5px"><span>🌐 Venta sin vendedor: toda la ganancia es '+(isSuper()?'tuya':'de la empresa')+' (cliente − costo)</span><b class="num"></b></div>':'')+
                   '<div class="r gain"><span>Mi ganancia</span><span class="val '+mgClass(mgAdm)+'">'+fmt(gAdm)+' ('+pct(mgAdm)+')</span></div>';
               })()
             : '<div class="r"><span>Mi costo (mayorista)</span><b class="num">'+fmt(mayoT)+'</b></div>'+
