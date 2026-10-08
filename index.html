@@ -598,6 +598,10 @@ select.sort{padding:10px 12px; border-radius:10px; border:1px solid var(--border
 .vid-preview{width:100%; max-height:180px; border-radius:10px; border:1px solid var(--border); background:#000; margin-top:6px}
 .vid-dropzone{display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; padding:20px 12px; border:2px dashed var(--border); border-radius:12px; background:var(--surface-2); cursor:pointer; transition:all .18s ease; text-align:center; margin-top:6px}
 .vid-dropzone:hover{border-color:var(--accent); background:var(--accent-soft)}
+.gal-row{display:flex; flex-wrap:wrap; gap:8px; margin-top:6px}
+.gal-th{position:relative; width:68px; height:68px; border-radius:10px; overflow:hidden; background:var(--surface-2)}
+.gal-th img{width:100%; height:100%; object-fit:cover; display:block}
+.gal-th button{position:absolute; top:3px; right:3px; width:20px; height:20px; border-radius:50%; border:0; background:rgba(0,0,0,.6); color:#fff; font-size:13px; line-height:1; cursor:pointer}
 .vid-dropzone.drag-over{border-color:var(--accent); border-style:solid; background:var(--accent-soft); transform:scale(1.01)}
 .vid-dropzone .vid-dz-ico{font-size:32px; opacity:.55}
 .vid-dropzone .vid-dz-hd{font-weight:700; color:var(--ink); font-size:14px}
@@ -1801,6 +1805,8 @@ body::before{
     url:'https://velora-data.sarmientobrayder10.workers.dev',
     key:'velora-2024-kv-secreto-x9m4p7'
   };
+  // API de las tiendas web (catálogo público + bandeja de pedidos). Worker aparte: velora-tienda
+  var TIENDA_URL='https://velora-tienda.sarmientobrayder10.workers.dev';
   var state={moneda:'COP', bodegas:[], bodegaTels:{}, productos:[], pedido:{items:[],cliente:{nombre:'',tel:''}}, pedidos:[], usuarios:[], carritos:{}, notifEmail:{enabled:true, accessKey:'', destinatario:'', extras:[]}, metaMensual:600000, secciones:[], marcas:[], premioVendedor:0};
   var session=null; // {usuarioId, usuarioNombre, role}
   var cfg=null;              // {url,key}
@@ -2257,6 +2263,8 @@ body::before{
       }
       await sbSave();
       dirty=false; setConn('ok');
+      if(pendingAck.length) ackInbox(pendingAck.slice());
+      refrescarTienda();
       showToast('Guardado y sincronizado', false);
     }catch(e){
       setConn('err');
@@ -3496,6 +3504,7 @@ body::before{
   function startPolling(){
     stopPolling();
     pollTimer=setInterval(function(){ if(document.visibilityState==='visible') syncPull(); }, 25000);
+    setTimeout(pullInbox, 1500);
     document.addEventListener('visibilitychange', onVis);
     window.addEventListener('focus', syncPull);
   }
@@ -3504,8 +3513,77 @@ body::before{
   async function syncPull(){
     if(!cfg||dirty) return;
     try{ var changed=await pullFromServer(true); if(changed){ render(); startPollingRefresh(); } }catch(e){}
+    pullInbox();
   }
   function startPollingRefresh(){ /* re-render ya hecho */ }
+
+  /* ---------- pedidos que llegan desde las tiendas web ---------- */
+  // Avisa a las tiendas web que hubo cambios (productos, precios, inventario) para que se actualicen al instante
+  var lastRefreshTienda=0;
+  function refrescarTienda(){
+    var now=Date.now(); if(now-lastRefreshTienda<15000) return; lastRefreshTienda=now;
+    try{ fetch(TIENDA_URL+'/refresh',{method:'POST',headers:cfHeaders()}).catch(function(){}); }catch(e){}
+  }
+  var inboxBusy=false, pendingAck=[];
+  async function ackInbox(ids){
+    if(!ids || !ids.length) return;
+    try{
+      var r=await fetch(TIENDA_URL+'/inbox/ack',{method:'POST',headers:cfHeaders(),body:JSON.stringify({ids:ids})});
+      if(r.ok) pendingAck=pendingAck.filter(function(x){ return ids.indexOf(x)<0; });
+    }catch(e){}
+  }
+  // Convierte el pedido de la web en un pedido normal de la plataforma (mismo formato que saveCart)
+  function pedidoDesdeWeb(w){
+    var costo=0, venta=0, units=0;
+    var items=(w.items||[]).map(function(it){
+      var p=state.productos.find(function(x){return x.id===it.productId;})||{};
+      var vari=variacionDe(p, it.variacionId);
+      var b=best(p)||{};
+      var vc=costoVariacion(vari);
+      var c=(vc!=null)?vc:(b.costo||0);
+      var cant=parseInt(it.cantidad,10)||1, precio=+it.precio||0;
+      costo+=c*cant; venta+=precio*cant; units+=cant;
+      return {
+        productId:it.productId, nombre:it.nombre||p.nombre||'(producto borrado)', bodega:b.bodega||'',
+        costo:c, mayorista:precio, precio:precio, precioSugerido:precio, cantidad:cant,
+        variacionId:it.variacionId||'', variacionNombre:it.variacionNombre||'', tipoVariacion: it.variacionId?(it.tipoVariacion||''):'',
+        variacionColorId:it.variacionColorId||'', variacionColorNombre:it.variacionColorNombre||'', tipoVariacionColor: it.variacionColorId?(it.tipoVariacionColor||''):''
+      };
+    });
+    var now=w.fecha||new Date().toISOString(), c=w.cliente||{};
+    return {
+      id:w.id, fecha:now, seccion:w.seccion||'calzado', origen:'web',
+      cliente:{nombre:c.nombre||'', tel:c.tel||'', direccion:c.direccion||'', ciudad:c.ciudad||'', notas:c.notas||''},
+      items:items,
+      // pedido de la tienda: no hay trabajador, toda la ganancia es de la empresa
+      costoTotal:costo, mayoristaTotal:venta, ventaTotal:venta,
+      gananciaEmpresa:venta-costo, gananciaTrabajador:0, gananciaTotal:venta-costo, ganancia:venta-costo,
+      unidades:units, usuarioId:'', usuarioNombre:'Tienda web',
+      estado:{ realizado:{at:now, by:'Tienda web'}, envio:null, venta:null }
+    };
+  }
+  async function pullInbox(){
+    if(!cfg || !session || dirty || inboxBusy) return;
+    inboxBusy=true;
+    try{
+      var r=await fetch(TIENDA_URL+'/inbox',{headers:cfHeaders()});
+      if(!r.ok) return;
+      var j=await r.json(); var list=(j&&j.orders)||[];
+      if(!list.length) return;
+      var nuevos=[], ids=[];
+      list.forEach(function(w){
+        ids.push(w.id);
+        if(state.pedidos.some(function(o){ return o.id===w.id; })) return;   // ya estaba (no duplicar ni descontar dos veces)
+        var o=pedidoDesdeWeb(w); state.pedidos.unshift(o); ajustarStockPorPedido(o,-1); nuevos.push(o);
+      });
+      pendingAck=pendingAck.concat(ids);
+      if(nuevos.length){
+        render(); scheduleSave();   // se confirma (ack) cuando el guardado termina bien
+        showToast('🛒 '+nuevos.length+' pedido'+(nuevos.length===1?'':'s')+' nuevo'+(nuevos.length===1?'':'s')+' de la tienda web', false);
+        nuevos.forEach(function(o){ enviarEmailPedido(o).catch(function(){}); });
+      } else { await ackInbox(ids); }
+    }catch(e){} finally{ inboxBusy=false; }
+  }
 
   /* ---------- toast ---------- */
   var toastEl=document.getElementById('toast'), toastT;
@@ -3904,6 +3982,7 @@ body::before{
     if(!Array.isArray(p.variacionesColor)) p.variacionesColor=[];
     if(!p.tipoVariacionColor) p.tipoVariacionColor='';
     if(!Array.isArray(p.videos)) p.videos=[];
+    if(!Array.isArray(p.galeria)) p.galeria=[];
     var imgPreview = p.imagen ? '<img src="'+esc(p.imagen)+'" alt="" style="width:100%;max-height:200px;object-fit:contain;border-radius:10px;border:1px solid var(--border);background:#fff">' : '<div class="img-placeholder">Sin imagen</div>';
     host.innerHTML='<div class="scrim" data-role="scrim"><div class="modal" role="dialog" aria-modal="true">'+
       '<div class="modal-hd"><h2>'+(isNew?'Nuevo producto':'Editar producto')+'</h2><button class="mini" data-role="close" aria-label="Cerrar">×</button></div>'+
@@ -4014,6 +4093,17 @@ body::before{
           '<div class="vid-dz-hd">Arrastra un video aquí</div>'+
           '<div class="vid-dz-sb">o toca para elegir · máx 8MB c/u</div>'+
         '</label>'+
+        '<div class="sub" style="margin-top:14px">🌐 Tienda web <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--faint)">(lo que ven tus clientes en la página)</span></div>'+
+        '<label style="display:flex;align-items:center;gap:8px;margin:8px 0;font-size:14px;cursor:pointer"><input type="checkbox" data-role="webvis"'+(p.webVisible===false?'':' checked')+'> Mostrar este producto en la tienda web</label>'+
+        '<div class="f2"><div class="field"><label>Color o versión</label><input type="text" data-f="webColor" value="'+esc(p.webColor||'')+'" placeholder="Ej: Triple White"></div>'+
+          '<div class="field"><label>Etiqueta (opcional)</label><select data-f="webEtiqueta" class="bod-select">'+
+            ['','Más vendido','Nuevo','Tendencia','Premium','Edición especial','Colaboración','Oferta'].map(function(t){ return '<option value="'+esc(t)+'"'+((p.webEtiqueta||'')===t?' selected':'')+'>'+(t||'— Sin etiqueta —')+'</option>'; }).join('')+
+          '</select></div></div>'+
+        '<div class="field"><label>Descripción para la web</label><textarea data-f="webDesc" placeholder="Cuéntale al cliente por qué lo va a amar…">'+esc(p.webDesc||'')+'</textarea></div>'+
+        '<div class="field"><label>Fotos adicionales <span style="font-weight:400;color:var(--faint)">(la imagen de arriba es la principal · hasta 8 más)</span></label>'+
+          '<div class="gal-row" data-role="gal-rows">'+p.galeria.map(function(u,i){ return '<div class="gal-th"><img src="'+u+'" alt=""><button type="button" data-role="galrm" data-i="'+i+'" aria-label="Quitar">×</button></div>'; }).join('')+'</div>'+
+          '<label class="btn ghost" style="cursor:pointer;margin:8px 0 0;display:inline-flex"><input type="file" accept="image/*" multiple data-role="galfile" style="display:none">➕ Agregar fotos</label>'+
+        '</div>'+
         '<div class="field"><label>Notas (opcional)</label><textarea data-f="notas" placeholder="Proveedor, tiempos de entrega, observaciones…">'+esc(p.notas||'')+'</textarea></div>'+
       '</div>'+
       '<div class="modal-ft"><button class="btn ghost" data-role="close">Cancelar</button><button class="btn primary" data-role="save">'+(isNew?'Agregar producto':'Guardar cambios')+'</button></div>'+
@@ -4342,6 +4432,19 @@ body::before{
       }
     });
 
+    // Galería de fotos para la tienda web
+    var galEl=modal.querySelector('[data-role="gal-rows"]'), galFile=modal.querySelector('[data-role="galfile"]');
+    function galRender(){ galEl.innerHTML=p.galeria.map(function(u,i){ return '<div class="gal-th"><img src="'+u+'" alt=""><button type="button" data-role="galrm" data-i="'+i+'" aria-label="Quitar">×</button></div>'; }).join(''); }
+    galFile.addEventListener('change', async function(e){
+      var files=Array.prototype.slice.call(e.target.files||[]); e.target.value='';
+      for(var k=0;k<files.length;k++){
+        if(p.galeria.length>=8){ showToast('Máximo 8 fotos adicionales', false); break; }
+        try{ p.galeria.push(await fileToCompressedDataURL(files[k], 800, 0.72)); }catch(err){ showToast('No se pudo cargar una imagen', false); }
+      }
+      galRender();
+    });
+    galEl.addEventListener('click', function(e){ var b=e.target.closest('[data-role="galrm"]'); if(!b) return; p.galeria.splice(+b.getAttribute('data-i'),1); galRender(); });
+
     function doClose(){ closeModal(); }
     host.querySelectorAll('[data-role="close"]').forEach(function(b){ b.addEventListener('click',doClose); });
     host.querySelector('[data-role="scrim"]').addEventListener('mousedown',function(e){ if(e.target===e.currentTarget) doClose(); });
@@ -4400,6 +4503,8 @@ body::before{
       if(!p.variaciones.length) p.tipoVariacion = '';
       if(!p.nombre){ modal.querySelector('[data-f="nombre"]').focus(); return; }
       if(p.tipo==='combo' && !comps.length){ showToast('El combo necesita al menos un producto', false); return; }
+      var wv=modal.querySelector('[data-role="webvis"]'); p.webVisible = wv ? wv.checked : true;
+      p.webColor=g('webColor').trim(); p.webEtiqueta=g('webEtiqueta').trim(); p.webDesc=g('webDesc').trim();
       if(isNew) state.productos.push(p); else { var i=state.productos.findIndex(function(x){return x.id===p.id;}); if(i>=0) state.productos[i]=p; else state.productos.push(p); }
       closeModal(); render(); scheduleSave();
     });
