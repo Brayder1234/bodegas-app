@@ -3610,7 +3610,7 @@ body::before{
     });
     var now=w.fecha||new Date().toISOString(), c=w.cliente||{};
     return {
-      id:w.id, fecha:now, seccion:w.seccion||'calzado', origen:'web',
+      id:w.id, fecha:now, seccion:w.seccion||'calzado', origen:'web', numeroWeb:w.numero||'',
       cliente:{nombre:c.nombre||'', tel:c.tel||'', direccion:c.direccion||'', ciudad:c.ciudad||'', notas:c.notas||''},
       items:items,
       // pedido de la tienda: si el cliente puso el código de un vendedor, la venta es suya; si no, todo es de la empresa
@@ -6222,7 +6222,7 @@ body::before{
         var fec=new Date(o.fecha||Date.now());
         var fs=fec.toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric'})+' '+fec.toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'});
         var who = o.usuarioNombre ? ' · <span style="color:var(--accent);font-weight:700">👤 '+esc(o.usuarioNombre)+'</span>' : '';
-        if(o.origen==='web') who += ' · <span class="hint">🌐 Tienda web'+(o.codigoVendedor?' · código '+esc(o.codigoVendedor):'')+'</span>';
+        if(o.origen==='web') who += ' · <span class="hint">🌐 Tienda web'+(o.numeroWeb?' #'+esc(o.numeroWeb):'')+(o.codigoVendedor?' · código '+esc(o.codigoVendedor):'')+'</span>';
         var ciudad = (o.cliente&&o.cliente.ciudad)?' · '+esc(o.cliente.ciudad):'';
         var gLabel = admin?'Ganancia':'Mi ganancia';
         // Chips de estado (3 etapas)
@@ -6304,7 +6304,7 @@ body::before{
       '<div class="modal-hd"><h2>'+tPed('SG')+'</h2><button class="mini" data-role="close">×</button></div>'+
       '<div class="modal-bd">'+
         '<div><b>'+esc(cli.nombre||'(sin cliente)')+'</b>'+
-          (o.usuarioNombre?' <span class="hint">· realizado por 👤 '+esc(o.usuarioNombre)+'</span>':'')+(o.origen==='web'?' <span class="hint">· 🌐 Tienda web'+(o.codigoVendedor?' · código '+esc(o.codigoVendedor):'')+'</span>':'')+
+          (o.usuarioNombre?' <span class="hint">· realizado por 👤 '+esc(o.usuarioNombre)+'</span>':'')+(o.origen==='web'?' <span class="hint">· 🌐 Tienda web'+(o.numeroWeb?' #'+esc(o.numeroWeb):'')+(o.codigoVendedor?' · código '+esc(o.codigoVendedor):'')+'</span>':'')+
           '<div class="hint">'+fec.toLocaleString('es-CO')+'</div></div>'+
         envioBlock+
         timeline+
