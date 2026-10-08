@@ -2029,6 +2029,7 @@ body::before{
       carritos:(d.carritos&&typeof d.carritos==='object')?d.carritos:{},
       metaMensual: (typeof d.metaMensual==='number' && d.metaMensual>0) ? d.metaMensual : 600000,
       metaPersonal: (typeof d.metaPersonal==='number' && d.metaPersonal>0) ? d.metaPersonal : 0,   // 0 = usar la meta mensual de siempre
+      metasSeccion: (d.metasSeccion && typeof d.metasSeccion==='object') ? d.metasSeccion : {},       // { calzado:{equipo,personal}, maquillaje:{...} }
       marcasOcultas: Array.isArray(d.marcasOcultas) ? d.marcasOcultas : [],
       marcas: (function(){
         var arr = Array.isArray(d.marcas) ? d.marcas : null;
@@ -2354,20 +2355,30 @@ body::before{
   function puedeEditarMeta(){
     return isSuper() && normNombre(session.usuarioNombre)==='brayder01';
   }
-  // Meta personal de una persona: la suya propia (si el admin se la fijó) o la meta personal general
-  function metaPersonalDe(u){
-    var own = u && parseFloat(u.meta);
+  // Las metas son POR SECCIÓN (zapatos no tiene la misma meta que maquillaje).
+  function metaSecObj(sec){ sec=sec||activeSection||'maquillaje'; var m=state.metasSeccion||{}; return m[sec]||{}; }
+  function metaEquipoSec(sec){
+    var v=parseFloat(metaSecObj(sec).equipo);
+    if(v>0) return v;
+    return (typeof state.metaMensual==='number' && state.metaMensual>0) ? state.metaMensual : 600000;
+  }
+  // Meta personal de una persona en una sección: la suya propia (si el dueño se la fijó) o la personal general de esa sección
+  function metaPersonalDe(u, sec){
+    sec=sec||activeSection||'maquillaje';
+    var own = u && u.metas && parseFloat(u.metas[sec]);
     if(own>0) return own;
+    var g=parseFloat(metaSecObj(sec).personal);
+    if(g>0) return g;
     if(typeof state.metaPersonal==='number' && state.metaPersonal>0) return state.metaPersonal;
     return (typeof state.metaMensual==='number' && state.metaMensual>0) ? state.metaMensual : 600000;
   }
+  function nombreSec(sec){ sec=sec||activeSection||'maquillaje'; return ((state.secciones||[]).find(function(x){return x.id===sec;})||{}).nombre || sec; }
   // La meta del EQUIPO (montos de todas las ventas) solo la ve el admin principal.
   // Todos los demás ven únicamente su meta personal con sus propias ventas.
   function metaWidgetHTML(){
     if(!session) return '';
     var equipo = puedeEditarMeta();
-    var meta = equipo ? ((typeof state.metaMensual==='number' && state.metaMensual>0) ? state.metaMensual : 600000)
-                      : metaPersonalDe(userById(session.usuarioId));
+    var meta = equipo ? metaEquipoSec() : metaPersonalDe(userById(session.usuarioId));
     var mesKey = new Date().toISOString().slice(0,7);
     var mesPed = pedidosDeSeccion().filter(function(o){
       if((o.fecha||'').slice(0,7)!==mesKey) return false;
@@ -2380,11 +2391,12 @@ body::before{
     var barW = Math.min(100, pct);
     var barCls = pct>=100 ? 'done' : (pct>=60 ? '' : 'warn');
     var mesNombre = new Date().toLocaleDateString('es-CO',{month:'long',year:'numeric'});
-    var editBtn = equipo ? '<button class="edit" data-act="edit-meta">Editar meta</button>' : '';
+    var sinPropia = equipo ? !(parseFloat(metaSecObj().equipo)>0) : false;
+    var editBtn = equipo ? (sinPropia?'<span style="color:var(--warn);font-size:12px">sin meta propia en esta sección</span> ':'')+'<button class="edit" data-act="edit-meta">'+(sinPropia?'Fijar meta':'Editar meta')+'</button>' : '';
     var falta = Math.max(0, meta-ventasMes);
     return '<div class="meta-card">'+
       '<div class="meta-hd">'+
-        '<span class="ttl">🎯 '+(equipo?'Meta del equipo (solo tú la ves)':'Mi meta')+' · '+esc(mesNombre)+'</span>'+
+        '<span class="ttl">🎯 '+(equipo?'Meta del equipo · '+esc(nombreSec())+' (solo tú la ves)':'Mi meta · '+esc(nombreSec()))+' · '+esc(mesNombre)+'</span>'+
         '<span class="pct '+barCls+'">'+pct+'%</span>'+
       '</div>'+
       '<div class="meta-bar"><div class="fill '+barCls+'" style="width:'+barW+'%"></div></div>'+
@@ -3371,7 +3383,7 @@ body::before{
           '<div class="field"><label>Teléfono</label><input type="tel" inputmode="tel" id="ue-tel" value="'+esc(u.telefono||'')+'"></div></div>'+
         '<div class="field"><label>Correo</label><input type="email" id="ue-correo" value="'+esc(u.correo||'')+'"></div>'+
         '<div class="field"><label>Nequi / Cuenta bancaria</label><input type="text" id="ue-pago" value="'+esc(u.cuentaPago||'')+'"></div>'+
-        (puedeEditarMeta()?'<div class="field"><label>🎯 Meta mensual personal (opcional)</label><input type="number" inputmode="numeric" id="ue-meta" min="0" value="'+esc(u.meta>0?u.meta:'')+'" placeholder="'+esc(String(metaPersonalDe(null)))+'"><span class="help">Si la dejas vacía usa la meta personal general ('+fmt(metaPersonalDe(null))+'). Solo tú ves y cambias esto.</span></div>':'')+
+        (puedeEditarMeta()?'<div class="field"><label>🎯 Meta mensual personal en '+esc(nombreSec())+' (opcional)</label><input type="number" inputmode="numeric" id="ue-meta" min="0" value="'+esc((u.metas&&u.metas[activeSection||'maquillaje']>0)?u.metas[activeSection||'maquillaje']:'')+'" placeholder="'+esc(String(metaPersonalDe(null)))+'"><span class="help">Si la dejas vacía usa la meta personal general de '+esc(nombreSec())+' ('+fmt(metaPersonalDe(null))+'). Solo tú ves y cambias esto.</span></div>':'')+
         '<div class="field"><label>🏷 Código de vendedor</label>'+
           '<input type="text" id="ue-codigo" maxlength="12" autocapitalize="characters" style="text-transform:uppercase;font-weight:700;letter-spacing:.08em" value="'+esc(u.codigo||'')+'"'+(isAdmin()?'':' readonly')+'>'+
           '<span class="help">Tus clientes lo escriben al hacer el pedido en la tienda web y la venta queda a tu nombre.'+(isAdmin()?' Solo letras y números.':'')+'</span>'+
@@ -3414,7 +3426,7 @@ body::before{
     u.correo=(document.getElementById('ue-correo').value||'').trim();
     u.cuentaPago=(document.getElementById('ue-pago').value||'').trim();
     var mEl=document.getElementById('ue-meta');
-    if(mEl && puedeEditarMeta()){ var mv=parseFloat(mEl.value); if(mv>0) u.meta=Math.round(mv); else delete u.meta; }
+    if(mEl && puedeEditarMeta()){ var secU=activeSection||'maquillaje'; var mv=parseFloat(mEl.value); if(!u.metas||typeof u.metas!=='object') u.metas={}; if(mv>0) u.metas[secU]=Math.round(mv); else delete u.metas[secU]; }
     var cEl=document.getElementById('ue-codigo');
     if(cEl && isAdmin()){
       var nc=normCodigo(cEl.value);
@@ -4762,8 +4774,9 @@ body::before{
       item('people', '#34c759', 'Trabajadores', 'users', '<span class="sb-badge">'+(isScopedAdmin()?trabajadoresSoloDe(activeSection||'maquillaje').length:state.usuarios.length)+'</span>')+
       item('tag', '#ff2d55', 'Marcas', 'marcas-visibles')+
       (sup?item('bell', '#ff3b30', 'Notificaciones', 'notifs', notifStatus):'')+
-      (puedeEditarMeta()?item('target', '#5856d6', 'Meta del equipo', 'edit-meta', '<span class="sb-badge">'+fmt(state.metaMensual||600000)+'</span>'):'')+
-      (puedeEditarMeta()?item('target', '#af52de', 'Meta personal', 'edit-meta-personal', '<span class="sb-badge">'+fmt(metaPersonalDe(null))+'</span>'):'')
+      (puedeEditarMeta()?item('target', '#5856d6', 'Meta del equipo · '+nombreSec(), 'edit-meta', '<span class="sb-badge">'+fmt(metaEquipoSec())+'</span>'):'')+
+      (puedeEditarMeta()?item('target', '#af52de', 'Meta personal · '+nombreSec(), 'edit-meta-personal', '<span class="sb-badge">'+fmt(metaPersonalDe(null))+'</span>'):'')+
+      (puedeEditarMeta()?item('trophy', '#34c759', 'Panel del dueño', 'open-dueno'):'')
     ) : '';
     var datos = sup ? group('Datos',
       item('docdown', '#34c759', 'Exportar a CSV', 'export')+
@@ -5187,23 +5200,32 @@ body::before{
     else if(a==='edit-meta'){
       if(!puedeEditarMeta()){ showToast('Solo Brayder01 puede cambiar la meta',false); return; }
       closeModal();
-      var actual=state.metaMensual||600000;
-      var nueva=prompt('Meta mensual del EQUIPO (COP) — solo la ves tú:\n\nEjemplo: 5000000 = $5.000.000\n\nLa meta de cada persona se cambia en "Meta personal".', String(actual));
+      var secM=activeSection||'maquillaje';
+      var nueva=prompt('Meta mensual del EQUIPO en '+nombreSec(secM)+' (COP) — solo la ves tú:\n\nEjemplo: 5000000 = $5.000.000\n\nCada sección tiene su propia meta. La meta de cada persona se cambia en "Meta personal".', String(metaEquipoSec(secM)));
       if(nueva==null) return;
       var n=parseInt(String(nueva).replace(/[^0-9]/g,''),10);
       if(!n || n<10000){ showToast('Monto inválido (mínimo $10.000)',false); return; }
-      state.metaMensual=n; scheduleSave(); render();
-      showToast('Meta actualizada a '+fmt(n),false);
+      if(!state.metasSeccion) state.metasSeccion={};
+      state.metasSeccion[secM]=Object.assign({}, state.metasSeccion[secM]||{}, {equipo:n});
+      scheduleSave(); render();
+      showToast('Meta del equipo en '+nombreSec(secM)+': '+fmt(n),false);
+    }
+    else if(a==='open-dueno'){
+      if(!puedeEditarMeta()){ showToast('Solo Brayder01 puede abrir el panel del dueño',false); return; }
+      closeModal(); window.open(TIENDA_URL+'/dueno','_blank','noopener');
     }
     else if(a==='edit-meta-personal'){
       if(!puedeEditarMeta()){ showToast('Solo Brayder01 puede cambiar la meta',false); return; }
       closeModal();
-      var nuevaP=prompt('Meta mensual PERSONAL de cada vendedor (COP):\n\nEjemplo: 600000 = $600.000\n\nCada persona solo ve su propia meta y sus propias ventas. Si a alguien le quieres poner una meta distinta, hazlo en Trabajadores → Ver datos → Editar.', String(metaPersonalDe(null)));
+      var secP=activeSection||'maquillaje';
+      var nuevaP=prompt('Meta mensual PERSONAL de cada vendedor en '+nombreSec(secP)+' (COP):\n\nEjemplo: 600000 = $600.000\n\nCada persona solo ve su propia meta y sus propias ventas. Si a alguien le quieres poner una meta distinta, hazlo en Trabajadores → Ver datos → Editar.', String(metaPersonalDe(null,secP)));
       if(nuevaP==null) return;
       var np=parseInt(String(nuevaP).replace(/[^0-9]/g,''),10);
       if(!np || np<10000){ showToast('Monto inválido (mínimo $10.000)',false); return; }
-      state.metaPersonal=np; scheduleSave(); render();
-      showToast('Meta personal: '+fmt(np),false);
+      if(!state.metasSeccion) state.metasSeccion={};
+      state.metasSeccion[secP]=Object.assign({}, state.metasSeccion[secP]||{}, {personal:np});
+      scheduleSave(); render();
+      showToast('Meta personal en '+nombreSec(secP)+': '+fmt(np),false);
     }
     else if(a==='us-view'){ var ur=e.target.closest('.user-row'); if(!ur) return; viewUser(ur.getAttribute('data-uid')); }
     else if(a==='us-secs'){ if(isScopedAdmin()) return; var ur2=e.target.closest('.user-row'); if(!ur2) return; openSeccionesUsuario(ur2.getAttribute('data-uid')); }
