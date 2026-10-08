@@ -2028,6 +2028,7 @@ body::before{
       }),
       carritos:(d.carritos&&typeof d.carritos==='object')?d.carritos:{},
       metaMensual: (typeof d.metaMensual==='number' && d.metaMensual>0) ? d.metaMensual : 600000,
+      metaPersonal: (typeof d.metaPersonal==='number' && d.metaPersonal>0) ? d.metaPersonal : 0,   // 0 = usar la meta mensual de siempre
       marcasOcultas: Array.isArray(d.marcasOcultas) ? d.marcasOcultas : [],
       marcas: (function(){
         var arr = Array.isArray(d.marcas) ? d.marcas : null;
@@ -2353,18 +2354,24 @@ body::before{
   function puedeEditarMeta(){
     return isSuper() && normNombre(session.usuarioNombre)==='brayder01';
   }
+  // Meta personal de una persona: la suya propia (si el admin se la fijó) o la meta personal general
+  function metaPersonalDe(u){
+    var own = u && parseFloat(u.meta);
+    if(own>0) return own;
+    if(typeof state.metaPersonal==='number' && state.metaPersonal>0) return state.metaPersonal;
+    return (typeof state.metaMensual==='number' && state.metaMensual>0) ? state.metaMensual : 600000;
+  }
+  // La meta del EQUIPO (montos de todas las ventas) solo la ve el admin principal.
+  // Todos los demás ven únicamente su meta personal con sus propias ventas.
   function metaWidgetHTML(){
     if(!session) return '';
-    // Brayder01 no ve el widget (lo edita desde el menú "⋯ Más")
-    if(puedeEditarMeta()) return '';
-    var meta = (typeof state.metaMensual==='number' && state.metaMensual>0) ? state.metaMensual : 600000;
+    var equipo = puedeEditarMeta();
+    var meta = equipo ? ((typeof state.metaMensual==='number' && state.metaMensual>0) ? state.metaMensual : 600000)
+                      : metaPersonalDe(userById(session.usuarioId));
     var mesKey = new Date().toISOString().slice(0,7);
-    // Ventas totales del mes: si es trabajador, solo las suyas; si es admin, todas
-    var admin = isAdmin();
     var mesPed = pedidosDeSeccion().filter(function(o){
       if((o.fecha||'').slice(0,7)!==mesKey) return false;
-      if(admin) return true;
-      return o.usuarioId===session.usuarioId;
+      return equipo ? true : o.usuarioId===session.usuarioId;
     });
     var ventasMes = mesPed.reduce(function(a,o){return a+(o.ventaTotal||0);},0);
     var cobradas = mesPed.filter(function(o){ ensureEstado(o); return !!o.estado.venta; })
@@ -2373,11 +2380,11 @@ body::before{
     var barW = Math.min(100, pct);
     var barCls = pct>=100 ? 'done' : (pct>=60 ? '' : 'warn');
     var mesNombre = new Date().toLocaleDateString('es-CO',{month:'long',year:'numeric'});
-    var editBtn = puedeEditarMeta() ? '<button class="edit" data-act="edit-meta">Editar meta</button>' : '';
+    var editBtn = equipo ? '<button class="edit" data-act="edit-meta">Editar meta</button>' : '';
     var falta = Math.max(0, meta-ventasMes);
     return '<div class="meta-card">'+
       '<div class="meta-hd">'+
-        '<span class="ttl">🎯 '+(admin?'Meta del equipo':'Mi meta')+' · '+esc(mesNombre)+'</span>'+
+        '<span class="ttl">🎯 '+(equipo?'Meta del equipo (solo tú la ves)':'Mi meta')+' · '+esc(mesNombre)+'</span>'+
         '<span class="pct '+barCls+'">'+pct+'%</span>'+
       '</div>'+
       '<div class="meta-bar"><div class="fill '+barCls+'" style="width:'+barW+'%"></div></div>'+
@@ -3364,6 +3371,7 @@ body::before{
           '<div class="field"><label>Teléfono</label><input type="tel" inputmode="tel" id="ue-tel" value="'+esc(u.telefono||'')+'"></div></div>'+
         '<div class="field"><label>Correo</label><input type="email" id="ue-correo" value="'+esc(u.correo||'')+'"></div>'+
         '<div class="field"><label>Nequi / Cuenta bancaria</label><input type="text" id="ue-pago" value="'+esc(u.cuentaPago||'')+'"></div>'+
+        (puedeEditarMeta()?'<div class="field"><label>🎯 Meta mensual personal (opcional)</label><input type="number" inputmode="numeric" id="ue-meta" min="0" value="'+esc(u.meta>0?u.meta:'')+'" placeholder="'+esc(String(metaPersonalDe(null)))+'"><span class="help">Si la dejas vacía usa la meta personal general ('+fmt(metaPersonalDe(null))+'). Solo tú ves y cambias esto.</span></div>':'')+
         '<div class="field"><label>🏷 Código de vendedor</label>'+
           '<input type="text" id="ue-codigo" maxlength="12" autocapitalize="characters" style="text-transform:uppercase;font-weight:700;letter-spacing:.08em" value="'+esc(u.codigo||'')+'"'+(isAdmin()?'':' readonly')+'>'+
           '<span class="help">Tus clientes lo escriben al hacer el pedido en la tienda web y la venta queda a tu nombre.'+(isAdmin()?' Solo letras y números.':'')+'</span>'+
@@ -3405,6 +3413,8 @@ body::before{
     u.telefono=(document.getElementById('ue-tel').value||'').trim();
     u.correo=(document.getElementById('ue-correo').value||'').trim();
     u.cuentaPago=(document.getElementById('ue-pago').value||'').trim();
+    var mEl=document.getElementById('ue-meta');
+    if(mEl && puedeEditarMeta()){ var mv=parseFloat(mEl.value); if(mv>0) u.meta=Math.round(mv); else delete u.meta; }
     var cEl=document.getElementById('ue-codigo');
     if(cEl && isAdmin()){
       var nc=normCodigo(cEl.value);
@@ -4752,7 +4762,8 @@ body::before{
       item('people', '#34c759', 'Trabajadores', 'users', '<span class="sb-badge">'+(isScopedAdmin()?trabajadoresSoloDe(activeSection||'maquillaje').length:state.usuarios.length)+'</span>')+
       item('tag', '#ff2d55', 'Marcas', 'marcas-visibles')+
       (sup?item('bell', '#ff3b30', 'Notificaciones', 'notifs', notifStatus):'')+
-      (puedeEditarMeta()?item('target', '#5856d6', 'Meta mensual', 'edit-meta', '<span class="sb-badge">'+fmt(state.metaMensual||600000)+'</span>'):'')
+      (puedeEditarMeta()?item('target', '#5856d6', 'Meta del equipo', 'edit-meta', '<span class="sb-badge">'+fmt(state.metaMensual||600000)+'</span>'):'')+
+      (puedeEditarMeta()?item('target', '#af52de', 'Meta personal', 'edit-meta-personal', '<span class="sb-badge">'+fmt(metaPersonalDe(null))+'</span>'):'')
     ) : '';
     var datos = sup ? group('Datos',
       item('docdown', '#34c759', 'Exportar a CSV', 'export')+
@@ -5177,12 +5188,22 @@ body::before{
       if(!puedeEditarMeta()){ showToast('Solo Brayder01 puede cambiar la meta',false); return; }
       closeModal();
       var actual=state.metaMensual||600000;
-      var nueva=prompt('Meta mensual de ventas totales (COP):\n\nEjemplo: 600000 = $600.000\n\nSe aplica a cada trabajador (individual) y al equipo.', String(actual));
+      var nueva=prompt('Meta mensual del EQUIPO (COP) — solo la ves tú:\n\nEjemplo: 5000000 = $5.000.000\n\nLa meta de cada persona se cambia en "Meta personal".', String(actual));
       if(nueva==null) return;
       var n=parseInt(String(nueva).replace(/[^0-9]/g,''),10);
       if(!n || n<10000){ showToast('Monto inválido (mínimo $10.000)',false); return; }
       state.metaMensual=n; scheduleSave(); render();
       showToast('Meta actualizada a '+fmt(n),false);
+    }
+    else if(a==='edit-meta-personal'){
+      if(!puedeEditarMeta()){ showToast('Solo Brayder01 puede cambiar la meta',false); return; }
+      closeModal();
+      var nuevaP=prompt('Meta mensual PERSONAL de cada vendedor (COP):\n\nEjemplo: 600000 = $600.000\n\nCada persona solo ve su propia meta y sus propias ventas. Si a alguien le quieres poner una meta distinta, hazlo en Trabajadores → Ver datos → Editar.', String(metaPersonalDe(null)));
+      if(nuevaP==null) return;
+      var np=parseInt(String(nuevaP).replace(/[^0-9]/g,''),10);
+      if(!np || np<10000){ showToast('Monto inválido (mínimo $10.000)',false); return; }
+      state.metaPersonal=np; scheduleSave(); render();
+      showToast('Meta personal: '+fmt(np),false);
     }
     else if(a==='us-view'){ var ur=e.target.closest('.user-row'); if(!ur) return; viewUser(ur.getAttribute('data-uid')); }
     else if(a==='us-secs'){ if(isScopedAdmin()) return; var ur2=e.target.closest('.user-row'); if(!ur2) return; openSeccionesUsuario(ur2.getAttribute('data-uid')); }
