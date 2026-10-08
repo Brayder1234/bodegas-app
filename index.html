@@ -598,6 +598,9 @@ select.sort{padding:10px 12px; border-radius:10px; border:1px solid var(--border
 .vid-preview{width:100%; max-height:180px; border-radius:10px; border:1px solid var(--border); background:#000; margin-top:6px}
 .vid-dropzone{display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; padding:20px 12px; border:2px dashed var(--border); border-radius:12px; background:var(--surface-2); cursor:pointer; transition:all .18s ease; text-align:center; margin-top:6px}
 .vid-dropzone:hover{border-color:var(--accent); background:var(--accent-soft)}
+.codelink{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 10px; border-radius:10px; background:var(--surface-2); font-size:12.5px; color:var(--muted)}
+.codelink b{color:var(--ink); word-break:break-all}
+.codelink .btn{padding:6px 10px; font-size:12px; flex-shrink:0}
 .gal-row{display:flex; flex-wrap:wrap; gap:8px; margin-top:6px}
 .gal-th{position:relative; width:68px; height:68px; border-radius:10px; overflow:hidden; background:var(--surface-2)}
 .gal-th img{width:100%; height:100%; object-fit:cover; display:block}
@@ -1807,6 +1810,8 @@ body::before{
   };
   // API de las tiendas web (catálogo público + bandeja de pedidos). Worker aparte: velora-tienda
   var TIENDA_URL='https://velora-tienda.sarmientobrayder10.workers.dev';
+  // Dirección de la tienda web de cada sección (el vendedor comparte su enlace con ?v=CÓDIGO)
+  var SITIOS={calzado:'https://pasosurbanos.store'};
   var state={moneda:'COP', bodegas:[], bodegaTels:{}, productos:[], pedido:{items:[],cliente:{nombre:'',tel:''}}, pedidos:[], usuarios:[], carritos:{}, notifEmail:{enabled:true, accessKey:'', destinatario:'', extras:[]}, metaMensual:600000, secciones:[], marcas:[], premioVendedor:0};
   var session=null; // {usuarioId, usuarioNombre, role}
   var cfg=null;              // {url,key}
@@ -3219,6 +3224,7 @@ body::before{
         var perfilInc = !u.cedula || !u.correo || !u.telefono || !u.cuentaPago;
         var otrasSecs = (!scopedV && u.role!=='admin' && Array.isArray(u.secciones)) ? u.secciones.filter(function(x){return x!==secKeyU;}).length : 0;
         var otrasSecsTag = otrasSecs>0 ? ' <span class="hint" style="color:var(--accent)">+'+otrasSecs+' sección(es)</span>' : '';
+        otrasSecsTag += u.codigo ? ' <span class="hint" style="color:var(--accent)">🏷 '+esc(u.codigo)+'</span>' : '';
         return '<div class="user-row" data-uid="'+esc(u.id)+'">'+
           '<div><div class="nmrow">'+avatarHTML(u,40)+'<div class="nm">'+esc(u.nombre)+ (isMe?' <span class="hint">(tú)</span>':'') + otrasSecsTag + (perfilInc && u.role==='trabajador'?' <span class="hint" style="color:var(--warn)">⚠ perfil incompleto</span>':'') +'</div></div>'+
             '<div class="rl '+(u.role==='admin'?'a':'')+'">'+esc(u.role==='admin'?(Array.isArray(u.secciones)&&u.secciones.length?'admin de sección':'admin principal'):u.role)+' · '+mine.length+' pedidos en '+esc(secNombreU)+'</div>'+
@@ -3273,6 +3279,7 @@ body::before{
       cedula:cedula, telefono:telefono, correo:correo, cuentaPago:cuentaPago,
       secciones: asAdmin ? [] : [activeSection||'maquillaje']
     });
+    asegurarCodigos();
     scheduleSave(); openUsers();
     showToast('Trabajador "'+name+'" creado',false);
   }
@@ -3352,9 +3359,15 @@ body::before{
           '<div class="field"><label>Teléfono</label><input type="tel" inputmode="tel" id="ue-tel" value="'+esc(u.telefono||'')+'"></div></div>'+
         '<div class="field"><label>Correo</label><input type="email" id="ue-correo" value="'+esc(u.correo||'')+'"></div>'+
         '<div class="field"><label>Nequi / Cuenta bancaria</label><input type="text" id="ue-pago" value="'+esc(u.cuentaPago||'')+'"></div>'+
+        '<div class="field"><label>🏷 Código de vendedor</label>'+
+          '<input type="text" id="ue-codigo" maxlength="12" autocapitalize="characters" style="text-transform:uppercase;font-weight:700;letter-spacing:.08em" value="'+esc(u.codigo||'')+'"'+(isAdmin()?'':' readonly')+'>'+
+          '<span class="help">Tus clientes lo escriben al hacer el pedido en la tienda web y la venta queda a tu nombre.'+(isAdmin()?' Solo letras y números.':'')+'</span>'+
+          (u.codigo?'<div style="display:flex;flex-direction:column;gap:6px;margin-top:8px"><div class="codelink"><span>Tu código: <b>'+esc(u.codigo)+'</b></span><button type="button" class="btn ghost" data-copy="'+esc(u.codigo)+'">Copiar código</button></div>'+enlacesVendedor(u)+'</div>':'')+
+        '</div>'+
       '</div>'+
       '<div class="modal-ft"><button class="btn ghost" data-role="close">Cancelar</button><button class="btn primary" data-act="us-savedata" data-uid="'+esc(u.id)+'">Guardar</button></div>'+
     '</div></div>';
+    host.querySelectorAll('[data-copy]').forEach(function(b){ b.addEventListener('click', function(){ copiarTexto(b.getAttribute('data-copy')); }); });
     // foto de perfil (se aplica al pulsar Guardar)
     _fotoPend = undefined;
     var fInp=document.getElementById('ue-foto-file'), fBtn=document.getElementById('ue-foto-btn'), fDel=document.getElementById('ue-foto-del'), fAv=document.getElementById('ue-av');
@@ -3387,6 +3400,15 @@ body::before{
     u.telefono=(document.getElementById('ue-tel').value||'').trim();
     u.correo=(document.getElementById('ue-correo').value||'').trim();
     u.cuentaPago=(document.getElementById('ue-pago').value||'').trim();
+    var cEl=document.getElementById('ue-codigo');
+    if(cEl && isAdmin()){
+      var nc=normCodigo(cEl.value);
+      if(nc && nc!==u.codigo){
+        if(nc.length<3){ showToast('El código debe tener al menos 3 letras o números',false); return; }
+        if(!codigoDisponible(nc,u.id)){ showToast('Ese código ya lo usa otra persona',false); return; }
+        u.codigo=nc;
+      }
+    }
     if(_fotoPend !== undefined){ u.foto = _fotoPend; _fotoPend = undefined; }
     scheduleSave();
     showToast('Datos guardados',false);
@@ -3505,6 +3527,7 @@ body::before{
     stopPolling();
     pollTimer=setInterval(function(){ if(document.visibilityState==='visible') syncPull(); }, 25000);
     setTimeout(pullInbox, 1500);
+    setTimeout(function(){ if(session && isAdmin() && asegurarCodigos()) scheduleSave(); }, 2500);
     document.addEventListener('visibilitychange', onVis);
     window.addEventListener('focus', syncPull);
   }
@@ -3524,6 +3547,39 @@ body::before{
     var now=Date.now(); if(now-lastRefreshTienda<15000) return; lastRefreshTienda=now;
     try{ fetch(TIENDA_URL+'/refresh',{method:'POST',headers:cfHeaders()}).catch(function(){}); }catch(e){}
   }
+  /* ---------- códigos de vendedor (los clientes los escriben en la tienda web) ---------- */
+  function normCodigo(c){ return String(c||'').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Z0-9]/g,'').slice(0,12); }
+  // Asigna un código a quien no tenga (4 letras del nombre + 2 números). Devuelve true si cambió algo.
+  function asegurarCodigos(){
+    var cambio=false, used={};
+    (state.usuarios||[]).forEach(function(u){ var c=normCodigo(u.codigo); if(c){ if(u.codigo!==c){ u.codigo=c; cambio=true; } used[c]=1; } });
+    (state.usuarios||[]).forEach(function(u){
+      if(normCodigo(u.codigo)) return;
+      var base=normCodigo(String(u.nombre||'').trim().split(/\s+/)[0]).slice(0,4);
+      if(base.length<3) base=(base+'VEN').slice(0,3);
+      var h=0; for(var i=0;i<String(u.id).length;i++) h=(h*31+String(u.id).charCodeAt(i))%90;
+      var c, t=0; do{ c=base+(10+(h+t)%90); t++; }while(used[c] && t<200);
+      u.codigo=c; used[c]=1; cambio=true;
+    });
+    return cambio;
+  }
+  function codigoDisponible(code, uid){ return !(state.usuarios||[]).some(function(x){ return x.id!==uid && normCodigo(x.codigo)===code; }); }
+  function copiarTexto(t){
+    function fb(){ try{ var ta=document.createElement('textarea'); ta.value=t; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); showToast('Copiado',false); }catch(e){ prompt('Copia esto:', t); } }
+    try{ if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(t).then(function(){ showToast('Copiado',false); }, fb); } else fb(); }catch(e){ fb(); }
+  }
+  function enlacesVendedor(u){
+    if(!u || !u.codigo) return '';
+    var html='';
+    (state.secciones||[]).forEach(function(sc){
+      var url=SITIOS[sc.id]; if(!url) return;
+      if(u.role!=='admin' && Array.isArray(u.secciones) && u.secciones.indexOf(sc.id)<0) return;
+      var link=url+'/?v='+encodeURIComponent(u.codigo);
+      html+='<div class="codelink"><span>'+esc(sc.emoji||'🛍️')+' '+esc(sc.nombre)+': <b>'+esc(link.replace(/^https?:\/\//,''))+'</b></span><button type="button" class="btn ghost" data-copy="'+esc(link)+'">Copiar enlace</button></div>';
+    });
+    return html;
+  }
+
   var inboxBusy=false, pendingAck=[];
   async function ackInbox(ids){
     if(!ids || !ids.length) return;
@@ -3534,7 +3590,8 @@ body::before{
   }
   // Convierte el pedido de la web en un pedido normal de la plataforma (mismo formato que saveCart)
   function pedidoDesdeWeb(w){
-    var costo=0, venta=0, units=0;
+    var costo=0, venta=0, mayo=0, units=0;
+    var vend = (w.vendedor && w.vendedor.id) ? state.usuarios.find(function(x){ return x.id===w.vendedor.id; }) : null;
     var items=(w.items||[]).map(function(it){
       var p=state.productos.find(function(x){return x.id===it.productId;})||{};
       var vari=variacionDe(p, it.variacionId);
@@ -3542,10 +3599,11 @@ body::before{
       var vc=costoVariacion(vari);
       var c=(vc!=null)?vc:(b.costo||0);
       var cant=parseInt(it.cantidad,10)||1, precio=+it.precio||0;
-      costo+=c*cant; venta+=precio*cant; units+=cant;
+      var may=vend ? mayoristaOf(p, vari) : precio;   // con vendedor: gana (venta - mayorista); sin vendedor: todo es de la empresa
+      costo+=c*cant; venta+=precio*cant; mayo+=may*cant; units+=cant;
       return {
         productId:it.productId, nombre:it.nombre||p.nombre||'(producto borrado)', bodega:b.bodega||'',
-        costo:c, mayorista:precio, precio:precio, precioSugerido:precio, cantidad:cant,
+        costo:c, mayorista:may, precio:precio, precioSugerido:precio, cantidad:cant,
         variacionId:it.variacionId||'', variacionNombre:it.variacionNombre||'', tipoVariacion: it.variacionId?(it.tipoVariacion||''):'',
         variacionColorId:it.variacionColorId||'', variacionColorNombre:it.variacionColorNombre||'', tipoVariacionColor: it.variacionColorId?(it.tipoVariacionColor||''):''
       };
@@ -3555,10 +3613,11 @@ body::before{
       id:w.id, fecha:now, seccion:w.seccion||'calzado', origen:'web',
       cliente:{nombre:c.nombre||'', tel:c.tel||'', direccion:c.direccion||'', ciudad:c.ciudad||'', notas:c.notas||''},
       items:items,
-      // pedido de la tienda: no hay trabajador, toda la ganancia es de la empresa
-      costoTotal:costo, mayoristaTotal:venta, ventaTotal:venta,
-      gananciaEmpresa:venta-costo, gananciaTrabajador:0, gananciaTotal:venta-costo, ganancia:venta-costo,
-      unidades:units, usuarioId:'', usuarioNombre:'Tienda web',
+      // pedido de la tienda: si el cliente puso el código de un vendedor, la venta es suya; si no, todo es de la empresa
+      costoTotal:costo, mayoristaTotal:mayo, ventaTotal:venta,
+      gananciaEmpresa:mayo-costo, gananciaTrabajador:venta-mayo, gananciaTotal:venta-costo, ganancia:venta-costo,
+      codigoVendedor:(w.vendedor&&w.vendedor.codigo)||'',
+      unidades:units, usuarioId:vend?vend.id:'', usuarioNombre:vend?vend.nombre:'Tienda web',
       estado:{ realizado:{at:now, by:'Tienda web'}, envio:null, venta:null }
     };
   }
@@ -6163,6 +6222,7 @@ body::before{
         var fec=new Date(o.fecha||Date.now());
         var fs=fec.toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric'})+' '+fec.toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'});
         var who = o.usuarioNombre ? ' · <span style="color:var(--accent);font-weight:700">👤 '+esc(o.usuarioNombre)+'</span>' : '';
+        if(o.origen==='web') who += ' · <span class="hint">🌐 Tienda web'+(o.codigoVendedor?' · código '+esc(o.codigoVendedor):'')+'</span>';
         var ciudad = (o.cliente&&o.cliente.ciudad)?' · '+esc(o.cliente.ciudad):'';
         var gLabel = admin?'Ganancia':'Mi ganancia';
         // Chips de estado (3 etapas)
@@ -6244,7 +6304,7 @@ body::before{
       '<div class="modal-hd"><h2>'+tPed('SG')+'</h2><button class="mini" data-role="close">×</button></div>'+
       '<div class="modal-bd">'+
         '<div><b>'+esc(cli.nombre||'(sin cliente)')+'</b>'+
-          (o.usuarioNombre?' <span class="hint">· realizado por 👤 '+esc(o.usuarioNombre)+'</span>':'')+
+          (o.usuarioNombre?' <span class="hint">· realizado por 👤 '+esc(o.usuarioNombre)+'</span>':'')+(o.origen==='web'?' <span class="hint">· 🌐 Tienda web'+(o.codigoVendedor?' · código '+esc(o.codigoVendedor):'')+'</span>':'')+
           '<div class="hint">'+fec.toLocaleString('es-CO')+'</div></div>'+
         envioBlock+
         timeline+
