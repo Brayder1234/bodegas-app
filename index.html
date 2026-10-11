@@ -2093,7 +2093,7 @@ body{ font-family:var(--font); background:var(--ground); letter-spacing:-.005em 
 .in-top{ display:block; margin-bottom:22px }
 .in-bar{ display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:clamp(22px,4vw,40px) }
 .in-bar > .bl-logo{ font-size:24px }
-.in-top .brand{ display:block; animation:abUp .7s cubic-bezier(.22,1,.36,1) both }
+.in-top .brand{ display:block } html:not(.bl-anim-done) .in-top .brand{ animation:abUp .7s cubic-bezier(.22,1,.36,1) both }
 .in-eyebrow{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; font:600 12px var(--font); letter-spacing:.14em; text-transform:uppercase; color:var(--muted) }
 .in-eyebrow > span{ display:inline-flex; align-items:center; gap:10px }
 .in-eyebrow > span::before{ content:""; width:22px; height:2px; border-radius:2px; background:var(--brand) }
@@ -2161,6 +2161,45 @@ body{ font-family:var(--font); background:var(--ground); letter-spacing:-.005em 
   .pcard-actions .pcard-add{ min-height:40px; font-size:13.5px }
   .pcard-actions .pcard-stock-btn{ flex-basis:40px; width:40px; min-height:40px }
 }
+
+/* ---------- Billon: interior de sección con la misma atmósfera del acceso y el selector ---------- */
+:root{ --card-g:#ffffff; --card-g-line:var(--border); --atmo-glow:rgba(18,183,106,.10); --atmo-bars:.22 }
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --card-g:rgba(255,255,255,.035); --card-g-line:rgba(255,255,255,.085); --atmo-glow:rgba(46,229,157,.16); --atmo-bars:.4 } }
+:root[data-theme="dark"]{ --card-g:rgba(255,255,255,.035); --card-g-line:rgba(255,255,255,.085); --atmo-glow:rgba(46,229,157,.16); --atmo-bars:.4 }
+.bl-atmo{ position:fixed; inset:0; z-index:0; pointer-events:none; overflow:hidden }
+.bl-atmo::before{ content:""; position:absolute; inset:-20%;
+  background:radial-gradient(700px circle at 85% 95%, var(--atmo-glow), transparent 60%), radial-gradient(600px circle at 8% 0%, var(--atmo-glow), transparent 60%);
+  opacity:.9; animation:abGlow 12s ease-in-out infinite alternate }
+.bl-atmo .ab-bars{ height:26%; opacity:var(--atmo-bars) }
+#app{ position:relative; z-index:1 }
+
+/* tarjetas de vidrio (como las cifras del selector) */
+.wrap .stat, .wrap .meta-card, .wrap .pcard, .wrap .stat-notes > span, .wrap .perfil-alert{
+  background:var(--card-g); border:1px solid var(--card-g-line); box-shadow:none;
+  -webkit-backdrop-filter:blur(14px); backdrop-filter:blur(14px) }
+.wrap .stat{ border-radius:20px }
+.wrap .stats > .stat:last-child{ background:rgba(46,229,157,.12); border-color:rgba(46,229,157,.22) }
+.wrap .stat .v{ font-size:clamp(24px,7.2vw,34px); white-space:nowrap }
+.wrap .meta-card{ border-radius:20px }
+.wrap .pcard{ border-radius:22px }
+.wrap .pcard-prices{ background:var(--fill) }
+.wrap .brand-add-btn{ background:transparent; border:1.5px dashed var(--card-g-line); color:var(--accent-ink); border-radius:16px }
+.wrap .brand-add-btn:hover{ border-color:var(--brand); background:rgba(46,229,157,.06); color:var(--accent-ink) }
+.wrap .pg-hdr{ border-bottom-color:var(--card-g-line) !important }
+@media (min-width:700px){
+  .wrap .toolbar{ background:var(--glass); border:1px solid var(--card-g-line); box-shadow:0 10px 30px rgba(0,0,0,.18) }
+}
+
+/* meta: barra verde de marca y porcentaje en tinta (verde al cumplir) */
+.wrap .meta-bar .fill, .wrap .meta-bar .fill.warn, .wrap .meta-bar .fill.done{ background:linear-gradient(90deg, #12b76a, #2ee59d) }
+.wrap .meta-hd .pct{ color:var(--ink) } .wrap .meta-hd .pct.done{ color:var(--good) }
+
+/* entrada suave del contenido, igual que las otras pantallas */
+html:not(.bl-anim-done) .wrap .stats > .stat, html:not(.bl-anim-done) .wrap .meta-card, html:not(.bl-anim-done) .wrap .toolbar{ animation:abUp .7s cubic-bezier(.22,1,.36,1) both }
+.wrap .stats > .stat:nth-child(2){ animation-delay:.05s } .wrap .stats > .stat:nth-child(3){ animation-delay:.1s }
+.wrap .stats > .stat:nth-child(4){ animation-delay:.15s } .wrap .stats > .stat:nth-child(5){ animation-delay:.2s }
+.wrap .meta-card{ animation-delay:.22s } .wrap .toolbar{ animation-delay:.28s }
+@media (prefers-reduced-motion:reduce){ .bl-atmo::before, .bl-atmo .ab-bars i{ animation:none !important } .bl-atmo .ab-bars i{ transform:none } .wrap *{ animation:none !important } }
 </style>
 </head>
 <body>
@@ -2889,6 +2928,8 @@ body{ font-family:var(--font); background:var(--ground); letter-spacing:-.005em 
         '</div>'+
         '<div id="prods">'+productsHTML()+'</div>'+
       '</div>'+ fabCartHTML() + selectionBarHTML();
+    // la animación de entrada solo corre la primera vez (no en cada actualización de la pantalla)
+    if(!document.documentElement.classList.contains('bl-anim-done')) setTimeout(function(){ document.documentElement.classList.add('bl-anim-done'); }, 1400);
   }
   function cartTotals(){
     var items=(currentCart().items||[]); var totC=0,totM=0,totV=0,units=0;
@@ -3305,6 +3346,14 @@ body{ font-family:var(--font); background:var(--ground); letter-spacing:-.005em 
   /* ---------- marca Billon ---------- */
   function blLogo(){ return '<span class="bl-logo" role="img" aria-label="Billon">bi<i></i><i></i>on</span>'; }
   var BL_HEAD='<div class="bl-head">'+blLogo()+'</div>';
+  (function(){ try{
+    if(document.querySelector('.bl-atmo')) return;
+    var hs=[22,30,26,38,34,46,42,55,50,64,72,88], bars='';
+    for(var k=0;k<hs.length;k++) bars+='<i style="--h:'+hs[k]+'%;--i:'+k+'"></i>';
+    var d=document.createElement('div'); d.className='bl-atmo'; d.setAttribute('aria-hidden','true');
+    d.innerHTML='<div class="ab-bars">'+bars+'</div>';
+    document.body.insertBefore(d, document.body.firstChild);
+  }catch(e){} })();
   // Pantallas de acceso: marca grande a un lado (con barras animadas) y el formulario al otro
   function authShell(inner, modo){
     var hs=[22,30,26,38,34,46,42,55,50,64,72,88], bars='';
