@@ -1931,6 +1931,71 @@ body{ font-family:var(--font); background:var(--ground); letter-spacing:-.005em 
 /* aviso flotante */
 .toast{ background:var(--btn); color:var(--btn-ink); border-radius:12px }
 ::selection{ background:var(--brand); color:#0c0f0d }
+
+/* ---------- Billon: pantallas de acceso (login / registro / carga) ---------- */
+.auth{ position:fixed; inset:0; z-index:5; display:grid; grid-template-columns:1.08fr 1fr; background:var(--ground); overflow:auto }
+.auth-brand{ position:relative; overflow:hidden; background:#0c0f0d; color:#fff; display:flex; align-items:center; justify-content:center; padding:48px; min-height:100%;
+  isolation:isolate }
+.auth-brand::before{ content:""; position:absolute; inset:-20%; z-index:-1;
+  background:radial-gradient(600px circle at 70% 85%, rgba(46,229,157,.20), transparent 60%), radial-gradient(500px circle at 15% 10%, rgba(46,229,157,.08), transparent 60%);
+  animation:abGlow 9s ease-in-out infinite alternate }
+@keyframes abGlow{ to{ transform:translate3d(-4%,-3%,0) scale(1.06) } }
+.ab-bars{ position:absolute; left:0; right:0; bottom:0; height:46%; display:flex; align-items:flex-end; gap:1.6%; padding:0 6% 0; z-index:-1; opacity:.9 }
+.ab-bars i{ flex:1; border-radius:8px 8px 0 0; background:linear-gradient(180deg, rgba(46,229,157,.26), rgba(46,229,157,.02));
+  height:var(--h); transform-origin:bottom; transform:scaleY(0); animation:abGrow 1.3s cubic-bezier(.22,1,.36,1) forwards, abWave 5s ease-in-out infinite alternate;
+  animation-delay:calc(var(--i)*70ms + .2s), calc(var(--i)*180ms + 1.6s) }
+.ab-bars i:nth-last-child(-n+2){ background:linear-gradient(180deg, rgba(46,229,157,.55), rgba(46,229,157,.05)) }
+@keyframes abGrow{ to{ transform:scaleY(1) } }
+@keyframes abWave{ from{ transform:scaleY(1) } to{ transform:scaleY(.86) } }
+.ab-in{ position:relative; max-width:520px; width:100% }
+.ab-logo{ font-size:clamp(72px,9vw,132px) !important; color:#fff !important; letter-spacing:-.05em !important }
+.ab-logo i{ background:#2ee59d !important; transform-origin:bottom; transform:scaleY(0); animation:abGrow .9s cubic-bezier(.22,1,.36,1) forwards }
+.ab-logo i:nth-of-type(1){ animation-delay:.35s } .ab-logo i:nth-of-type(2){ animation-delay:.5s }
+.ab-tag{ margin:26px 0 0; font:800 clamp(24px,2.6vw,34px)/1.12 var(--font-display); letter-spacing:-.035em; max-width:15ch }
+.ab-tag em{ font-style:normal; color:#2ee59d }
+.ab-sub{ margin:14px 0 0; color:rgba(255,255,255,.62); font-size:15.5px; line-height:1.5; max-width:38ch }
+.ab-chips{ margin-top:34px; display:flex; flex-direction:column; gap:10px; align-items:flex-start }
+.ab-chip{ display:inline-flex; align-items:center; gap:10px; padding:10px 14px 10px 10px; border-radius:14px; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.09);
+  backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); font-size:13.5px; font-weight:500; color:rgba(255,255,255,.88);
+  opacity:0; transform:translateY(14px); animation:abUp .8s cubic-bezier(.22,1,.36,1) forwards, abFloat 6s ease-in-out infinite alternate }
+.ab-chip:nth-child(1){ animation-delay:.9s, 1.7s } .ab-chip:nth-child(2){ animation-delay:1.05s, 2.4s; margin-left:28px } .ab-chip:nth-child(3){ animation-delay:1.2s, 3.1s; margin-left:10px }
+.ab-chip b{ width:28px; height:28px; border-radius:9px; display:grid; place-items:center; background:rgba(46,229,157,.16); color:#2ee59d; font-size:14px }
+@keyframes abUp{ to{ opacity:1; transform:none } }
+@keyframes abFloat{ from{ translate:0 0 } to{ translate:0 -6px } }
+.ab-in > *:not(.ab-chips){ opacity:0; transform:translateY(16px); animation:abUp .9s cubic-bezier(.22,1,.36,1) forwards }
+.ab-in > .ab-logo{ animation-delay:.05s } .ab-in > .ab-tag{ animation-delay:.25s } .ab-in > .ab-sub{ animation-delay:.4s }
+.auth-main{ display:flex; align-items:center; justify-content:center; padding:48px 28px; min-height:100% }
+.auth .login-card{ width:min(420px,100%); background:transparent; border:none !important; box-shadow:none !important; padding:0 !important; animation:none }
+.auth .login-card h1{ font-size:clamp(30px,3vw,40px); line-height:1.05; margin:0 0 8px }
+.auth .login-card .lead{ font-size:15.5px; margin-bottom:28px }
+.auth .login-card > *{ opacity:0; transform:translateY(14px); animation:abUp .7s cubic-bezier(.22,1,.36,1) forwards }
+.auth .login-card > *:nth-child(1){animation-delay:.15s} .auth .login-card > *:nth-child(2){animation-delay:.22s} .auth .login-card > *:nth-child(3){animation-delay:.29s}
+.auth .login-card > *:nth-child(4){animation-delay:.36s} .auth .login-card > *:nth-child(5){animation-delay:.43s} .auth .login-card > *:nth-child(6){animation-delay:.5s}
+.auth .login-card > *:nth-child(7){animation-delay:.57s} .auth .login-card > *:nth-child(8){animation-delay:.64s} .auth .login-card > *:nth-child(9){animation-delay:.71s}
+.auth .field input{ min-height:52px; border-radius:14px; font-size:16px; transition:border-color .25s, box-shadow .25s, transform .25s }
+.auth .field input:focus{ border-color:var(--ink); box-shadow:0 0 0 4px var(--accent-soft) }
+.auth .btn.primary{ min-height:54px; border-radius:14px; font-size:16px; font-weight:700; position:relative; overflow:hidden; transition:transform .25s cubic-bezier(.22,1,.36,1), box-shadow .25s }
+.auth .btn.primary::before{ content:""; position:absolute; left:0; right:0; bottom:0; height:3px; background:var(--brand); transform:scaleX(0); transform-origin:left; transition:transform .5s cubic-bezier(.22,1,.36,1) }
+@media (hover:hover){ .auth .btn.primary:hover{ transform:translateY(-2px); box-shadow:0 14px 30px rgba(0,0,0,.18) } .auth .btn.primary:hover::before{ transform:scaleX(1) } }
+.auth .auth-switch{ text-align:center; margin-top:22px; padding-top:18px; border-top:1px solid var(--border); font-size:14px; color:var(--muted) }
+.auth .auth-switch button{ background:none; border:none; color:var(--ink); font-weight:700; cursor:pointer; font-family:inherit; font-size:14px; padding:2px 4px;
+  text-decoration:underline; text-decoration-color:var(--brand); text-decoration-thickness:2px; text-underline-offset:4px }
+.auth .auth-foot{ margin-top:26px; font-size:12px; color:var(--faint); text-align:center }
+.auth .boot{ text-align:center }
+.auth .boot .spin{ width:28px; height:28px; margin:0 auto 16px; color:var(--brand) }
+@media (max-width:860px){
+  .auth{ grid-template-columns:1fr; grid-template-rows:auto 1fr }
+  .auth-brand{ min-height:0; padding:calc(38px + env(safe-area-inset-top)) 24px 34px; justify-content:flex-start }
+  .ab-bars{ height:70% }
+  .ab-logo{ font-size:64px !important }
+  .ab-tag{ font-size:22px; margin-top:14px }
+  .ab-sub, .ab-chips{ display:none }
+  .auth-main{ align-items:flex-start; padding:30px 22px calc(30px + env(safe-area-inset-bottom)) }
+  .auth .login-card h1{ font-size:30px }
+}
+@media (prefers-reduced-motion:reduce){
+  .auth *, .auth *::before{ animation:none !important; opacity:1 !important; transform:none !important }
+}
 </style>
 </head>
 <body>
@@ -3072,6 +3137,25 @@ body{ font-family:var(--font); background:var(--ground); letter-spacing:-.005em 
   /* ---------- marca Billon ---------- */
   function blLogo(){ return '<span class="bl-logo" role="img" aria-label="Billon">bi<i></i><i></i>on</span>'; }
   var BL_HEAD='<div class="bl-head">'+blLogo()+'</div>';
+  // Pantallas de acceso: marca grande a un lado (con barras animadas) y el formulario al otro
+  function authShell(inner, modo){
+    var hs=[22,30,26,38,34,46,42,55,50,64,72,88], bars='';
+    for(var k=0;k<hs.length;k++) bars+='<i style="--h:'+hs[k]+'%;--i:'+k+'"></i>';
+    var tag = modo==='registro' ? 'Empieza a vender <em>hoy.</em>' : 'Tu negocio, <em>creciendo.</em>';
+    var sub = modo==='registro'
+      ? 'Crea tu cuenta, elige el negocio con el que quieres trabajar y empieza a ganar con cada venta.'
+      : 'Productos, pedidos, vendedores y ganancias en un solo lugar.';
+    return '<div class="auth">'+
+      '<aside class="auth-brand"><div class="ab-bars" aria-hidden="true">'+bars+'</div>'+
+        '<div class="ab-in"><span class="bl-logo ab-logo" role="img" aria-label="Billon">bi<i></i><i></i>on</span>'+
+        '<p class="ab-tag">'+tag+'</p><p class="ab-sub">'+sub+'</p>'+
+        '<div class="ab-chips" aria-hidden="true">'+
+          '<span class="ab-chip"><b>✓</b>Nuevo pedido recibido</span>'+
+          '<span class="ab-chip"><b>↑</b>Tus ganancias suben</span>'+
+          '<span class="ab-chip"><b>★</b>Meta del mes alcanzada</span>'+
+        '</div></div></aside>'+
+      '<main class="auth-main"><div class="login-card">'+inner+'</div></main></div>';
+  }
 
   /* ---------- pantalla de conexión ---------- */
   function renderSetup(pre){
@@ -3121,11 +3205,9 @@ body{ font-family:var(--font); background:var(--ground); letter-spacing:-.005em 
 
   /* ---------- login ---------- */
   function renderBootSplash(){
-    app.innerHTML='<div class="login-wrap"><div class="login-card" style="text-align:center; padding:40px 26px">'+BL_HEAD+
-      '<div class="spin" style="width:24px; height:24px; margin:0 auto 14px; color:var(--accent)"></div>'+
-      '<h1 style="font-size:19px; margin:0 0 4px">Cargando…</h1>'+
-      '<p class="lead" style="margin:0">Descargando la información de la plataforma.</p>'+
-    '</div></div>';
+    app.innerHTML=authShell('<div class="boot"><div class="spin"></div>'+
+      '<h1 style="font-size:24px">Cargando…</h1>'+
+      '<p class="lead" style="margin:0">Descargando la información de la plataforma.</p></div>');
   }
   function renderSectionPicker(){
     var nombre = session ? session.usuarioNombre : '';
@@ -3198,10 +3280,10 @@ body{ font-family:var(--font); background:var(--ground); letter-spacing:-.005em 
 
   function renderLogin(){
     var needsAdmin = !state.usuarios.length;
-    app.innerHTML='<div class="login-wrap"><div class="login-card">'+BL_HEAD+
+    app.innerHTML=authShell(
       (needsAdmin
         ? '<h1>Crea tu cuenta de administrador</h1><p class="lead">Este es el primer usuario de la plataforma. Podrás crear más trabajadores después.</p>'
-        : '<h1>Inicia sesión</h1><p class="lead">Ingresa con tu nombre y contraseña.</p>'
+        : '<h1>Bienvenido de nuevo</h1><p class="lead">Inicia sesión con tu nombre de usuario y contraseña.</p>'
       )+
       '<div class="field"><label>Nombre de usuario</label><input type="text" id="lg-name" autocomplete="username" placeholder="Ej: Juan"></div>'+
       '<div class="field" style="margin-top:12px"><label>Contraseña</label>'+
@@ -3221,16 +3303,10 @@ body{ font-family:var(--font); background:var(--ground); letter-spacing:-.005em 
         '<button class="btn primary" id="lg-btn" style="flex:1;justify-content:center">'+(needsAdmin?'Crear administrador':'Entrar')+'</button>'+
       '</div>'+
       (needsAdmin
-        ? '<div style="text-align:center; margin-top:18px; padding-top:16px; border-top:1px solid var(--border); font-size:13px; color:var(--muted)">'+
-            '¿Ya tienes cuenta? '+
-            '<button type="button" id="force-reload-btn" style="background:none; border:none; color:var(--accent); font-weight:600; cursor:pointer; font-family:inherit; font-size:13px; padding:2px 6px">Iniciar sesión</button>'+
-          '</div>'
-        : '<div style="text-align:center; margin-top:18px; padding-top:16px; border-top:1px solid var(--border); font-size:13px; color:var(--muted)">'+
-            '¿Aún no tienes cuenta? '+
-            '<button type="button" data-act="show-register" style="background:none; border:none; color:var(--accent); font-weight:600; cursor:pointer; font-family:inherit; font-size:13px; padding:2px 6px">Regístrate aquí</button>'+
-          '</div>'
+        ? '<div class="auth-switch">¿Ya tienes cuenta? <button type="button" id="force-reload-btn">Iniciar sesión</button></div>'
+        : '<div class="auth-switch">¿Aún no tienes cuenta? <button type="button" data-act="show-register">Regístrate aquí</button></div>'
       )+
-    '</div></div>';
+      '<p class="auth-foot">© Billon</p>', 'login');
     var doLogin=function(){ if(needsAdmin) tryCreateFirstAdmin(); else tryLogin(); };
     document.getElementById('lg-btn').addEventListener('click', doLogin);
     var focusEl=document.getElementById('lg-name'); if(focusEl) focusEl.focus();
@@ -3249,7 +3325,7 @@ body{ font-family:var(--font); background:var(--ground); letter-spacing:-.005em 
   }
 
   function renderRegister(){
-    app.innerHTML='<div class="login-wrap"><div class="login-card">'+BL_HEAD+
+    app.innerHTML=authShell(
       '<h1>Crea tu cuenta</h1><p class="lead">Elige tu nombre de usuario y contraseña. Los demás datos los completas después.</p>'+
       '<div class="field"><label>Nombre de usuario</label><input type="text" id="rg-name" placeholder="Ej: Juan"></div>'+
       '<div class="field" style="margin-top:12px"><label>Contraseña</label>'+
@@ -3268,11 +3344,8 @@ body{ font-family:var(--font); background:var(--ground); letter-spacing:-.005em 
       '<div style="display:flex; gap:10px; margin-top:16px">'+
         '<button class="btn primary" id="rg-btn" style="flex:1;justify-content:center">Crear cuenta</button>'+
       '</div>'+
-      '<div style="text-align:center; margin-top:18px; padding-top:16px; border-top:1px solid var(--border); font-size:13px; color:var(--muted)">'+
-        '¿Ya tienes cuenta? '+
-        '<button type="button" data-act="show-login" style="background:none; border:none; color:var(--accent); font-weight:600; cursor:pointer; font-family:inherit; font-size:13px; padding:2px 6px">Iniciar sesión</button>'+
-      '</div>'+
-    '</div></div>';
+      '<div class="auth-switch">¿Ya tienes cuenta? <button type="button" data-act="show-login">Iniciar sesión</button></div>'+
+      '<p class="auth-foot">© Billon</p>', 'registro');
     document.getElementById('rg-btn').addEventListener('click', tryRegister);
     var focusEl=document.getElementById('rg-name'); if(focusEl) focusEl.focus();
     ['rg-name','rg-pwd','rg-pwd2'].forEach(function(id){
