@@ -2078,6 +2078,89 @@ body{ font-family:var(--font); background:var(--ground); letter-spacing:-.005em 
   .sp-stat .v{ font-size:28px }
 }
 @media (prefers-reduced-motion:reduce){ .sp *, .sp *::before, .spc{ animation:none !important; opacity:1 !important; transform:none !important } }
+
+/* ---------- Billon: interior de cada sección (productos) ---------- */
+/* barras de fondo más sutiles (acceso y selector) */
+.ab-bars{ -webkit-mask-image:linear-gradient(180deg, transparent 0%, #000 55%); mask-image:linear-gradient(180deg, transparent 0%, #000 55%) }
+.auth .ab-bars{ height:34%; opacity:.6 }
+.ab-bars i{ background:linear-gradient(180deg, rgba(46,229,157,.16), rgba(46,229,157,0)) }
+.ab-bars i:nth-last-child(-n+2){ background:linear-gradient(180deg, rgba(46,229,157,.28), rgba(46,229,157,0)) }
+.sp-bg .ab-bars{ height:26%; opacity:.4 }
+/* sin las barritas repetidas en cada tarjeta de cifras: el verde se guarda para lo que importa */
+.stat::after, .sp-stat::after{ display:none }
+
+/* encabezado: barra superior (logo + herramientas) y nombre grande de la tienda */
+.in-top{ display:block; margin-bottom:22px }
+.in-bar{ display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:clamp(22px,4vw,40px) }
+.in-bar > .bl-logo{ font-size:24px }
+.in-top .brand{ display:block; animation:abUp .7s cubic-bezier(.22,1,.36,1) both }
+.in-eyebrow{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; font:600 12px var(--font); letter-spacing:.14em; text-transform:uppercase; color:var(--muted) }
+.in-eyebrow > span{ display:inline-flex; align-items:center; gap:10px }
+.in-eyebrow > span::before{ content:""; width:22px; height:2px; border-radius:2px; background:var(--brand) }
+.in-top .change-sect{ margin:0; padding:5px 12px; border-radius:999px; border:1px solid var(--border); background:var(--surface); color:var(--ink);
+  font:600 12px var(--font); letter-spacing:0; text-transform:none; cursor:pointer; transition:border-color .25s, background .25s }
+.in-top .change-sect:hover{ border-color:var(--ink); background:var(--surface); color:var(--ink) }
+.in-top .brand h1{ margin:12px 0 0; font:800 clamp(38px,5.4vw,64px)/.98 var(--font-display); letter-spacing:-.045em }
+.in-top .brand h1 .sub{ font-size:inherit !important; font-weight:600 !important; color:var(--faint) !important; letter-spacing:-.04em !important }
+
+/* cifras */
+.stats{ margin-bottom:14px }
+.stat .v{ margin-top:12px }
+.stats > .stat:last-child{ background:var(--accent-soft); border-color:transparent }
+.stats > .stat:last-child .v{ color:var(--good) }
+.stat-notes > span{ background:var(--surface); border:1px solid var(--border); box-shadow:none }
+
+/* meta */
+.meta-card{ border:1px solid var(--border); box-shadow:none }
+.meta-hd .pct{ font-family:var(--font-display); font-weight:800; letter-spacing:-.04em }
+.meta-bar{ height:12px }
+
+/* barra de herramientas */
+.toolbar .btn, .toolbar .icon-btn{ border-radius:12px }
+
+/* grupos por marca: título editorial en vez de caja */
+.pg-hdr{ background:transparent !important; box-shadow:none !important; border:none !important; border-bottom:1px solid var(--border) !important;
+  border-radius:0 !important; padding:6px 2px 12px !important; min-height:0 }
+.pgroup:not(.collapsed) .pg-hdr{ margin-bottom:16px }
+.pgroup + .pgroup{ margin-top:18px }
+.pg-hdr .name{ font:800 26px/1.05 var(--font-display) !important; letter-spacing:-.04em !important; text-transform:none !important }
+.pg-hdr .name::first-letter{ text-transform:uppercase }
+.pg-hdr .count{ font:600 12px var(--font) !important; color:var(--muted) !important; background:var(--fill) !important; padding:4px 10px !important; border-radius:999px !important }
+
+/* tarjeta de producto */
+.pcard{ padding:8px; border-radius:22px; background:var(--surface); transition:border-color .3s, translate .45s cubic-bezier(.22,1,.36,1), box-shadow .45s }
+@media (hover:hover){ .pcard:hover{ translate:0 -3px; border-color:var(--border-strong); box-shadow:0 14px 30px rgba(17,17,17,.08) } .pcard:hover .pcard-img img{ transform:scale(1.04) } }
+.pcard-img{ border-radius:16px; overflow:hidden }
+.pcard-tools .pcard-dl, .pcard-more .mm{ background:rgba(12,15,13,.55) !important; color:#fff !important; border:1px solid rgba(255,255,255,.18) !important;
+  backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px) }
+.pcard-body{ padding:12px 6px 4px !important; gap:10px }
+.pcard-name{ font:700 15.5px/1.25 var(--font-display) !important; letter-spacing:-.025em !important }
+.pcard-prices{ background:var(--surface-2); border-radius:14px; padding:10px 12px }
+.pcard-prices .pl-venta .v{ font-family:var(--font-display); font-weight:800; font-size:17px; letter-spacing:-.03em }
+.pcard-prices .pl-mayo .v{ color:var(--good) }
+.pcard-actions{ margin-top:auto; display:flex; gap:8px; align-items:stretch }
+.pcard-actions .pcard-add{ flex:1; margin-top:0; min-height:42px; border-radius:12px }
+.pcard-actions .pcard-stock-btn{ flex:0 0 42px; width:42px; min-height:42px; padding:0; border-radius:12px; display:grid; place-items:center; background:var(--fill); border:none }
+.pcard-actions .pcard-stock-btn span{ display:none }
+.pcard-actions .pcard-stock-btn svg.sf{ width:19px; height:19px; margin:0 }
+.pcard-actions .pcard-stock-btn:hover{ background:var(--fill-2); color:var(--ink) }
+
+@media (max-width:640px){
+  .in-bar .top-tools{ order:0; width:auto; flex:0 1 auto; gap:6px }
+  .in-bar .top-tools .hamburger{ margin-right:0 }
+  .in-bar .status{ font-size:0; gap:0; padding:0; width:34px; height:34px; justify-content:center }
+  .in-bar .icon-btn{ min-width:34px; height:34px; padding:0 8px }
+  .pcard-prices{ padding:9px 10px }
+  .pcard-prices .pl-venta .v{ font-size:15px }
+  .in-bar > .bl-logo{ font-size:22px }
+  .in-top .brand h1{ font-size:36px }
+  .pg-hdr .name{ font-size:22px !important }
+  .pcard{ padding:6px; border-radius:18px }
+  .pcard-img{ border-radius:13px }
+  .pcard-body{ padding:10px 4px 2px !important }
+  .pcard-actions .pcard-add{ min-height:40px; font-size:13.5px }
+  .pcard-actions .pcard-stock-btn{ flex-basis:40px; width:40px; min-height:40px }
+}
 </style>
 </head>
 <body>
@@ -2858,7 +2941,7 @@ body{ font-family:var(--font); background:var(--ground); letter-spacing:-.005em 
     '</button>';
     var secActiva = (state.secciones||[]).find(function(x){return x.id===activeSection;}) || {nombre:activeSection||'', emoji:''};
     var leadEmoji = secActiva.emoji || '📦';
-    var lead = leadEmoji + ' Sección: ' + (secActiva.nombre || 'Sin nombre');
+    var lead = 'Sección · ' + (secActiva.nombre || 'Sin nombre');
     var statsHTML;
     if(admin){
       var mes=new Date().toISOString().slice(0,7);
@@ -2904,14 +2987,18 @@ body{ font-family:var(--font); background:var(--ground); letter-spacing:-.005em 
         '</div>';
       }
     }
-    return '<div class="top">'+
-      '<div class="brand"><div class="bl-mini">'+blLogo()+'</div><h1>'+esc((secActiva.marca||secActiva.nombre||'').toUpperCase())+ (secActiva.sublabel?' <span style="font-weight:400;color:var(--muted);letter-spacing:0">'+esc(secActiva.sublabel)+'</span>':'') +'</h1><p>'+esc(lead)+' '+((isScopedAdmin() && adminScope().length<2)?'':'<button class="change-sect" data-act="change-section" title="Cambiar de sección">Cambiar</button>')+'</p></div>'+
-      '<div class="top-tools">'+
-        '<button class="hamburger" data-act="menu" title="Menú" aria-label="Menú">'+sf('menu')+'</button>'+
-        whoLine+connHTML()+
-        (isSuper()?'<button class="icon-btn" data-act="toggle-moneda" title="Cambiar moneda">'+(state.moneda==='USD'?'US$':'COP')+'</button>':'')+
-        '<button class="icon-btn" data-act="toggle-theme" title="Tema claro/oscuro" aria-label="Cambiar tema">'+sf('theme')+'</button>'+
-      '</div></div>'+ statsHTML;
+    var cambiarBtn = (isScopedAdmin() && adminScope().length<2) ? '' : '<button class="change-sect" data-act="change-section" title="Cambiar de sección">Cambiar</button>';
+    return '<div class="top in-top">'+
+      '<div class="in-bar">'+blLogo()+
+        '<div class="top-tools">'+
+          '<button class="hamburger" data-act="menu" title="Menú" aria-label="Menú">'+sf('menu')+'</button>'+
+          whoLine+connHTML()+
+          (isSuper()?'<button class="icon-btn" data-act="toggle-moneda" title="Cambiar moneda">'+(state.moneda==='USD'?'US$':'COP')+'</button>':'')+
+          '<button class="icon-btn" data-act="toggle-theme" title="Tema claro/oscuro" aria-label="Cambiar tema">'+sf('theme')+'</button>'+
+        '</div></div>'+
+      '<div class="brand"><div class="in-eyebrow"><span>'+esc(lead)+'</span>'+cambiarBtn+'</div>'+
+        '<h1>'+esc((secActiva.marca||secActiva.nombre||'').toUpperCase())+(secActiva.sublabel?' <span class="sub">'+esc(secActiva.sublabel)+'</span>':'')+'</h1></div>'+
+    '</div>'+ statsHTML;
   }
   function stat(k,v){ return '<div class="stat"><div class="rail"></div><div class="k">'+esc(k)+'</div><div class="v num">'+esc(v)+'</div></div>'; }
   function opt(v,label){ return '<option value="'+v+'"'+(ui.sort===v?' selected':'')+'>'+esc(label)+'</option>'; }
@@ -3106,7 +3193,7 @@ body{ font-family:var(--font); background:var(--ground); letter-spacing:-.005em 
         '<div class="pl pl-mayo"><span class="lb">Mayorista</span><span class="v num">'+fmt(mayo)+'</span></div>'+
         '<div class="pl pl-venta"><span class="lb">Sugerido</span><span class="v num">'+fmt(venta)+'</span></div>';
     }
-    var stockBtn = admin ? '<button class="pcard-stock-btn" data-act="stock-add" title="Gestionar inventario">'+sf('box')+'Inventario</button>' : '';
+    var stockBtn = admin ? '<button class="pcard-stock-btn" data-act="stock-add" title="Gestionar inventario" aria-label="Inventario">'+sf('box')+'<span>Inventario</span></button>' : '';
     var addBtn = soldOut && !admin
       ? '<button class="pcard-add sold-out" disabled>AGOTADO</button>'
       : '<button class="pcard-add'+(inCart?' in':'')+'" data-act="add-cart">'+(inCart?'✓ En pedido':'＋ Al pedido')+'</button>';
@@ -3127,8 +3214,7 @@ body{ font-family:var(--font); background:var(--ground); letter-spacing:-.005em 
         '<div class="pcard-name" data-act="tg-row">'+esc(p.nombre||'(sin nombre)')+ (p.sku?'<small>'+esc(p.sku)+'</small>':'') +'</div>'+
         ((p.variaciones&&p.variaciones.length)||(p.variacionesColor&&p.variacionesColor.length)||(p.videos&&p.videos.length) ? '<div class="pcard-badges">'+(p.variaciones&&p.variaciones.length?'<span class="var-badge">💰 '+p.variaciones.length+' '+(p.tipoVariacion||'')+'</span>':'')+(p.variacionesColor&&p.variacionesColor.length?'<span class="var-badge">🎨 '+p.variacionesColor.length+' '+(p.tipoVariacionColor||'')+'</span>':'')+(p.videos&&p.videos.length?'<span class="var-badge">🎬 '+p.videos.length+' video'+(p.videos.length===1?'':'s')+'</span>':'')+'</div>':'')+
         '<div class="pcard-prices">'+pricesHTML+'</div>'+
-        stockBtn+
-        addBtn+
+        '<div class="pcard-actions">'+stockBtn+addBtn+'</div>'+
       '</div>'+
       '<div class="pexp" data-for="'+esc(p.id)+'">'+expandedHTML(p)+'</div>'+
     '</div>';
