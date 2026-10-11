@@ -3461,7 +3461,8 @@ html:not(.bl-anim-done) .wrap .stats > .stat, html:not(.bl-anim-done) .wrap .met
         '<span class="sp-status '+status[0]+'">'+status[1]+'</span>'+
         '<h3>'+esc(s.nombre)+'</h3>'+
         (s.descripcion?'<p>'+esc(s.descripcion)+'</p>':'')+
-        '<div class="sp-meta"><span class="m"><b>'+nMiembros+'</b> trabajador'+(nMiembros===1?'':'es')+' en el grupo</span>'+
+        // el número de trabajadores del grupo solo lo ve el admin
+        '<div class="sp-meta">'+(admin?'<span class="m"><b>'+nMiembros+'</b> trabajador'+(nMiembros===1?'':'es')+' en el grupo</span>':'<span class="m"></span>')+
           '<span class="sp-go">'+cta+(canEnter?' <i>→</i>':'')+'</span></div>'+
       '</div>';
     }).join('');
