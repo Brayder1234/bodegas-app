@@ -11,20 +11,26 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>Panel de gestión</title>
+<title>Billon</title>
+<meta name="apple-mobile-web-app-title" content="Billon">
+<meta name="application-name" content="Billon">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxODAgMTgwIj48cmVjdCB3aWR0aD0iMTgwIiBoZWlnaHQ9IjE4MCIgcng9IjQwIiBmaWxsPSIjMGMwZjBkIi8+PHJlY3QgeD0iNTIiIHk9Ijc4IiB3aWR0aD0iMzAiIGhlaWdodD0iNjIiIHJ4PSI3IiBmaWxsPSIjMmVlNTlkIi8+PHJlY3QgeD0iOTgiIHk9IjQwIiB3aWR0aD0iMzAiIGhlaWdodD0iMTAwIiByeD0iNyIgZmlsbD0iIzJlZTU5ZCIvPjwvc3ZnPg==">
+<link rel="apple-touch-icon" href="data:image/png;base64,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">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
 <style>
 /* ========== Sistema de diseño estilo Apple (colores del sistema iOS / macOS) ========== */
 :root{
   color-scheme: light;
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro", "Helvetica Neue", "Segoe UI", Roboto, system-ui, sans-serif;
-  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro", "Helvetica Neue", "Segoe UI", Roboto, system-ui, sans-serif;
+  --font-display: "Sora", -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro", "Helvetica Neue", "Segoe UI", Roboto, system-ui, sans-serif;
   --font-rounded: ui-rounded, "SF Pro Rounded", -apple-system, BlinkMacSystemFont, "Helvetica Neue", system-ui, sans-serif;
 
   --ground:#f2f2f7; --surface:#ffffff; --surface-2:#f2f2f7; --surface-3:#e5e5ea;
   --fill:rgba(120,120,128,.12); --fill-2:rgba(120,120,128,.16); --fill-3:rgba(120,120,128,.20);
   --ink:#000000; --muted:#6e6e73; --faint:#8e8e93;
   --border:#e5e5ea; --border-strong:#d1d1d6; --hairline:rgba(60,60,67,.18);
-  --accent:#007aff; --accent-soft:rgba(0,122,255,.12); --accent-ink:#0064d2; --accent-contrast:#ffffff;
+  --accent:#0f9d5c; --accent-soft:rgba(18,183,106,.13); --accent-ink:#0b7d48; --accent-contrast:#ffffff; --brand:#12b76a; --brand-ink:#0c0f0d;
   --good:#248a3d; --good-soft:rgba(52,199,89,.14); --good-contrast:#ffffff; --good-fill:#34c759;
   --warn:#c93400; --warn-soft:rgba(255,149,0,.14); --warn-fill:#ff9500;
   --bad:#ff3b30; --bad-soft:rgba(255,59,48,.12);
@@ -52,7 +58,7 @@
     --fill:rgba(120,120,128,.24); --fill-2:rgba(120,120,128,.32); --fill-3:rgba(120,120,128,.36);
     --ink:#ffffff; --muted:#98989d; --faint:#6c6c70;
     --border:#38383a; --border-strong:#48484a; --hairline:rgba(84,84,88,.6);
-    --accent:#0a84ff; --accent-soft:rgba(10,132,255,.2); --accent-ink:#409cff; --accent-contrast:#ffffff;
+    --accent:#1fb36c; --accent-soft:rgba(46,229,157,.18); --accent-ink:#3ddc8f; --accent-contrast:#ffffff; --brand:#2ee59d; --brand-ink:#ffffff;
     --good:#30d158; --good-soft:rgba(48,209,88,.18); --good-contrast:#ffffff; --good-fill:#30d158;
     --warn:#ff9f0a; --warn-soft:rgba(255,159,10,.18); --warn-fill:#ff9f0a;
     --bad:#ff453a; --bad-soft:rgba(255,69,58,.18);
@@ -71,7 +77,7 @@
   --fill:rgba(120,120,128,.24); --fill-2:rgba(120,120,128,.32); --fill-3:rgba(120,120,128,.36);
   --ink:#ffffff; --muted:#98989d; --faint:#6c6c70;
   --border:#38383a; --border-strong:#48484a; --hairline:rgba(84,84,88,.6);
-  --accent:#0a84ff; --accent-soft:rgba(10,132,255,.2); --accent-ink:#409cff; --accent-contrast:#ffffff;
+  --accent:#1fb36c; --accent-soft:rgba(46,229,157,.18); --accent-ink:#3ddc8f; --accent-contrast:#ffffff; --brand:#2ee59d; --brand-ink:#ffffff;
   --good:#30d158; --good-soft:rgba(48,209,88,.18); --good-contrast:#ffffff; --good-fill:#30d158;
   --warn:#ff9f0a; --warn-soft:rgba(255,159,10,.18); --warn-fill:#ff9f0a;
   --bad:#ff453a; --bad-soft:rgba(255,69,58,.18);
@@ -735,6 +741,13 @@ body.role-trabajador .pexp{display:none !important}
 .pwd-eye.on{opacity:1; color:var(--accent)}
 
 /* Login y panel de usuarios */
+.bl-logo{display:inline-flex;align-items:baseline;font:800 26px/1 "Sora",var(--font);letter-spacing:-.04em;color:var(--brand-ink,var(--ink));white-space:nowrap}
+.bl-logo i{display:inline-block;width:.15em;border-radius:.03em;margin:0 .035em 0 .045em;background:var(--brand)}
+.bl-logo i:nth-of-type(1){height:.52em}.bl-logo i:nth-of-type(2){height:.74em}
+.bl-head{display:flex;justify-content:center;margin:0 0 22px}
+.bl-head .bl-logo{font-size:40px}
+.bl-mini{display:flex;margin:0 0 6px}.bl-mini .bl-logo{font-size:17px;opacity:.9}
+.bl-foot{display:block;text-align:center;margin-top:18px;font-size:12px;color:var(--faint)}
 .login-wrap{max-width:400px; margin:8vh auto 0; padding:0 18px}
 .login-card{background:var(--surface); border:1px solid var(--border); border-radius:18px; box-shadow:var(--shadow-lg); padding:28px 26px; animation:scaleIn .5s var(--ease-out)}
 .login-card h1{font-family:var(--font-display); font-size:24px; margin:0 0 4px; letter-spacing:-.02em}
@@ -2086,7 +2099,7 @@ body::before{
         enabled: ne.enabled!==false,
         accessKey: ne.accessKey || '',
         destinatario: ne.destinatario || '',
-        fromName: ne.fromName || 'VELORA',
+        fromName: ne.fromName || 'Billon',
         extras: Array.isArray(ne.extras) ? ne.extras : [],
         keys: Array.isArray(ne.keys) ? ne.keys : []  // lista de {label, key} para múltiples destinatarios
       }
@@ -2617,7 +2630,7 @@ body::before{
       }
     }
     return '<div class="top">'+
-      '<div class="brand"><h1>'+esc((secActiva.marca||secActiva.nombre||'').toUpperCase())+ (secActiva.sublabel?' <span style="font-weight:400;color:var(--muted);letter-spacing:0">'+esc(secActiva.sublabel)+'</span>':'') +'</h1><p>'+esc(lead)+' '+((isScopedAdmin() && adminScope().length<2)?'':'<button class="change-sect" data-act="change-section" title="Cambiar de sección">Cambiar</button>')+'</p></div>'+
+      '<div class="brand"><div class="bl-mini">'+blLogo()+'</div><h1>'+esc((secActiva.marca||secActiva.nombre||'').toUpperCase())+ (secActiva.sublabel?' <span style="font-weight:400;color:var(--muted);letter-spacing:0">'+esc(secActiva.sublabel)+'</span>':'') +'</h1><p>'+esc(lead)+' '+((isScopedAdmin() && adminScope().length<2)?'':'<button class="change-sect" data-act="change-section" title="Cambiar de sección">Cambiar</button>')+'</p></div>'+
       '<div class="top-tools">'+
         '<button class="hamburger" data-act="menu" title="Menú" aria-label="Menú">'+sf('menu')+'</button>'+
         whoLine+connHTML()+
@@ -2928,10 +2941,14 @@ body::before{
 
   function refreshProds(){ var el=document.getElementById('prods'); if(el) el.innerHTML=productsHTML(); }
 
+  /* ---------- marca Billon ---------- */
+  function blLogo(){ return '<span class="bl-logo" role="img" aria-label="Billon">bi<i></i><i></i>on</span>'; }
+  var BL_HEAD='<div class="bl-head">'+blLogo()+'</div>';
+
   /* ---------- pantalla de conexión ---------- */
   function renderSetup(pre){
     pre=pre||{};
-    app.innerHTML='<div class="setup"><div class="card2">'+
+    app.innerHTML='<div class="setup"><div class="card2">'+BL_HEAD+
       '<h1>Conecta tu base de datos</h1>'+
       '<p class="lead">Pega los datos de tu Worker en Cloudflare para activar la sincronización. Se guardan solo en este dispositivo.</p>'+
       '<div class="field"><label>Worker URL</label><input type="text" id="s-url" placeholder="https://velora-data.tu-usuario.workers.dev" value="'+esc(pre.url||'')+'"><span class="help">Cloudflare → Workers → tu worker → la URL que aparece arriba</span></div>'+
@@ -2976,7 +2993,7 @@ body::before{
 
   /* ---------- login ---------- */
   function renderBootSplash(){
-    app.innerHTML='<div class="login-wrap"><div class="login-card" style="text-align:center; padding:40px 26px">'+
+    app.innerHTML='<div class="login-wrap"><div class="login-card" style="text-align:center; padding:40px 26px">'+BL_HEAD+
       '<div class="spin" style="width:24px; height:24px; margin:0 auto 14px; color:var(--accent)"></div>'+
       '<h1 style="font-size:19px; margin:0 0 4px">Cargando…</h1>'+
       '<p class="lead" style="margin:0">Descargando la información de la plataforma.</p>'+
@@ -3053,7 +3070,7 @@ body::before{
 
   function renderLogin(){
     var needsAdmin = !state.usuarios.length;
-    app.innerHTML='<div class="login-wrap"><div class="login-card">'+
+    app.innerHTML='<div class="login-wrap"><div class="login-card">'+BL_HEAD+
       (needsAdmin
         ? '<h1>Crea tu cuenta de administrador</h1><p class="lead">Este es el primer usuario de la plataforma. Podrás crear más trabajadores después.</p>'
         : '<h1>Inicia sesión</h1><p class="lead">Ingresa con tu nombre y contraseña.</p>'
@@ -3104,7 +3121,7 @@ body::before{
   }
 
   function renderRegister(){
-    app.innerHTML='<div class="login-wrap"><div class="login-card">'+
+    app.innerHTML='<div class="login-wrap"><div class="login-card">'+BL_HEAD+
       '<h1>Crea tu cuenta</h1><p class="lead">Elige tu nombre de usuario y contraseña. Los demás datos los completas después.</p>'+
       '<div class="field"><label>Nombre de usuario</label><input type="text" id="rg-name" placeholder="Ej: Juan"></div>'+
       '<div class="field" style="margin-top:12px"><label>Contraseña</label>'+
@@ -4790,7 +4807,7 @@ body::before{
     var sb = document.createElement('div');
     sb.className = 'sidebar-scrim';
     sb.innerHTML = '<div class="sidebar" role="dialog" aria-modal="true" aria-label="Menú">'+
-      '<div class="sidebar-hd"><h2>Menú</h2><button class="close-sb" data-role="close-sb" aria-label="Cerrar">✕</button></div>'+
+      '<div class="sidebar-hd"><h2 aria-label="Menú">'+blLogo()+'</h2><button class="close-sb" data-role="close-sb" aria-label="Cerrar">✕</button></div>'+
       ventas + cuenta + adminSection + datos + conexion +
     '</div>';
     document.body.appendChild(sb);
@@ -5392,7 +5409,7 @@ body::before{
   async function enviarEmailPedido(order){
     var ne=state.notifEmail||{};
     if(!ne.enabled){ return {skipped:true}; }
-    var fromName=(ne.fromName||'VELORA').trim() || 'VELORA';
+    var fromName=(ne.fromName||'Billon').trim() || 'Billon';
     // Junto todas las keys: la principal + las adicionales del array keys[]
     var allKeys=[];
     if(ne.accessKey) allKeys.push({label:'principal', key:ne.accessKey});
@@ -5421,7 +5438,7 @@ body::before{
   /* ---------- panel de notificaciones (admin) ---------- */
   function openNotifs(){
     if(!isSuper()){ showToast('Solo el admin principal puede configurar esto', false); return; }
-    var ne=state.notifEmail||{enabled:true, accessKey:'', keys:[], fromName:'VELORA'};
+    var ne=state.notifEmail||{enabled:true, accessKey:'', keys:[], fromName:'Billon'};
     var keys=(ne.keys||[]).filter(function(k){return k && k.key;});
     var keysHtml = keys.length
       ? keys.map(function(k,i){
@@ -5437,7 +5454,7 @@ body::before{
         '<p class="hint">Cada pedido guardado envía un email a cada Access Key configurada. Añade una key por cada admin (cada uno la crea con su email en <a href="https://web3forms.com" target="_blank" rel="noopener" style="color:var(--accent)">web3forms.com</a>).</p>'+
         '<div class="field"><label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="ne-on"'+(ne.enabled?' checked':'')+'> Enviar email por cada pedido</label></div>'+
         '<div class="f2">'+
-          '<div class="field"><label>Nombre remitente</label><input type="text" id="ne-from" value="'+esc(ne.fromName||'VELORA')+'" placeholder="VELORA"><span class="help">Aparece como "De: [nombre]"</span></div>'+
+          '<div class="field"><label>Nombre remitente</label><input type="text" id="ne-from" value="'+esc(ne.fromName||'Billon')+'" placeholder="Billon"><span class="help">Aparece como "De: [nombre]"</span></div>'+
           '<div class="field"><label>Access Key principal</label><input type="text" id="ne-key" value="'+esc(ne.accessKey||'')+'" placeholder="ej: 70942b0b-..."><span class="help">Tu email registrado en Web3Forms</span></div>'+
         '</div>'+
         '<div class="sub" style="margin-top:8px">Admins adicionales que reciben cada pedido</div>'+
@@ -5464,13 +5481,13 @@ body::before{
     var keys=(state.notifEmail && state.notifEmail.keys || []).slice();
     if(keys.some(function(k){return k.key===key;})){ showToast('Esa key ya está agregada',false); return; }
     keys.push({label: lbl||'admin', key:key});
-    state.notifEmail = Object.assign({enabled:true, accessKey:'', fromName:'VELORA'}, state.notifEmail||{}, {keys:keys});
+    state.notifEmail = Object.assign({enabled:true, accessKey:'', fromName:'Billon'}, state.notifEmail||{}, {keys:keys});
     openNotifs();
   }
   function neDelExtra(idx){
     var keys=(state.notifEmail && state.notifEmail.keys || []).slice();
     keys.splice(idx,1);
-    state.notifEmail = Object.assign({enabled:true, accessKey:'', fromName:'VELORA'}, state.notifEmail||{}, {keys:keys});
+    state.notifEmail = Object.assign({enabled:true, accessKey:'', fromName:'Billon'}, state.notifEmail||{}, {keys:keys});
     openNotifs();
   }
 
@@ -5505,7 +5522,7 @@ body::before{
     var ne={
       enabled: document.getElementById('ne-on').checked,
       accessKey: (document.getElementById('ne-key').value||'').trim(),
-      fromName: (document.getElementById('ne-from').value||'VELORA').trim() || 'VELORA',
+      fromName: (document.getElementById('ne-from').value||'Billon').trim() || 'Billon',
       keys: current.keys||[],
       extras: current.extras||[]  // conservado por compatibilidad
     };
@@ -5559,7 +5576,7 @@ body::before{
     var admin=isAdmin();
     // Trabajador
     if(!admin) return [
-      {sel:'.brand', title:'👋 Bienvenido a VELORA', body:'Este es tu panel para manejar pedidos. Te muestro rápido cada parte.'},
+      {sel:'.brand', title:'👋 Bienvenido a Billon', body:'Esta es tu plataforma para manejar productos, pedidos y ventas. Te muestro rápido cada parte.'},
       {sel:'.meta-card', title:'🎯 Tu meta del mes', body:'Aquí ves cuánto llevas vendido y cuánto te falta para llegar a tu meta mensual.'},
       {sel:'.stats', title:'📊 Tus números', body:'Un vistazo rápido: productos disponibles, pedidos que has hecho este mes y tu ganancia.'},
       {sel:'.search', title:'🔍 Buscar productos', body:'Escribe aquí el nombre del producto, marca o SKU para encontrarlo rápido.'},
@@ -6103,7 +6120,8 @@ body::before{
   function copyCartSummary(){
     var t=cartTotals(); if(!t.lineas){ showToast('Pedido vacío',false); return; }
     var c=currentCart().cliente;
-    var lines=['*Pedido VELORA*'];
+    var _sp=(state.secciones||[]).find(function(x){return x.id===activeSection;})||{};
+    var lines=['*Pedido '+(_sp.marca||_sp.nombre||'Billon')+'*'];
     if(c.nombre) lines.push('Cliente: '+c.nombre);
     if(c.tel) lines.push('Tel: '+c.tel);
     if(c.direccion) lines.push('Dirección: '+c.direccion+(c.ciudad?', '+c.ciudad:''));
