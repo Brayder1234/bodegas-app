@@ -2349,7 +2349,7 @@ body, button, input, select, textarea{ font-family:var(--font) }
   // Configuración fija de VELORA — Cloudflare Workers KV
   var DEFAULT_CFG={
     url:'https://velora-data.sarmientobrayder10.workers.dev',
-    key:'velora-2024-kv-secreto-x9m4p7'
+    key:'sesion'     // ya no hay llave pública: cada persona entra con su usuario y recibe un token firmado
   };
   // API de las tiendas web (catálogo público + bandeja de pedidos). Worker aparte: velora-tienda
   var TIENDA_URL='https://velora-tienda.sarmientobrayder10.workers.dev';
@@ -2451,7 +2451,7 @@ body, button, input, select, textarea{ font-family:var(--font) }
   function normUrl(u){ u=(u||'').trim().replace(/\/+$/,''); return u; }
   /* ---------- config ---------- */
   function loadCfg(){
-    if(DEFAULT_CFG.url && DEFAULT_CFG.key){
+    if(DEFAULT_CFG.url){
       try{ localStorage.setItem(CFG_KEY, JSON.stringify(DEFAULT_CFG)); }catch(e){}
       return DEFAULT_CFG;
     }
@@ -2466,11 +2466,22 @@ body, button, input, select, textarea{ font-family:var(--font) }
   function loadCache(){ try{ var s=JSON.parse(localStorage.getItem(CACHE_KEY)); if(s&&s.productos) return s; }catch(e){} return null; }
 
   /* ---------- Cloudflare Workers KV ---------- */
-  function cfHeaders(){ return {'Content-Type':'application/json','X-API-Key':cfg.key}; }
-  async function sbGet(){
-    var r=await fetch(cfg.url+'/data',{headers:cfHeaders()});
+  var TOKEN_KEY='bm-token';
+  function getToken(){ try{ return localStorage.getItem(TOKEN_KEY)||''; }catch(e){ return ''; } }
+  function setToken(t){ try{ if(t) localStorage.setItem(TOKEN_KEY,t); else localStorage.removeItem(TOKEN_KEY); }catch(e){} }
+  function cfHeaders(){ var h={'Content-Type':'application/json'}; var t=getToken(); if(t) h['Authorization']='Bearer '+t; return h; }
+  // la sesión venció o ya no existe: se vuelve a la pantalla de acceso
+  function sesionCaducada(){
+    clearSession(); stopPolling();
+    try{ render(); showToast('Tu sesión terminó. Inicia sesión de nuevo.', false); }catch(e){}
+    var e=new Error('401'); e.status=401; throw e;
+  }
+  async function sbGet(since){
+    var r=await fetch(cfg.url+'/data'+(since?'?since='+encodeURIComponent(since):''),{headers:cfHeaders()});
+    if(r.status===401) sesionCaducada();
     if(!r.ok) throw new Error('HTTP '+r.status);
     var row=await r.json();
+    if(row&&row.unchanged) return row;
     return row&&row.data?row:null;
   }
   /* ---------- fotos y videos fuera del estado ----------
@@ -2487,7 +2498,8 @@ body, button, input, select, textarea{ font-family:var(--font) }
     var h=await _sha20(dataUri);
     if(!_mediaOk[h]){
       var blob=await (await fetch(dataUri)).blob();
-      var r=await fetch(cfg.url+'/m/'+h,{method:'PUT',headers:{'X-API-Key':cfg.key,'Content-Type':blob.type||'image/jpeg'},body:blob});
+      var r=await fetch(cfg.url+'/m/'+h,{method:'PUT',headers:{'Authorization':'Bearer '+getToken(),'Content-Type':blob.type||'image/jpeg'},body:blob});
+      if(r.status===401) sesionCaducada();
       if(!r.ok) throw new Error('foto HTTP '+r.status);
       _mediaOk[h]=1; _mediaPersist();
     }
@@ -2511,17 +2523,26 @@ body, button, input, select, textarea{ font-family:var(--font) }
   }
   async function sbSave(){
     await externalizarMedia(state);
-    var body=Object.assign({}, state);
-    var r=await fetch(cfg.url+'/data',{method:'PUT',headers:cfHeaders(),body:JSON.stringify(body)});
-    if(!r.ok) throw new Error('HTTP '+r.status);
+    var payload={ base:lastServerStamp, state:Object.assign({}, state) };
+    var r=await fetch(cfg.url+'/data',{method:'PUT',headers:cfHeaders(),body:JSON.stringify(payload)});
+    if(r.status===401) sesionCaducada();
+    if(!r.ok){
+      var er=new Error('HTTP '+r.status); er.status=r.status;
+      try{ er.detalle=(await r.json()).error; }catch(x){}
+      throw er;
+    }
     var res=await r.json();
     if(res.updated_at) lastServerStamp=res.updated_at;
+    // otra persona guardó al mismo tiempo: el servidor unió los dos cambios y devuelve el resultado
+    if(res.merged && res.data){ state=sanitize(res.data); cacheState(); return {merged:true}; }
+    return {merged:false};
   }
 
   async function pullFromServer(applyIfNewer){
     try{
-      var row=await sbGet();
-      if(!row){ await sbSave(); return true; }
+      var row=await sbGet(applyIfNewer?lastServerStamp:'');
+      if(row && row.unchanged){ return false; }
+      if(!row){ if(isAdmin()){ await sbSave(); return true; } return false; }
       if(applyIfNewer && row.updated_at===lastServerStamp && !dirty) return false;
       if(!dirty){
         var d=row.data||row;
@@ -2730,7 +2751,13 @@ body, button, input, select, textarea{ font-family:var(--font) }
     catch(e){ try{ localStorage.removeItem(CACHE_KEY); localStorage.setItem(SESSION_KEY, v); }catch(x){} }
     try{ document.cookie='bm_session='+encodeURIComponent(v)+'; max-age=31536000; path=/; SameSite=Lax'; }catch(e){}
   }
-  function clearSession(){ try{ localStorage.removeItem(SESSION_KEY); }catch(e){} try{ document.cookie='bm_session=; max-age=0; path=/'; }catch(e){} session=null; }
+  function clearSession(){
+    try{ localStorage.removeItem(SESSION_KEY); }catch(e){}
+    try{ localStorage.removeItem(CACHE_KEY); }catch(e){}
+    try{ document.cookie='bm_session=; max-age=0; path=/'; }catch(e){}
+    setToken(''); session=null; dirty=false;
+    try{ state=sanitize({}); }catch(e){}
+  }
   function myUser(){ return session ? userById(session.usuarioId) : null; }
   function myRole(){ var me=myUser(); return me ? me.role : (session ? session.role : ''); }
   function isAdmin(){ return !!session && myRole()==='admin'; }
@@ -2832,28 +2859,22 @@ body, button, input, select, textarea{ font-family:var(--font) }
     if(!cfg){ setConn('off'); return; }
     setConn('saving');
     try{
-      // Antes de guardar, verificar si el servidor tiene datos más nuevos
-      var serverRow=await sbGet();
-      if(serverRow && serverRow.updated_at && lastServerStamp && serverRow.updated_at!==lastServerStamp){
-        // El servidor cambió desde nuestra última lectura — mergear
-        var sd=serverRow.data||serverRow;
-        if(sd._ts) delete sd._ts;
-        var serverState=sanitize(sd);
-        // Si el servidor tiene más productos, tomar los del servidor como base
-        if(serverState.productos.length > state.productos.length){
-          // Mantener nuestros cambios locales de usuarios/pedidos pero tomar productos del server
-          state.productos=serverState.productos;
-          state.marcas=serverState.marcas.length>=state.marcas.length?serverState.marcas:state.marcas;
-          state.bodegas=serverState.bodegas.length>=state.bodegas.length?serverState.bodegas:state.bodegas;
-        }
-        lastServerStamp=serverRow.updated_at;
-      }
-      await sbSave();
+      // El servidor une los cambios de todos (fusión de tres vías): ya no hace falta leer antes de guardar
+      var rs=await sbSave();
       dirty=false; setConn('ok');
+      if(rs && rs.merged){ try{ render(); }catch(x){} }
       if(pendingAck.length) ackInbox(pendingAck.slice());
       refrescarTienda();
       showToast('Guardado y sincronizado', false);
     }catch(e){
+      if(e && e.status===401) return;
+      if(e && (e.status===409 || e.status===413)){
+        // el servidor rechazó el cambio (por seguridad): no se reintenta en bucle
+        setConn('err'); dirty=false;
+        showToast((e.detalle||'El cambio no se pudo guardar.'), false);
+        try{ await pullFromServer(false); render(); }catch(x){}
+        return;
+      }
       setConn('err');
       showToast('No se pudo guardar (se guardó local). Reintentando…', false);
       clearTimeout(saveTimer); saveTimer=setTimeout(commit, 4000);
@@ -3675,7 +3696,8 @@ body, button, input, select, textarea{ font-family:var(--font) }
   }
 
   function renderLogin(){
-    var needsAdmin = !state.usuarios.length;
+    if(srvHayUsuarios===null){ consultarEstadoServidor().then(function(){ if(!session && !bootstrapping) renderLogin(); }); }
+    var needsAdmin = srvHayUsuarios===false;
     app.innerHTML=authShell(
       (needsAdmin
         ? '<h1>Crea tu cuenta de administrador</h1><p class="lead">Este es el primer usuario de la plataforma. Podrás crear más trabajadores después.</p>'
@@ -3713,8 +3735,8 @@ body, button, input, select, textarea{ font-family:var(--font) }
     if(frBtn) frBtn.addEventListener('click', async function(){
       frBtn.textContent='Cargando…'; frBtn.disabled=true;
       try{
-        await pullFromServer(false);
-        if(state.usuarios.length) renderLogin();
+        var hay=await consultarEstadoServidor();
+        if(hay){ renderLogin(); }
         else { frBtn.textContent='No se encontraron datos. Intenta de nuevo.'; frBtn.disabled=false; }
       }catch(e){ frBtn.textContent='Error: '+e.message+'. Toca para reintentar.'; frBtn.disabled=false; }
     });
@@ -3748,6 +3770,26 @@ body, button, input, select, textarea{ font-family:var(--font) }
       var el=document.getElementById(id); if(el) el.addEventListener('keydown', function(e){ if(e.key==='Enter') tryRegister(); });
     });
   }
+  var srvHayUsuarios=null;   // ¿el servidor ya tiene usuarios? (null = aún no se sabe)
+  async function authPost(path, body){
+    var r=await fetch(cfg.url+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    var j={}; try{ j=await r.json(); }catch(e){}
+    return {ok:r.ok, status:r.status, j:j};
+  }
+  async function consultarEstadoServidor(){
+    try{ var r=await fetch(cfg.url+'/auth/status'); var j=await r.json(); srvHayUsuarios=!!j.hayUsuarios; }catch(e){}
+    return srvHayUsuarios;
+  }
+  // el servidor entregó un token: se guarda, se descargan los datos que le corresponden y se entra
+  async function entrarConToken(j, bienvenida){
+    setToken(j.token);
+    session={usuarioId:j.user.id, usuarioNombre:j.user.nombre, role:j.user.role};
+    saveSession(session);
+    try{ dirty=false; lastServerStamp=null; await pullFromServer(false); }catch(e){}
+    render(); startPolling();
+    showToast((bienvenida||'Bienvenido, ')+j.user.nombre, false);
+    autoStartTutorial();
+  }
   async function tryRegister(){
     var name=(document.getElementById('rg-name').value||'').trim();
     var pwd=document.getElementById('rg-pwd').value||'';
@@ -3757,23 +3799,12 @@ body, button, input, select, textarea{ font-family:var(--font) }
     if(pwd.length<4){ msg.innerHTML='<div class="callout warn">La contraseña debe tener al menos 4 caracteres.</div>'; return; }
     if(pwd!==pwd2){ msg.innerHTML='<div class="callout warn">Las contraseñas no coinciden.</div>'; return; }
     msg.innerHTML='<div class="callout"><span class="spin" style="display:inline-block;vertical-align:-2px"></span> Creando cuenta…</div>';
-    try{ await pullFromServer(false); }catch(e){}
-    if(findUser(name)){ msg.innerHTML='<div class="callout warn">Ya existe un usuario con el nombre "'+esc(name)+'". Usa otro nombre.</div>'; return; }
-    var salt=randSalt(); var hash=await hashPwd(pwd, salt);
-    var u={
-      id:uidUser(), nombre:name, salt:salt, hash:hash,
-      role:'trabajador', createdAt:new Date().toISOString(),
-      cedula:'', telefono:'', correo:'', cuentaPago:'',
-      tutorialVisto:false,
-      secciones: []
-    };
-    state.usuarios.push(u);
-    session={usuarioId:u.id, usuarioNombre:u.nombre, role:u.role};
-    saveSession(session);
-    await commit();
-    render(); startPolling();
-    showToast('¡Bienvenido, '+u.nombre+'!', false);
-    autoStartTutorial();
+    try{
+      var salt=randSalt(); var hash=await hashPwd(pwd, salt);
+      var r=await authPost('/auth/register',{nombre:name, salt:salt, hash:hash});
+      if(!r.ok||!r.j.token){ msg.innerHTML='<div class="callout warn">'+esc(r.j.error||'No se pudo crear la cuenta.')+'</div>'; return; }
+      await entrarConToken(r.j, '¡Bienvenido, ');
+    }catch(e){ msg.innerHTML='<div class="callout warn">No se pudo conectar con el servidor. Revisa tu internet.</div>'; }
   }
   async function tryLogin(){
     var name=(document.getElementById('lg-name').value||'').trim();
@@ -3781,23 +3812,15 @@ body, button, input, select, textarea{ font-family:var(--font) }
     var msg=document.getElementById('lg-msg');
     if(!name||!pwd){ msg.innerHTML='<div class="callout warn">Escribe usuario y contraseña.</div>'; return; }
     msg.innerHTML='<div class="callout"><span class="spin" style="display:inline-block;vertical-align:-2px"></span> Verificando…</div>';
-    // sincroniza el estado antes de validar (para respetar cambios recientes del admin)
-    var fresh=null;
-    try{ var row=await sbGet(); if(row){ var d=row.data||row; if(d._ts) delete d._ts; fresh=sanitize(d); } }catch(e){}
-    if(fresh && fresh.usuarios.length){
-      if(!dirty){ state=fresh; cacheState(); } else { state.usuarios=fresh.usuarios; }
-    } else if(!state.usuarios.length){
-      msg.innerHTML='<div class="callout warn">No se pudo conectar con el servidor. Revisa tu internet e intenta de nuevo.</div>'; return;
-    }
-    var u=findUser(name);
-    if(!u){ msg.innerHTML='<div class="callout warn">Usuario o contraseña incorrectos.</div>'; return; }
-    var ok=await verifyPwd(pwd, u.salt, u.hash);
-    if(!ok){ msg.innerHTML='<div class="callout warn">Usuario o contraseña incorrectos.</div>'; return; }
-    session={usuarioId:u.id, usuarioNombre:u.nombre, role:u.role};
-    saveSession(session);
-    render(); startPolling();
-    showToast('Bienvenido, '+u.nombre, false);
-    autoStartTutorial();
+    try{
+      // la contraseña nunca viaja: se calcula su huella aquí con la sal del usuario y solo se envía la huella
+      var rs=await authPost('/auth/salt',{nombre:name});
+      if(!rs.ok||!rs.j.salt){ msg.innerHTML='<div class="callout warn">No se pudo conectar con el servidor. Intenta de nuevo.</div>'; return; }
+      var hash=await hashPwd(pwd, rs.j.salt);
+      var rl=await authPost('/auth/login',{nombre:name, hash:hash});
+      if(!rl.ok||!rl.j.token){ msg.innerHTML='<div class="callout warn">'+esc(rl.j.error||'Usuario o contraseña incorrectos.')+'</div>'; return; }
+      await entrarConToken(rl.j, 'Bienvenido, ');
+    }catch(e){ msg.innerHTML='<div class="callout warn">No se pudo conectar con el servidor. Revisa tu internet e intenta de nuevo.</div>'; }
   }
   async function tryCreateFirstAdmin(){
     var name=(document.getElementById('lg-name').value||'').trim();
@@ -3807,26 +3830,16 @@ body, button, input, select, textarea{ font-family:var(--font) }
     if(!name||name.length<2){ msg.innerHTML='<div class="callout warn">Escribe un nombre de usuario (mínimo 2 letras).</div>'; return; }
     if(pwd.length<4){ msg.innerHTML='<div class="callout warn">La contraseña debe tener al menos 4 caracteres.</div>'; return; }
     if(pwd!==pwd2){ msg.innerHTML='<div class="callout warn">Las contraseñas no coinciden.</div>'; return; }
-    msg.innerHTML='<div class="callout"><span class="spin" style="display:inline-block;vertical-align:-2px"></span> Verificando…</div>';
-    // Anti-race: pull antes de crear para no pisar usuarios existentes
-    try{ await pullFromServer(false); }catch(e){}
-    if(state.usuarios.length){
-      // Ya hay usuarios registrados — pasar a modo login
-      renderLogin();
-      var m2=document.getElementById('lg-msg');
-      if(m2) m2.innerHTML='<div class="callout warn">Ya existe una cuenta creada. Inicia sesión con tu usuario y contraseña.</div>';
-      var n=document.getElementById('lg-name'); if(n){ n.value=name; var p=document.getElementById('lg-pwd'); if(p){ p.value=pwd; p.focus(); } }
-      return;
-    }
     msg.innerHTML='<div class="callout"><span class="spin" style="display:inline-block;vertical-align:-2px"></span> Creando…</div>';
-    var salt=randSalt(); var hash=await hashPwd(pwd, salt);
-    var u={id:uidUser(), nombre:name, salt:salt, hash:hash, role:'admin', createdAt:new Date().toISOString()};
-    state.usuarios.push(u);
-    session={usuarioId:u.id, usuarioNombre:u.nombre, role:u.role};
-    saveSession(session);
-    await commit();
-    render(); startPolling();
-    showToast('¡Cuenta creada! Bienvenido, '+u.nombre, false);
+    try{
+      var salt=randSalt(); var hash=await hashPwd(pwd, salt);
+      var r=await authPost('/auth/first-admin',{nombre:name, salt:salt, hash:hash});
+      if(!r.ok||!r.j.token){
+        if(r.status===409){ srvHayUsuarios=true; renderLogin(); var m2=document.getElementById('lg-msg'); if(m2) m2.innerHTML='<div class="callout warn">Ya existe una cuenta creada. Inicia sesión con tu usuario y contraseña.</div>'; return; }
+        msg.innerHTML='<div class="callout warn">'+esc(r.j.error||'No se pudo crear la cuenta.')+'</div>'; return;
+      }
+      await entrarConToken(r.j, '¡Cuenta creada! Bienvenido, ');
+    }catch(e){ msg.innerHTML='<div class="callout warn">No se pudo conectar con el servidor.</div>'; }
   }
 
   /* ---------- panel de usuarios (admin) ---------- */
@@ -4381,7 +4394,7 @@ body, button, input, select, textarea{ font-family:var(--font) }
   function stopPolling(){ if(pollTimer) clearInterval(pollTimer); }
   function onVis(){ if(document.visibilityState==='visible') syncPull(); }
   async function syncPull(){
-    if(!cfg||dirty) return;
+    if(!cfg||dirty||!getToken()) return;
     try{ var changed=await pullFromServer(true); if(changed){ render(); startPollingRefresh(); } }catch(e){}
     pullInbox();
   }
@@ -7251,8 +7264,14 @@ body, button, input, select, textarea{ font-family:var(--font) }
   /* ---------- init ---------- */
   cfg=loadCfg();
   session=loadSession();
-  var cached=loadCache(); if(cached) state=sanitize(cached);
+  if(session && !getToken()){ clearSession(); }       // sesiones anteriores sin token: hay que iniciar de nuevo
+  var cached=session ? loadCache() : null; if(cached) state=sanitize(cached);
   if(!cfg){ render(); }
+  else if(!session){
+    // sin sesión: solo se averigua si ya hay usuarios (para mostrar acceso o creación del primer administrador)
+    bootstrapping=true; render();
+    (async function(){ await consultarEstadoServidor(); bootstrapping=false; render(); })();
+  }
   else{
     // Sólo mostrar el splash si NO hay datos locales confiables aún
     // (sin usuarios cargados y sin sesión previa). Si ya hay cache con usuarios,
