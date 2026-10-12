@@ -2278,6 +2278,22 @@ html:not(.bl-anim-done) .wrap .stats > .stat, html:not(.bl-anim-done) .wrap .met
 }
 body, button, input, select, textarea{ font-family:var(--font) }
 .in-top .brand h1, .in-top .brand h1 .sub, .sp-hero h1, .spc h3{ font-family:var(--font-brand) !important }
+
+/* ---------- método de pago ---------- */
+.pago-ops{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px }
+.pago-op{ display:flex; align-items:center; gap:10px; padding:12px; border-radius:14px; border:1px solid var(--border); background:var(--fill); color:var(--ink); text-align:left; cursor:pointer; font-family:inherit; transition:border-color .2s, background .2s }
+.pago-op span{ display:flex; flex-direction:column; min-width:0 } .pago-op b{ font-size:14px } .pago-op small{ font-size:11.5px; color:var(--muted); line-height:1.25 }
+.pago-op i{ flex:none; width:30px; height:30px; border-radius:9px; display:grid; place-items:center; font:800 13px var(--font); font-style:normal }
+.pm-nequi{ background:#2b0b33; color:#ff2e93 } .pm-nequi::before{ content:"N" }
+.pm-bancolombia{ background:#fdda24; color:#111 } .pm-bancolombia::before{ content:"B" }
+.pm-breb{ background:#0d3b66; color:#5fd3ff } .pm-breb::before{ content:"B·" }
+.pago-op.on{ border-color:var(--brand); background:rgba(46,229,157,.10); box-shadow:0 0 0 1px var(--brand) inset }
+.pago-in{ display:none; flex-direction:column; gap:12px; margin-top:12px; padding:14px; border-radius:14px; background:var(--fill) }
+.pago-f[data-met="nequi"] .pago-in[data-for="nequi"], .pago-f[data-met="bancolombia"] .pago-in[data-for="bancolombia"], .pago-f[data-met="breb"] .pago-in[data-for="breb"]{ display:flex; animation:abUp .35s cubic-bezier(.22,1,.36,1) both }
+.pago-seg{ display:flex; gap:4px; padding:4px; border-radius:12px; background:var(--fill) }
+.pago-seg button{ flex:1; height:38px; border:none; border-radius:9px; background:transparent; color:var(--muted); font:600 14px var(--font); cursor:pointer }
+.pago-seg button.on{ background:var(--surface); color:var(--ink); box-shadow:0 0 0 1px var(--border) }
+@media (max-width:520px){ .pago-ops{ grid-template-columns:1fr } }
 </style>
 </head>
 <body>
@@ -3796,7 +3812,7 @@ body, button, input, select, textarea{ font-family:var(--font) }
     body+='<div class="f2"><div class="field"><label>Número de cédula</label><input type="text" inputmode="numeric" id="nu-cedula" placeholder="1234567890"></div>'+
       '<div class="field"><label>Teléfono</label><input type="tel" inputmode="tel" id="nu-tel" placeholder="3001234567"></div></div>';
     body+='<div class="field"><label>Correo</label><input type="email" id="nu-correo" placeholder="maria@ejemplo.com"></div>';
-    body+='<div class="field"><label>Nequi / Cuenta bancaria (para pagos)</label><input type="text" id="nu-pago" placeholder="Nequi 3001234567 · o Bancolombia 12345678"></div>';
+    body+=pagoFieldsHTML('nu', {});
     body+='<div style="display:flex; gap:8px; align-items:center">'+(scopedV?'<input type="checkbox" id="nu-admin" style="display:none">':'<label style="display:inline-flex;gap:6px;align-items:center;font-size:13px;color:var(--muted)"><input type="checkbox" id="nu-admin"> Crear como admin</label>')+
       '<button class="btn primary" data-act="us-create" style="margin-left:auto">＋ Añadir trabajador</button></div>';
     body+='</div>';
@@ -3805,6 +3821,7 @@ body, button, input, select, textarea{ font-family:var(--font) }
       body+
       '<div class="modal-ft"><button class="btn ghost" data-role="close" style="margin-left:auto">Cerrar</button></div>'+
     '</div></div>';
+    bindPago('nu');
   }
   async function createUser(){
     var name=(document.getElementById('nu-name').value||'').trim();
@@ -3816,12 +3833,14 @@ body, button, input, select, textarea{ font-family:var(--font) }
     var cedula=(document.getElementById('nu-cedula').value||'').trim();
     var telefono=(document.getElementById('nu-tel').value||'').trim();
     var correo=(document.getElementById('nu-correo').value||'').trim();
-    var cuentaPago=(document.getElementById('nu-pago').value||'').trim();
+    var rpn=leerPago('nu');
+    if(rpn.err){ showToast(rpn.err,false); return; }
+    var cuentaPago=rpn.texto||'';
     var salt=randSalt(); var hash=await hashPwd(pwd, salt);
     state.usuarios.push({
       id:uidUser(), nombre:name, salt:salt, hash:hash,
       role:asAdmin?'admin':'trabajador', createdAt:new Date().toISOString(),
-      cedula:cedula, telefono:telefono, correo:correo, cuentaPago:cuentaPago,
+      cedula:cedula, telefono:telefono, correo:correo, cuentaPago:cuentaPago, pago:rpn.pago||null,
       secciones: asAdmin ? [] : [activeSection||'maquillaje']
     });
     asegurarCodigos();
@@ -3903,7 +3922,7 @@ body, button, input, select, textarea{ font-family:var(--font) }
         '<div class="f2"><div class="field"><label>Cédula</label><input type="text" inputmode="numeric" id="ue-cedula" value="'+esc(u.cedula||'')+'"></div>'+
           '<div class="field"><label>Teléfono</label><input type="tel" inputmode="tel" id="ue-tel" value="'+esc(u.telefono||'')+'"></div></div>'+
         '<div class="field"><label>Correo</label><input type="email" id="ue-correo" value="'+esc(u.correo||'')+'"></div>'+
-        '<div class="field"><label>Nequi / Cuenta bancaria</label><input type="text" id="ue-pago" value="'+esc(u.cuentaPago||'')+'"></div>'+
+        pagoFieldsHTML('ue', u)+
         (puedeEditarMeta()?'<div class="field"><label>🎯 Meta mensual personal en '+esc(nombreSec())+' (opcional)</label><input type="number" inputmode="numeric" id="ue-meta" min="0" value="'+esc((u.metas&&u.metas[activeSection||'maquillaje']>0)?u.metas[activeSection||'maquillaje']:'')+'" placeholder="'+esc(String(metaPersonalDe(null)))+'"><span class="help">Si la dejas vacía usa la meta personal general de '+esc(nombreSec())+' ('+fmt(metaPersonalDe(null))+'). Solo tú ves y cambias esto.</span></div>':'')+
         '<div class="field"><label>🏷 Código de vendedor</label>'+
           '<input type="text" id="ue-codigo" maxlength="12" autocapitalize="characters" style="text-transform:uppercase;font-weight:700;letter-spacing:.08em" value="'+esc(u.codigo||'')+'"'+(isAdmin()?'':' readonly')+'>'+
@@ -3914,6 +3933,7 @@ body, button, input, select, textarea{ font-family:var(--font) }
       '<div class="modal-ft"><button class="btn ghost" data-role="close">Cancelar</button><button class="btn primary" data-act="us-savedata" data-uid="'+esc(u.id)+'">Guardar</button></div>'+
     '</div></div>';
     host.querySelectorAll('[data-copy]').forEach(function(b){ b.addEventListener('click', function(){ copiarTexto(b.getAttribute('data-copy')); }); });
+    bindPago('ue');
     // foto de perfil (se aplica al pulsar Guardar)
     _fotoPend = undefined;
     var fInp=document.getElementById('ue-foto-file'), fBtn=document.getElementById('ue-foto-btn'), fDel=document.getElementById('ue-foto-del'), fAv=document.getElementById('ue-av');
@@ -3945,7 +3965,11 @@ body, button, input, select, textarea{ font-family:var(--font) }
     u.cedula=(document.getElementById('ue-cedula').value||'').trim();
     u.telefono=(document.getElementById('ue-tel').value||'').trim();
     u.correo=(document.getElementById('ue-correo').value||'').trim();
-    u.cuentaPago=(document.getElementById('ue-pago').value||'').trim();
+    var rp=leerPago('ue');
+    if(rp.err){ showToast(rp.err,false); return; }
+    if(rp.pago){ u.pago=rp.pago; u.cuentaPago=rp.texto; }
+    else if(!(document.getElementById('ue-pagobox').getAttribute('data-met'))){ /* sin método elegido: se deja lo que había */ }
+    else { delete u.pago; u.cuentaPago=''; }
     var mEl=document.getElementById('ue-meta');
     if(mEl && puedeEditarMeta()){ var secU=activeSection||'maquillaje'; var mv=parseFloat(mEl.value); if(!u.metas||typeof u.metas!=='object') u.metas={}; if(mv>0) u.metas[secU]=Math.round(mv); else delete u.metas[secU]; }
     var cEl=document.getElementById('ue-codigo');
@@ -4054,6 +4078,85 @@ body, button, input, select, textarea{ font-family:var(--font) }
     newInp.addEventListener('keydown', function(e){ if(e.key==='Enter') addMarca(); });
   }
 
+
+  /* ---------- método de pago del trabajador: Nequi · Bancolombia · Bre-B ---------- */
+  var PAGO_MET={nequi:'Nequi', bancolombia:'Bancolombia', breb:'Bre-B'};
+  var BREB_LLAVES={celular:'Celular', cedula:'Cédula', correo:'Correo', alfa:'Llave alfanumérica (@)'};
+  function pagoDe(u){
+    if(u && u.pago && u.pago.metodo) return Object.assign({}, u.pago);
+    var t=String((u&&u.cuentaPago)||''), d=t.replace(/\D/g,''), lo=t.toLowerCase();
+    if(/bancolombia/.test(lo)) return {metodo:'bancolombia', tipoCuenta:/corriente/.test(lo)?'corriente':'ahorros', numero:d};
+    if(/bre-?b/.test(lo)) return {metodo:'breb', tipoLlave:'celular', llave:d||t};
+    if(d.length===10 && d.charAt(0)==='3') return {metodo:'nequi', numero:d};
+    return {metodo:'', anterior:t};
+  }
+  function pagoTexto(pg){
+    if(!pg||!pg.metodo) return '';
+    if(pg.metodo==='nequi') return 'Nequi · '+pg.numero;
+    if(pg.metodo==='bancolombia') return 'Bancolombia · '+(pg.tipoCuenta==='corriente'?'Corriente':'Ahorros')+' · '+pg.numero;
+    return 'Bre-B · '+(BREB_LLAVES[pg.tipoLlave]||'Llave')+' · '+pg.llave;
+  }
+  function pagoFieldsHTML(pre, u){
+    var pg=pagoDe(u);
+    function op(k,sub){ return '<button type="button" class="pago-op'+(pg.metodo===k?' on':'')+'" data-pmet="'+k+'"><i class="pm-'+k+'"></i><span><b>'+PAGO_MET[k]+'</b><small>'+sub+'</small></span></button>'; }
+    return '<div class="field pago-f" id="'+pre+'-pagobox" data-met="'+esc(pg.metodo||'')+'">'+
+      '<label>Método de pago (para pagarte tus ganancias)</label>'+
+      '<div class="pago-ops">'+op('nequi','Número de celular')+op('bancolombia','Cuenta de ahorros o corriente')+op('breb','Llave Bre-B')+'</div>'+
+      '<div class="pago-in" data-for="nequi"><div class="field"><label>Número Nequi</label><input type="tel" inputmode="numeric" maxlength="12" id="'+pre+'-pg-nequi" placeholder="300 123 4567" value="'+esc(pg.metodo==='nequi'?pg.numero:'')+'"><span class="help">El celular registrado en Nequi (10 dígitos, empieza por 3).</span></div></div>'+
+      '<div class="pago-in" data-for="bancolombia">'+
+        '<div class="field"><label>Tipo de cuenta</label><div class="pago-seg">'+
+          '<button type="button" data-ptc="ahorros" class="'+(pg.metodo!=='bancolombia'||pg.tipoCuenta!=='corriente'?'on':'')+'">Ahorros</button>'+
+          '<button type="button" data-ptc="corriente" class="'+(pg.metodo==='bancolombia'&&pg.tipoCuenta==='corriente'?'on':'')+'">Corriente</button></div></div>'+
+        '<div class="field"><label>Número de cuenta Bancolombia</label><input type="text" inputmode="numeric" maxlength="14" id="'+pre+'-pg-banco" placeholder="123 456789 01" value="'+esc(pg.metodo==='bancolombia'?pg.numero:'')+'"><span class="help">11 dígitos, sin guiones. Debe estar a nombre de quien aparece en la cédula.</span></div>'+
+      '</div>'+
+      '<div class="pago-in" data-for="breb">'+
+        '<div class="field"><label>Tipo de llave</label><select id="'+pre+'-pg-tllave">'+Object.keys(BREB_LLAVES).map(function(k){ return '<option value="'+k+'"'+((pg.metodo==='breb'?pg.tipoLlave:'celular')===k?' selected':'')+'>'+BREB_LLAVES[k]+'</option>'; }).join('')+'</select></div>'+
+        '<div class="field"><label>Llave Bre-B</label><input type="text" id="'+pre+'-pg-llave" value="'+esc(pg.metodo==='breb'?pg.llave:'')+'"><span class="help" id="'+pre+'-pg-llhelp"></span></div>'+
+      '</div>'+
+      (pg.anterior?'<span class="help">Dato que tenías guardado: <b>'+esc(pg.anterior)+'</b>. Elige el método y escríbelo de nuevo.</span>':'')+
+    '</div>';
+  }
+  function bindPago(pre){
+    var box=document.getElementById(pre+'-pagobox'); if(!box) return;
+    var LL={celular:['300 123 4567','tel','El celular inscrito como llave (10 dígitos).'], cedula:['1234567890','text','Tu número de cédula, solo números.'],
+            correo:['tucorreo@ejemplo.com','email','El correo inscrito como llave.'], alfa:['@tunombre','text','Empieza con @ (letras y números).']};
+    function llaveUI(){ var t=document.getElementById(pre+'-pg-tllave').value, inp=document.getElementById(pre+'-pg-llave'), h=document.getElementById(pre+'-pg-llhelp');
+      inp.placeholder=LL[t][0]; inp.type=LL[t][1]; inp.inputMode=(t==='celular'||t==='cedula')?'numeric':(t==='correo'?'email':'text'); h.textContent=LL[t][2]; }
+    box.querySelectorAll('[data-pmet]').forEach(function(b){ b.addEventListener('click', function(){
+      box.setAttribute('data-met', b.getAttribute('data-pmet'));
+      box.querySelectorAll('[data-pmet]').forEach(function(x){ x.classList.toggle('on', x===b); });
+      var f=box.querySelector('.pago-in[data-for="'+b.getAttribute('data-pmet')+'"] input'); if(f) setTimeout(function(){ f.focus(); },30);
+    }); });
+    box.querySelectorAll('[data-ptc]').forEach(function(b){ b.addEventListener('click', function(){ box.querySelectorAll('[data-ptc]').forEach(function(x){ x.classList.toggle('on', x===b); }); }); });
+    document.getElementById(pre+'-pg-tllave').addEventListener('change', llaveUI); llaveUI();
+  }
+  // Devuelve {pago, texto} o {err}. Si no eligió método devuelve {vacio:true}.
+  function leerPago(pre){
+    var box=document.getElementById(pre+'-pagobox'); if(!box) return {vacio:true};
+    var met=box.getAttribute('data-met')||'';
+    if(!met) return {vacio:true};
+    var pg={metodo:met};
+    if(met==='nequi'){
+      var n=(document.getElementById(pre+'-pg-nequi').value||'').replace(/\D/g,'');
+      if(!n) return {vacio:true};
+      if(n.length!==10||n.charAt(0)!=='3') return {err:'El número Nequi debe tener 10 dígitos y empezar por 3.'};
+      pg.numero=n;
+    } else if(met==='bancolombia'){
+      var c=(document.getElementById(pre+'-pg-banco').value||'').replace(/\D/g,'');
+      if(!c) return {vacio:true};
+      if(c.length!==11) return {err:'La cuenta Bancolombia debe tener 11 dígitos (sin guiones).'};
+      var on=box.querySelector('[data-ptc].on'); pg.tipoCuenta=on?on.getAttribute('data-ptc'):'ahorros'; pg.numero=c;
+    } else {
+      var t=document.getElementById(pre+'-pg-tllave').value, v=(document.getElementById(pre+'-pg-llave').value||'').trim();
+      if(!v) return {vacio:true};
+      if(t==='celular'){ v=v.replace(/\D/g,''); if(v.length!==10||v.charAt(0)!=='3') return {err:'La llave de celular debe tener 10 dígitos y empezar por 3.'}; }
+      else if(t==='cedula'){ v=v.replace(/\D/g,''); if(v.length<6||v.length>10) return {err:'La llave de cédula debe tener entre 6 y 10 dígitos.'}; }
+      else if(t==='correo'){ if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return {err:'Escribe un correo válido para la llave Bre-B.'}; v=v.toLowerCase(); }
+      else { if(v.charAt(0)!=='@') v='@'+v; if(!/^@[A-Za-z0-9]{3,20}$/.test(v)) return {err:'La llave alfanumérica debe empezar con @ y tener de 3 a 20 letras o números.'}; }
+      pg.tipoLlave=t; pg.llave=v;
+    }
+    return {pago:pg, texto:pagoTexto(pg)};
+  }
   function openMiPerfil(){
     if(!session) return;
     editUserData(session.usuarioId);
@@ -6659,7 +6762,7 @@ body, button, input, select, textarea{ font-family:var(--font) }
     if(!(u.cedula||'').trim()) f.push('cédula');
     if(!(u.telefono||'').trim()) f.push('teléfono');
     if(!(u.correo||'').trim()) f.push('correo');
-    if(!(u.cuentaPago||'').trim()) f.push('Nequi/Cuenta bancaria');
+    if(!(u.cuentaPago||'').trim()) f.push('Método de pago (Nequi, Bancolombia o Bre-B)');
     return f;
   }
   function saveCart(){
