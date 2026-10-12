@@ -18,7 +18,7 @@ try{ document.documentElement.setAttribute('data-theme', localStorage.getItem('b
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxODAgMTgwIj48cmVjdCB3aWR0aD0iMTgwIiBoZWlnaHQ9IjE4MCIgcng9IjQwIiBmaWxsPSIjMGMwZjBkIi8+PHJlY3QgeD0iNTIiIHk9Ijc4IiB3aWR0aD0iMzAiIGhlaWdodD0iNjIiIHJ4PSI3IiBmaWxsPSIjMmVlNTlkIi8+PHJlY3QgeD0iOTgiIHk9IjQwIiB3aWR0aD0iMzAiIGhlaWdodD0iMTAwIiByeD0iNyIgZmlsbD0iIzJlZTU5ZCIvPjwvc3ZnPg==">
 <link rel="apple-touch-icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAC0CAYAAAA9zQYyAAAIeUlEQVR4nOzdT2ib5x3A8d/zWpE8W5IdwijxZQ2FZAfnEnoZ9GBv0Bz6ZwwSRij0MkY22mMLOTVNT4X1uMLCTiuU0DWXZelhHSw+BHozjIQyG0p6KCqhmER6FTHLit4+P/m1sRXLlm298vv+9P2AYtmy8urwzZvn/fe8OTlCExMTJ3O53LnIRWfbIqedyPP+xzP+ccI/Sv5REKTRqn+E/rHiH5VI5NtAZNlF7l6r1VpsNBrfyxFxMlz54nTxVYncy/75nH+cEVi05B8L4qIv64/rt/3zpgzJUIIul8uvtIP2JR/yRf9tXjBKmj7sz4N2cKNWq30hCUsy6PzkdPktF0WXhTUx1i1Fzl1/8rj2sSS01k4k6NJU6YofV70j62NhoNuKD++jsBp+KAM20KD9GvlNiaJr8cYdsCvdmBTnrvo19icyIAMJulQqnY6c/Mn/ba8LsF+R3HKRvBuG4bIc0qGD9sOL3/t/aX8WNvZwOE0f49t+GPJXOYRDBV2cKv3Ff7kswOBcr1fDP8gBHShoPSASHBv71D+dF2Dw7rTXnr5xkAM0+w66eLw4K213U9gVh2QtSRBdqD+q39/Pm/YV9MTU1Lkgav/Tv2tGgKRFUmm74LVGtbrY71v6DrqzZn7q/kXMGCoftYxF5/tdU/cVdDxmviMMM3A0lvyYer6fMXUgfYg3AIkZR+VM3OCexvb6hXjX3AUBjtap/HjhZHO1eXu3X9o1aD1o4r9cEyAdXiyMFyo+6p4biT3H0J3D2YHcE44AIl2ari1nex0m7zmG7pybQcxIn3zc5o52HHLoWXN+1X1FgDRycubYT8YfrP1/9b/PvrSDyanSA04BRZrpqadPquGp7p8/s4bWk/OFvRpIOb/CnfYbiKt+A/Fu18+3yfvddBXhShNkw0q9GuqR683LubZtFOo1gELMyI4TcbObtgUdX9AKZEZ3s5tB61QDwuFtZM+ZuN2OzaA782YAGbS13Y2NQt0Y1KmdOJCCLGr6jUOdOq7ZWUN3puciZmRXPm44HnKszzUHZFfccC7+dk6AbJvTP1x8NUpFgIxrrz2dCXR+ZgEM0JZzOtm4AAZoy4HOnC+AAdpyjtNEYYW2rHs5mGcDVsxo0JxdBytOaNAlAWwoadDcOg1WFHKC1MnNHJfypZdkYm5W8i88J4PQ/OahNBbuS+3GXWlVHolVrjhVigSpUbrwC/npB7+VJP3w3mcS3vxKLBrLjxfeF6TCMGJWk/Oz0npYlebX34k1fU3WiOTpMGMYMW/QZekyrSHolNAx8ygsM2kEnRK6ATgKy0waezlSYlB7M9K+zKSxhoYpBA1TCBqmEDRMIWiYQtAwhaBhCkHDFIKGKQQNUwgaphA0TCFomELQMIWgYQpBwxSChikEDVMIGqYQNEwhaJhC0DCFoGEKQcMUgoYpBA1TCBqmEDRMIWiYQtAwhaBhiun5obmb1OgxG3RSN+DRfxj6mP7dr0zfTSqrTAY9rLtJbSyDqNPD3Biau0mNNnNBczep0WYuaO4mNdrMjaG5m9RoYz80TCFomELQMIWgYQpBwxSChikEDVMIGqYQNEwhaJhC0DCFoGEKQcMUgoYpBA1TCBqmEDRMIWiYQtAwhaBhCkHDFIKGKQQNUwgaphA0TCFomELQMIWgYQpBwxSChikEDVMIGqYQNEwhaJhC0DCFoGEKQcMUgoYpBA1TCBqmEDRMIWiYQtAwhaBhCkHDFIKGKQQNUwgaphA0TDEXdPObhzJsg1hmVj932pgLurFwX4ZtEMvM6udOG3NB127clWEbxDKz+rnTxlzQrcoj+eG9z2RYdFm6zMPK6udOm7H8eOF9Mab59XfSeliVyflZSZJGEd78SgYlq587TVxxqhSJUbmZ41K+9JJMzM1K/oXnZBB0Q0rHnvrfdVJruKx+7jQwHTRGj46hVwWwYVWDDgWwIdSgVwSwYUWDrghgQyXwW4TfCmCAthz4VfSyAAZoy4GL3D0BDNCWg1artSiAAdpy0Gg0vvfPlwTItiVteePkpAUBsm1B/1gP2kVfCpBlccMu/jZfnCrpEcO8ANnTrFfDkn7dGHI0feGfC5BF6+029enmCf5BO7ghQAZtbddtfcEPO/7nv5wRIDuW/HDj5xvfbLsEK3LuugAZ0t2s63pdNw71ZKUTAqTfil87z0g8flbdF8k2feEfCZABcavNrp89a3Kq9MC/8LwAKaVn1j2phqe6f77zNAbOXRUgzXo06nr9frFc+od/9XUB0iaSW/Va+OudXuo50YyL5F3pGp8AKdCM29xRz6DDMFz2q++3BUgRbVLb7PX62G5vbq42F/PjhZP+6YsCHL3rfjfdB7v9gpM++H3T//Ff5gU4Ond8zL/c65f6mqyxvfb0DeEiABydpbjBPfUVdOeqliC64LcumfIAw6XN+fbiK6v21Pd0uvVH9fttF7xG1Bga35o2p+31+5Z9zQ/dqFYXZSw6Lww/kLwlba3T3D70tVHYbWJi4mRwbOxTYUMRybijY+Z+hxlbjckBrK2t1f0uvb+xSw8J0F1zF7UxOYADBb3BR327MF7QMfX5w/5dGHl6pucf99rPvJdDR6gHXwr5wt/905/5AQxXu2D/IrnlD2f/JqyF/5ZDOtAYupfJ6fKbEkXXOPUU/ehMFOrc1SePa5/IgAw06A2lqdIV/2HfEa58wc5W9OT8sBp+KAOWSNCxvF9jv+Wi6LJw4S3WLek1gH6N/LEkdCZnkkFvKpfLr7SD9iWJ3EVhMptR05nzRacaqNVqX0jChhL0FvnidPFVH/bL/vmcsOa2Sg+8Lej0XPXH9dsyxPPqhx30NnqAJpfLnYtcdLYtcjremNSreHXsrVM7FQRppHdO06nj9P48lc7M+SLLOj+zTml7kAMig/IjAAAA//+ZBSR0AAAABklEQVQDAHRahsNcoFsEAAAAAElFTkSuQmCC">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700&family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 /* ========== Sistema de diseño estilo Apple (colores del sistema iOS / macOS) ========== */
 :root{
@@ -2021,7 +2021,7 @@ body{ font-family:var(--font); background:var(--ground); letter-spacing:-.005em 
 .sp-hero > div > *, .sp-stats > *{ opacity:0; transform:translateY(16px); animation:abUp .9s cubic-bezier(.22,1,.36,1) forwards }
 .sp-eyebrow{ display:inline-flex; align-items:center; gap:10px; font:600 12px var(--font); letter-spacing:.16em; text-transform:uppercase; color:rgba(255,255,255,.55); animation-delay:.05s !important }
 .sp-eyebrow::before{ content:""; width:26px; height:2px; border-radius:2px; background:#2ee59d }
-.sp-hero h1{ margin:14px 0 12px; font:800 clamp(40px,6vw,76px)/.98 var(--font-display); letter-spacing:-.045em; color:#fff; animation-delay:.15s !important }
+.sp-hero h1{ margin:14px 0 12px; font:800 clamp(40px,6vw,76px)/.98 var(--font-brand); letter-spacing:-.045em; color:#fff; animation-delay:.15s !important }
 .sp-hero h1 em{ font-style:normal; color:#2ee59d }
 .sp-hero p{ margin:0; color:rgba(255,255,255,.62); font-size:16px; line-height:1.5; max-width:44ch; animation-delay:.28s !important }
 .sp-stats{ display:grid; grid-template-columns:1fr 1fr; gap:12px }
@@ -2054,7 +2054,7 @@ body{ font-family:var(--font); background:var(--ground); letter-spacing:-.005em 
 .spc .sp-status.join::before{ background:#fff; box-shadow:0 0 0 3px rgba(255,255,255,.15) }
 .spc .sect-admin{ top:14px; right:14px }
 .spc .sect-admin .mini{ border-radius:999px; width:34px; height:34px; padding:0; display:grid; place-items:center; background:rgba(12,15,13,.6); border-color:rgba(255,255,255,.14) }
-.spc h3{ margin:0; font:800 clamp(28px,2.6vw,36px)/1 var(--font-display); letter-spacing:-.04em; color:#fff }
+.spc h3{ margin:0; font:800 clamp(28px,2.6vw,36px)/1 var(--font-brand); letter-spacing:-.04em; color:#fff }
 .spc p{ margin:10px 0 0; font-size:14px; line-height:1.45; color:rgba(255,255,255,.72); max-width:34ch }
 .sp-meta{ margin-top:18px; padding-top:16px; border-top:1px solid rgba(255,255,255,.14); display:flex; align-items:center; justify-content:space-between; gap:10px }
 .sp-meta .m{ font-size:13px; color:rgba(255,255,255,.62) }
@@ -2101,7 +2101,7 @@ body{ font-family:var(--font); background:var(--ground); letter-spacing:-.005em 
 .in-top .change-sect{ margin:0; padding:5px 12px; border-radius:999px; border:1px solid var(--border); background:var(--surface); color:var(--ink);
   font:600 12px var(--font); letter-spacing:0; text-transform:none; cursor:pointer; transition:border-color .25s, background .25s }
 .in-top .change-sect:hover{ border-color:var(--ink); background:var(--surface); color:var(--ink) }
-.in-top .brand h1{ margin:12px 0 0; font:800 clamp(38px,5.4vw,64px)/.98 var(--font-display); letter-spacing:-.045em }
+.in-top .brand h1{ margin:12px 0 0; font:800 clamp(38px,5.4vw,64px)/.98 var(--font-brand); letter-spacing:-.045em }
 .in-top .brand h1 .sub{ font-size:inherit !important; font-weight:600 !important; color:var(--faint) !important; letter-spacing:-.04em !important }
 
 /* cifras */
@@ -2266,6 +2266,17 @@ html:not(.bl-anim-done) .wrap .stats > .stat, html:not(.bl-anim-done) .wrap .met
   .ho-sp{ display:none }
   .ho-foot{ display:none }
 }
+
+/* ---------- Billon: toda la letra en Poppins, excepto el logo, el nombre de la tienda,
+   los nombres de las secciones y "Elige tu negocio." (siguen en Sora) ---------- */
+:root{
+  --font:"Poppins", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+  --font-display:"Poppins", -apple-system, system-ui, sans-serif;
+  --font-rounded:"Poppins", system-ui, sans-serif;
+  --font-brand:"Sora", "Poppins", system-ui, sans-serif;
+}
+body, button, input, select, textarea{ font-family:var(--font) }
+.in-top .brand h1, .in-top .brand h1 .sub, .sp-hero h1, .spc h3{ font-family:var(--font-brand) !important }
 </style>
 </head>
 <body>
