@@ -6,12 +6,13 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#0c0f0d">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Billon</title>
+<script>/* Billon: modo oscuro por defecto (si la persona eligió claro con el botón ◐, se respeta) */
+try{ document.documentElement.setAttribute('data-theme', localStorage.getItem('bm-theme')||'dark'); }catch(e){ document.documentElement.setAttribute('data-theme','dark'); }</script>
 <meta name="apple-mobile-web-app-title" content="Billon">
 <meta name="application-name" content="Billon">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxODAgMTgwIj48cmVjdCB3aWR0aD0iMTgwIiBoZWlnaHQ9IjE4MCIgcng9IjQwIiBmaWxsPSIjMGMwZjBkIi8+PHJlY3QgeD0iNTIiIHk9Ijc4IiB3aWR0aD0iMzAiIGhlaWdodD0iNjIiIHJ4PSI3IiBmaWxsPSIjMmVlNTlkIi8+PHJlY3QgeD0iOTgiIHk9IjQwIiB3aWR0aD0iMzAiIGhlaWdodD0iMTAwIiByeD0iNyIgZmlsbD0iIzJlZTU5ZCIvPjwvc3ZnPg==">
@@ -2299,7 +2300,7 @@ html:not(.bl-anim-done) .wrap .stats > .stat, html:not(.bl-anim-done) .wrap .met
   var bootstrapping=false;   // esperando el primer pull del servidor
 
   /* tema */
-  try{ var t=localStorage.getItem(THEME_KEY); if(t) document.documentElement.setAttribute('data-theme', t); }catch(e){}
+  try{ var t=localStorage.getItem(THEME_KEY); document.documentElement.setAttribute('data-theme', t||'dark'); }catch(e){ document.documentElement.setAttribute('data-theme','dark'); }
   // Sección activa (se elige después del login)
   var activeSection=null;
   try{ activeSection=localStorage.getItem(SECTION_KEY) || null; }catch(e){}
