@@ -2302,6 +2302,19 @@ body, button, input, select, textarea{ font-family:var(--font) }
 .u-act-t.on{ color:var(--good) } .u-act-t.on i{ background:var(--brand); box-shadow:0 0 0 3px rgba(46,229,157,.2); animation:pulse 1.6s ease-in-out infinite }
 .u-act-t.old{ color:#d99a00 } .u-act-t.old i{ background:#f5b301 }
 .u-act-t.muted{ font-weight:500; color:var(--faint) }
+
+/* ---------- tarjeta de pago (ver datos) ---------- */
+.pago-card{ margin:10px 0 4px; padding:14px; border-radius:16px; background:var(--fill); border:1px solid var(--border) }
+.pago-card .pc-hd{ display:flex; align-items:center; gap:12px; margin-bottom:8px }
+.pago-card .pc-hd > div{ flex:1; min-width:0; display:flex; flex-direction:column }
+.pago-card .pc-hd b{ font-size:15.5px } .pago-card .pc-hd small{ font-size:12px; color:var(--muted) }
+.pago-card .pc-hd > i{ flex:none; width:38px; height:38px; border-radius:11px; display:grid; place-items:center; font:800 15px var(--font); font-style:normal }
+.pago-card .pc-ic{ background:var(--fill-2) }
+.pago-card .pc-copy{ min-height:34px; padding:0 14px; font-size:13px; border-radius:10px }
+.pago-card .pc-row{ display:flex; justify-content:space-between; gap:12px; padding:8px 0; border-top:1px solid var(--border); font-size:13.5px }
+.pago-card .pc-row span{ color:var(--muted) } .pago-card .pc-row b{ text-align:right; font-variant-numeric:tabular-nums; letter-spacing:.02em; word-break:break-all }
+.pago-card .pc-note{ font-size:13px; color:var(--muted) }
+.pago-card.none{ border-style:dashed }
 </style>
 </head>
 <body>
@@ -3910,7 +3923,7 @@ body, button, input, select, textarea{ font-family:var(--font) }
         line('📄','Cédula', u.cedula)+
         line('📱','Teléfono', u.telefono)+
         line('📧','Correo', u.correo)+
-        line('💰','Cuenta pago', u.cuentaPago)+
+        pagoCardHTML(u)+
         line('📅','Creado', u.createdAt?new Date(u.createdAt).toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric'}):'')+
       '</div>'+
       '<div class="modal-ft">'+
@@ -3918,6 +3931,7 @@ body, button, input, select, textarea{ font-family:var(--font) }
         '<button class="btn primary" data-act="us-edit" data-uid="'+esc(u.id)+'">✎ Editar datos</button>'+
       '</div>'+
     '</div></div>';
+    host.querySelectorAll('.pago-card [data-copy]').forEach(function(b){ b.addEventListener('click', function(){ copiarTexto(b.getAttribute('data-copy')); }); });
   }
   function editUserData(uid){
     var u=state.usuarios.find(function(x){return x.id===uid;}); if(!u) return;
@@ -4213,6 +4227,24 @@ body, button, input, select, textarea{ font-family:var(--font) }
       pg.tipoLlave=t; pg.llave=v;
     }
     return {pago:pg, texto:pagoTexto(pg)};
+  }
+
+  // Tarjeta con el método de pago tal como lo eligió el trabajador (para que el admin le pague fácil)
+  function pagoCardHTML(u){
+    var pg=pagoDe(u), confirmado=!!(u.pago&&u.pago.metodo);
+    if(!pg.metodo){
+      return '<div class="pago-card none"><div class="pc-hd"><i class="pc-ic">💰</i><div><b>Método de pago</b><small>'+(pg.anterior?'Dato sin formato: '+esc(pg.anterior):'No lo ha registrado')+'</small></div></div>'+
+        '<div class="pc-note">Pídele que lo complete en <b>Menú → Mi perfil</b> eligiendo Nequi, Bancolombia o Bre-B.</div></div>';
+    }
+    var filas=[], copia='';
+    if(pg.metodo==='nequi'){ filas.push(['Número Nequi', pg.numero]); copia=pg.numero; }
+    else if(pg.metodo==='bancolombia'){ filas.push(['Tipo de cuenta', pg.tipoCuenta==='corriente'?'Corriente':'Ahorros']); filas.push(['Número de cuenta', pg.numero]); copia=pg.numero; }
+    else { filas.push(['Tipo de llave', BREB_LLAVES[pg.tipoLlave]||'Llave']); filas.push(['Llave Bre-B', pg.llave]); copia=pg.llave; }
+    filas.push(['Titular', (u.nombre||'')+(u.cedula?' · C.C. '+u.cedula:'')]);
+    return '<div class="pago-card"><div class="pc-hd"><i class="pm-'+pg.metodo+'"></i><div><b>'+PAGO_MET[pg.metodo]+'</b><small>'+(confirmado?'Método de pago registrado':'Detectado del dato anterior · sin confirmar')+'</small></div>'+
+      '<button type="button" class="btn ghost pc-copy" data-copy="'+esc(copia)+'">Copiar</button></div>'+
+      filas.map(function(f){ return '<div class="pc-row"><span>'+esc(f[0])+'</span><b>'+esc(f[1])+'</b></div>'; }).join('')+
+    '</div>';
   }
   function openMiPerfil(){
     if(!session) return;
