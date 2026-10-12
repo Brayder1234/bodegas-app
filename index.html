@@ -2294,6 +2294,14 @@ body, button, input, select, textarea{ font-family:var(--font) }
 .pago-seg button{ flex:1; height:38px; border:none; border-radius:9px; background:transparent; color:var(--muted); font:600 14px var(--font); cursor:pointer }
 .pago-seg button.on{ background:var(--surface); color:var(--ink); box-shadow:0 0 0 1px var(--border) }
 @media (max-width:520px){ .pago-ops{ grid-template-columns:1fr } }
+
+/* ---------- última vez activo ---------- */
+.u-act{ margin-top:6px }
+.u-act-t{ display:inline-flex; align-items:center; gap:7px; font-size:12.5px; font-weight:600; color:var(--muted) }
+.u-act-t i{ width:8px; height:8px; border-radius:50%; background:var(--faint) }
+.u-act-t.on{ color:var(--good) } .u-act-t.on i{ background:var(--brand); box-shadow:0 0 0 3px rgba(46,229,157,.2); animation:pulse 1.6s ease-in-out infinite }
+.u-act-t.old{ color:#d99a00 } .u-act-t.old i{ background:#f5b301 }
+.u-act-t.muted{ font-weight:500; color:var(--faint) }
 </style>
 </head>
 <body>
@@ -3022,6 +3030,7 @@ body, button, input, select, textarea{ font-family:var(--font) }
         '</div>'+
         '<div id="prods">'+productsHTML()+'</div>'+
       '</div>'+ fabCartHTML() + selectionBarHTML();
+    pingActividad();
     // la animación de entrada solo corre la primera vez (no en cada actualización de la pantalla)
     if(!document.documentElement.classList.contains('bl-anim-done')) setTimeout(function(){ document.documentElement.classList.add('bl-anim-done'); }, 1400);
   }
@@ -3789,7 +3798,8 @@ body, button, input, select, textarea{ font-family:var(--font) }
         return '<div class="user-row" data-uid="'+esc(u.id)+'">'+
           '<div><div class="nmrow">'+avatarHTML(u,40)+'<div class="nm">'+esc(u.nombre)+ (isMe?' <span class="hint">(tú)</span>':'') + otrasSecsTag + (perfilInc && u.role==='trabajador'?' <span class="hint" style="color:var(--warn)">⚠ perfil incompleto</span>':'') +'</div></div>'+
             '<div class="rl '+(u.role==='admin'?'a':'')+'">'+esc(u.role==='admin'?(Array.isArray(u.secciones)&&u.secciones.length?'admin de sección':'admin principal'):u.role)+' · '+mine.length+' pedidos en '+esc(secNombreU)+'</div>'+
-            '<div style="font-size:12.5px;color:var(--muted);margin-top:2px">💰 Este mes: <b style="color:var(--good)">'+fmt(vendidoMes)+'</b> · Total: <b style="color:var(--ink)">'+fmt(vendidoTotal)+'</b></div></div>'+
+            '<div style="font-size:12.5px;color:var(--muted);margin-top:2px">💰 Este mes: <b style="color:var(--good)">'+fmt(vendidoMes)+'</b> · Total: <b style="color:var(--ink)">'+fmt(vendidoTotal)+'</b></div>'+
+            '<div class="u-act" data-act-uid="'+esc(u.id)+'">'+actividadHTML(u.id)+'</div></div>'+
           '<div class="acts">'+
             '<button data-act="us-view">👤 Ver datos</button>'+
             ((u.role!=='admin' && !scopedV) || (u.role==='admin' && !scopedV && !isMe)?'<button data-act="us-secs">🗂 '+(u.role==='admin'?'Alcance':'Secciones')+'</button>':'')+
@@ -3816,6 +3826,7 @@ body, button, input, select, textarea{ font-family:var(--font) }
     body+='<div style="display:flex; gap:8px; align-items:center">'+(scopedV?'<input type="checkbox" id="nu-admin" style="display:none">':'<label style="display:inline-flex;gap:6px;align-items:center;font-size:13px;color:var(--muted)"><input type="checkbox" id="nu-admin"> Crear como admin</label>')+
       '<button class="btn primary" data-act="us-create" style="margin-left:auto">＋ Añadir trabajador</button></div>';
     body+='</div>';
+    cargarActividad();
     host.innerHTML='<div class="scrim" data-role="scrim"><div class="modal" role="dialog" aria-modal="true" style="width:min(600px,100%)">'+
       '<div class="modal-hd"><h2>Trabajadores</h2><button class="mini" data-role="close">×</button></div>'+
       body+
@@ -4078,6 +4089,52 @@ body, button, input, select, textarea{ font-family:var(--font) }
     newInp.addEventListener('keydown', function(e){ if(e.key==='Enter') addMarca(); });
   }
 
+
+
+  /* ---------- última vez activo (base aparte en el worker velora-tienda, D1) ---------- */
+  var ACT_DATA=null, ACT_AT=0, _actPend=null;
+  function actividadHTML(uid){
+    if(!ACT_DATA) return '<span class="u-act-t">Última vez activo: cargando…</span>';
+    var a=ACT_DATA[uid];
+    if(!a) return '<span class="u-act-t muted">Sin actividad registrada todavía</span>';
+    var d=new Date(a.ultima), min=Math.floor((Date.now()-d.getTime())/60000), tz={timeZone:'America/Bogota'};
+    var dev = a.disp==='celular' ? ' · 📱' : ' · 💻';
+    if(min<5) return '<span class="u-act-t on"><i></i>Activo ahora'+dev+'</span>';
+    var txt;
+    if(min<60) txt='hace '+min+' min';
+    else {
+      var k=function(x){ return x.toLocaleDateString('en-CA',tz); }, hora=d.toLocaleTimeString('es-CO',Object.assign({hour:'numeric',minute:'2-digit'},tz));
+      if(k(d)===k(new Date())) txt='hoy '+hora;
+      else if(k(d)===k(new Date(Date.now()-864e5))) txt='ayer '+hora;
+      else txt=d.toLocaleDateString('es-CO',Object.assign({day:'numeric',month:'short'},tz))+' · '+hora;
+    }
+    var viejo = min>7*24*60;
+    return '<span class="u-act-t'+(viejo?' old':'')+'"><i></i>Activo '+txt+dev+'</span>';
+  }
+  function pintarActividad(){
+    document.querySelectorAll('[data-act-uid]').forEach(function(el){ el.innerHTML=actividadHTML(el.getAttribute('data-act-uid')); });
+  }
+  function cargarActividad(){
+    if(!cfg||!isAdmin()) return;
+    if(ACT_DATA && Date.now()-ACT_AT<30000){ setTimeout(pintarActividad,0); return; }
+    if(_actPend) return;
+    _actPend=fetch(TIENDA_URL+'/actividad',{headers:cfHeaders()}).then(function(r){return r.json();}).then(function(j){
+      var m={}; (j.actividad||[]).forEach(function(a){ m[a.uid]=a; }); ACT_DATA=m; ACT_AT=Date.now(); pintarActividad();
+    }).catch(function(){ ACT_DATA=ACT_DATA||{}; pintarActividad(); }).then(function(){ _actPend=null; });
+  }
+  // Avisa que esta persona está usando la plataforma (como máximo cada 4 minutos)
+  function pingActividad(){
+    try{
+      if(!cfg||!session||document.visibilityState!=='visible') return;
+      var last=+(localStorage.getItem('bm-act-ping')||0);
+      if(Date.now()-last<4*60000) return;
+      localStorage.setItem('bm-act-ping', String(Date.now()));
+      fetch(TIENDA_URL+'/actividad',{method:'POST',headers:cfHeaders(),body:JSON.stringify({uid:session.usuarioId, nombre:session.usuarioNombre||'', seccion:activeSection||''})}).catch(function(){});
+    }catch(e){}
+  }
+  setInterval(pingActividad, 60000);
+  document.addEventListener('visibilitychange', pingActividad);
+  ['click','keydown','touchstart'].forEach(function(ev){ document.addEventListener(ev, function(){ pingActividad(); }, {passive:true}); });
 
   /* ---------- método de pago del trabajador: Nequi · Bancolombia · Bre-B ---------- */
   var PAGO_MET={nequi:'Nequi', bancolombia:'Bancolombia', breb:'Bre-B'};
