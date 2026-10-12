@@ -2473,7 +2473,44 @@ body, button, input, select, textarea{ font-family:var(--font) }
     var row=await r.json();
     return row&&row.data?row:null;
   }
+  /* ---------- fotos y videos fuera del estado ----------
+     Antes cada foto viajaba incrustada (base64) dentro de los datos: 13 MB en cada guardado.
+     Ahora se sube una sola vez al almacén (/m/<hash>) y en el estado queda la dirección pública. */
+  var MEDIA_BASE = TIENDA_URL + '/img/';
+  var _mediaOk = (function(){ try{ return JSON.parse(localStorage.getItem('bm-media')||'{}')||{}; }catch(e){ return {}; } })();
+  function _mediaPersist(){ try{ var k=Object.keys(_mediaOk); if(k.length>3000){ _mediaOk={}; k.slice(-1500).forEach(function(x){ _mediaOk[x]=1; }); } localStorage.setItem('bm-media', JSON.stringify(_mediaOk)); }catch(e){} }
+  async function _sha20(text){
+    var b=await crypto.subtle.digest('SHA-1', new TextEncoder().encode(text));
+    return Array.prototype.map.call(new Uint8Array(b).subarray(0,10), function(x){ return ('0'+x.toString(16)).slice(-2); }).join('');
+  }
+  async function _subirMedia(dataUri){
+    var h=await _sha20(dataUri);
+    if(!_mediaOk[h]){
+      var blob=await (await fetch(dataUri)).blob();
+      var r=await fetch(cfg.url+'/m/'+h,{method:'PUT',headers:{'X-API-Key':cfg.key,'Content-Type':blob.type||'image/jpeg'},body:blob});
+      if(!r.ok) throw new Error('foto HTTP '+r.status);
+      _mediaOk[h]=1; _mediaPersist();
+    }
+    return MEDIA_BASE+h;
+  }
+  var _esMedia=function(v){ return typeof v==='string' && v.length>400 && (v.indexOf('data:image/')===0 || v.indexOf('data:video/')===0); };
+  async function externalizarMedia(obj){
+    var found={};
+    (function scan(o){
+      if(Array.isArray(o)){ for(var i=0;i<o.length;i++){ if(_esMedia(o[i])) found[o[i]]=1; else if(o[i]&&typeof o[i]==='object') scan(o[i]); } }
+      else if(o&&typeof o==='object'){ for(var k in o){ var v=o[k]; if(_esMedia(v)) found[v]=1; else if(v&&typeof v==='object') scan(v); } }
+    })(obj);
+    var uris=Object.keys(found); if(!uris.length) return 0;
+    var map={};
+    for(var i=0;i<uris.length;i++) map[uris[i]]=await _subirMedia(uris[i]);
+    (function put(o){
+      if(Array.isArray(o)){ for(var i=0;i<o.length;i++){ if(_esMedia(o[i])) o[i]=map[o[i]]; else if(o[i]&&typeof o[i]==='object') put(o[i]); } }
+      else if(o&&typeof o==='object'){ for(var k in o){ var v=o[k]; if(_esMedia(v)) o[k]=map[v]; else if(v&&typeof v==='object') put(v); } }
+    })(obj);
+    return uris.length;
+  }
   async function sbSave(){
+    await externalizarMedia(state);
     var body=Object.assign({}, state);
     var r=await fetch(cfg.url+'/data',{method:'PUT',headers:cfHeaders(),body:JSON.stringify(body)});
     if(!r.ok) throw new Error('HTTP '+r.status);
@@ -2561,7 +2598,7 @@ body, button, input, select, textarea{ font-family:var(--font) }
         u.telefono = u.telefono || '';
         u.correo = u.correo || '';
         u.cuentaPago = u.cuentaPago || '';
-        u.foto = (typeof u.foto==='string' && u.foto.indexOf('data:image/')===0) ? u.foto : '';
+        u.foto = (typeof u.foto==='string' && (u.foto.indexOf('data:image/')===0 || /^https:\/\/[^\s"'<>]+$/.test(u.foto))) ? u.foto : '';
         u.tutorialVisto = u.tutorialVisto || false;
         // Trabajadores: array de secciones (ids). Admin no se filtra por sección.
         if(!Array.isArray(u.secciones)){
@@ -4488,6 +4525,13 @@ body, button, input, select, textarea{ font-family:var(--font) }
     });
   }
   function downloadDataURL(dataURL, filename){
+    if(/^https?:/.test(dataURL||'')){
+      fetch(dataURL).then(function(r){ return r.blob(); }).then(function(b){
+        var u=URL.createObjectURL(b), a=document.createElement('a'); a.href=u; a.download=filename||'imagen.jpg';
+        document.body.appendChild(a); a.click(); setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(u); },300);
+      }).catch(function(){ showToast('No se pudo descargar', false); });
+      return;
+    }
     try{
       var a=document.createElement('a');
       a.href=dataURL; a.download=filename||'imagen.jpg';
