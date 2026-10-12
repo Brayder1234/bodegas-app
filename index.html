@@ -2315,6 +2315,24 @@ body, button, input, select, textarea{ font-family:var(--font) }
 .pago-card .pc-row span{ color:var(--muted) } .pago-card .pc-row b{ text-align:right; font-variant-numeric:tabular-nums; letter-spacing:.02em; word-break:break-all }
 .pago-card .pc-note{ font-size:13px; color:var(--muted) }
 .pago-card.none{ border-style:dashed }
+
+/* ---------- activos ahora ---------- */
+.act-live{ display:inline-flex; align-items:center; gap:7px; height:38px; padding:0 13px; border-radius:999px; border:1px solid var(--border); background:var(--surface); color:var(--muted); font:600 13px var(--font); cursor:pointer; white-space:nowrap }
+.act-live i{ width:8px; height:8px; border-radius:50%; background:var(--faint) }
+.act-live b{ color:var(--ink); font-weight:700 }
+.act-live.on{ border-color:rgba(46,229,157,.35); background:rgba(46,229,157,.08) }
+.act-live.on i{ background:var(--brand); box-shadow:0 0 0 3px rgba(46,229,157,.22); animation:pulse 1.6s ease-in-out infinite }
+.act-live.on b{ color:var(--good) }
+.sp .act-live{ background:rgba(255,255,255,.06); border-color:rgba(255,255,255,.1); color:rgba(255,255,255,.7) } .sp .act-live b{ color:#fff } .sp .act-live.on b{ color:#2ee59d }
+.al-kpis{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px }
+.al-kpis div{ padding:12px 14px; border-radius:14px; background:var(--fill); display:flex; flex-direction:column; gap:4px }
+.al-kpis b{ font:800 26px/1 var(--font); letter-spacing:-.03em } .al-kpis div:first-child b{ color:var(--good) }
+.al-kpis span{ font:600 10.5px var(--font); letter-spacing:.12em; text-transform:uppercase; color:var(--muted) }
+.al-row{ display:flex; align-items:center; gap:12px; padding:10px 2px; border-bottom:1px solid var(--border) }
+.al-tx{ flex:1; min-width:0; display:flex; flex-direction:column } .al-tx b{ font-size:14.5px } .al-tx span{ font-size:12.5px; color:var(--muted) }
+.al-when{ display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:600; color:var(--good); white-space:nowrap }
+.al-when i{ width:7px; height:7px; border-radius:50%; background:var(--brand) }
+@media (max-width:640px){ .act-live span{ display:none } .act-live{ height:34px; padding:0 10px } .in-bar .act-live{ order:-1 } }
 </style>
 </head>
 <body>
@@ -3149,7 +3167,7 @@ body, button, input, select, textarea{ font-family:var(--font) }
       '<div class="in-bar">'+blLogo()+
         '<div class="top-tools">'+
           '<button class="hamburger" data-act="menu" title="Menú" aria-label="Menú">'+sf('menu')+'</button>'+
-          whoLine+connHTML()+
+          actLiveHTML()+whoLine+connHTML()+
           (isSuper()?'<button class="icon-btn" data-act="toggle-moneda" title="Cambiar moneda">'+(state.moneda==='USD'?'US$':'COP')+'</button>':'')+
           '<button class="icon-btn" data-act="toggle-theme" title="Tema claro/oscuro" aria-label="Cambiar tema">'+sf('theme')+'</button>'+
         '</div></div>'+
@@ -3605,7 +3623,7 @@ body, button, input, select, textarea{ font-family:var(--font) }
     var primerNombre = String(nombre||'').split(' ')[0];
     app.innerHTML='<div class="sp"><div class="sp-bg" aria-hidden="true"><div class="ab-bars">'+bars+'</div></div><div class="sp-in">'+
       '<header class="sp-top">'+blLogo()+
-        '<div class="sp-user">'+
+        '<div class="sp-user">'+actLiveHTML()+
           '<div class="who-chip'+(admin?' admin':'')+'"><span class="avat">'+esc((nombre||'?').charAt(0).toUpperCase())+'</span>'+esc(nombre)+' <span class="role">'+(admin?'admin':'trabajador')+'</span></div>'+
           '<button class="sp-out" data-act="logout" title="Cerrar sesión"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 17l-5-5 5-5M5 12h11"/></svg><span>Cerrar sesión</span></button>'+
         '</div>'+
@@ -4127,6 +4145,7 @@ body, button, input, select, textarea{ font-family:var(--font) }
   }
   function pintarActividad(){
     document.querySelectorAll('[data-act-uid]').forEach(function(el){ el.innerHTML=actividadHTML(el.getAttribute('data-act-uid')); });
+    if(typeof pintarActLive==='function') pintarActLive();
   }
   function cargarActividad(){
     if(!cfg||!isAdmin()) return;
@@ -4143,12 +4162,63 @@ body, button, input, select, textarea{ font-family:var(--font) }
       var last=+(localStorage.getItem('bm-act-ping')||0);
       if(Date.now()-last<4*60000) return;
       localStorage.setItem('bm-act-ping', String(Date.now()));
-      fetch(TIENDA_URL+'/actividad',{method:'POST',headers:cfHeaders(),body:JSON.stringify({uid:session.usuarioId, nombre:session.usuarioNombre||'', seccion:activeSection||''})}).catch(function(){});
+      fetch(TIENDA_URL+'/actividad',{method:'POST',headers:cfHeaders(),body:JSON.stringify({uid:session.usuarioId, nombre:session.usuarioNombre||'', seccion:activeSection||''})})
+        .then(function(){ if(isAdmin()){ ACT_AT=0; cargarActividad(); } }).catch(function(){});
     }catch(e){}
   }
   setInterval(pingActividad, 60000);
   document.addEventListener('visibilitychange', pingActividad);
   ['click','keydown','touchstart'].forEach(function(ev){ document.addEventListener(ev, function(){ pingActividad(); }, {passive:true}); });
+
+
+  /* ---------- usuarios activos en simultáneo (solo admin) ---------- */
+  var ACT_VIVO_MIN=5;
+  function usuariosVisiblesAct(){
+    var us=state.usuarios||[];
+    if(isScopedAdmin()){ var sc=adminScope(); us=us.filter(function(u){ return u.id===(session&&session.usuarioId) || (Array.isArray(u.secciones)&&u.secciones.some(function(x){return sc.indexOf(x)>=0;})); }); }
+    return us;
+  }
+  function activosAhora(){
+    if(!ACT_DATA) return null;
+    var lim=Date.now()-ACT_VIVO_MIN*60000;
+    return usuariosVisiblesAct().map(function(u){ var a=ACT_DATA[u.id]; return a&&new Date(a.ultima).getTime()>=lim ? {u:u,a:a} : null; }).filter(Boolean)
+      .sort(function(x,y){ return String(y.a.ultima).localeCompare(String(x.a.ultima)); });
+  }
+  function actLiveTxt(){ var l=activosAhora(); return l==null?'…':String(l.length); }
+  function actLiveHTML(){
+    if(!isAdmin()) return '';
+    if(!ACT_DATA) setTimeout(cargarActividad,0);
+    var l=activosAhora();
+    return '<button class="act-live'+(l&&l.length?' on':'')+'" data-act="act-live" title="Personas usando la plataforma ahora"><i></i><b data-act-live-n>'+actLiveTxt()+'</b><span> activos ahora</span></button>';
+  }
+  function pintarActLive(){
+    var l=activosAhora();
+    document.querySelectorAll('.act-live').forEach(function(b){ b.classList.toggle('on', !!(l&&l.length)); var n=b.querySelector('[data-act-live-n]'); if(n) n.textContent=actLiveTxt(); });
+    var box=document.getElementById('act-live-list'); if(box) box.innerHTML=activosListaHTML();
+  }
+  function activosListaHTML(){
+    var l=activosAhora();
+    if(l==null) return '<div class="hint">Cargando…</div>';
+    var hoyK=new Date().toLocaleDateString('en-CA',{timeZone:'America/Bogota'});
+    var hoy=usuariosVisiblesAct().filter(function(u){ var a=ACT_DATA[u.id]; return a && new Date(a.ultima).toLocaleDateString('en-CA',{timeZone:'America/Bogota'})===hoyK; }).length;
+    var secN=function(id){ var x=(state.secciones||[]).find(function(s){return s.id===id;}); return x?(x.marca||x.nombre):''; };
+    var head='<div class="al-kpis"><div><b>'+l.length+'</b><span>Activos ahora</span></div><div><b>'+hoy+'</b><span>Entraron hoy</span></div></div>';
+    if(!l.length) return head+'<div class="ho-empty"><div class="em">🌙</div><b>Nadie conectado en este momento</b><p>Cuenta como activo quien usó la plataforma en los últimos '+ACT_VIVO_MIN+' minutos.</p></div>';
+    return head+l.map(function(x){ var min=Math.max(0,Math.floor((Date.now()-new Date(x.a.ultima).getTime())/60000));
+      return '<div class="al-row">'+avatarHTML(x.u,38)+'<div class="al-tx"><b>'+esc(x.u.nombre)+'</b><span>'+esc(x.u.role==='admin'?'admin':'trabajador')+(x.a.seccion?' · en '+esc(secN(x.a.seccion)||x.a.seccion):'')+'</span></div>'+
+        '<span class="al-when"><i></i>'+(min<1?'ahora':'hace '+min+' min')+' · '+(x.a.disp==='celular'?'📱':'💻')+'</span></div>'; }).join('');
+  }
+  function openActivos(){
+    if(!isAdmin()) return;
+    ACT_AT=0; cargarActividad();
+    host.innerHTML='<div class="scrim" data-role="scrim"><div class="modal" role="dialog" aria-modal="true" style="width:min(480px,100%)">'+
+      '<div class="modal-hd"><h2>Activos ahora</h2><button class="mini" data-role="close">×</button></div>'+
+      '<div class="modal-bd"><div id="act-live-list">'+activosListaHTML()+'</div><p class="hint" style="margin:6px 0 0">Se actualiza solo cada minuto. Cuenta como activo quien usó la plataforma en los últimos '+ACT_VIVO_MIN+' minutos.</p></div>'+
+      '<div class="modal-ft"><button class="btn ghost" data-role="close" style="margin-left:auto">Cerrar</button></div>'+
+    '</div></div>';
+  }
+  // el admin refresca el contador cada minuto mientras tiene la plataforma abierta
+  setInterval(function(){ if(session && isAdmin() && document.visibilityState==='visible'){ ACT_AT=0; cargarActividad(); } }, 60000);
 
   /* ---------- método de pago del trabajador: Nequi · Bancolombia · Bre-B ---------- */
   var PAGO_MET={nequi:'Nequi', bancolombia:'Bancolombia', breb:'Bre-B'};
@@ -5711,6 +5781,7 @@ body, button, input, select, textarea{ font-family:var(--font) }
     else if(a==='who'){ if(confirm('¿Cerrar sesión de '+(session?session.usuarioNombre:'')+'?')){ clearSession(); render(); } }
     else if(a==='us-create'){ createUser(); }
     else if(a==='mi-perfil'){ closeModal(); openMiPerfil(); }
+    else if(a==='act-live'){ openActivos(); }
     else if(a==='show-register'){ renderRegister(); }
     else if(a==='show-login'){ renderLogin(); }
     else if(a==='marcas-visibles'){ closeModal(); openMarcasVisibles(); }
