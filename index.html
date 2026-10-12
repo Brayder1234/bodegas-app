@@ -3069,7 +3069,7 @@ body, button, input, select, textarea{ font-family:var(--font) }
   }
   function render(){
     applyRoleClass();
-    if(!cfg){ renderSetup(); return; }
+    if(!cfg){ cfg=DEFAULT_CFG; }
     if(bootstrapping){ renderBootSplash(); return; }
     if(!session){ renderLogin(); return; }
     if(state.usuarios.length && activeSection){
@@ -5710,7 +5710,16 @@ body, button, input, select, textarea{ font-family:var(--font) }
     else if(a==='export'){ if(!isSuper()) return; closeModal(); exportCSV(); }
     else if(a==='backup'){ if(!isSuper()) return; closeModal(); backup(); }
     else if(a==='import'){ if(!isSuper()) return; doImport(); }
-    else if(a==='config'){ if(!isSuper()) return; closeModal(); renderSetup(cfg||{}); }
+    else if(a==='config'){
+      // tocar el estado de conexión solo reintenta la sincronización (ya no hay pantalla de configuración)
+      closeModal(); setConn('connecting');
+      (async function(){
+        try{
+          if(dirty){ await commit(); }
+          else { await pullFromServer(false); setConn('ok'); render(); showToast('Sincronizado', false); }
+        }catch(e){ if(!(e&&e.status===401)){ setConn('err'); showToast('Sin conexión. Reintenta en unos segundos.', false); } }
+      })();
+    }
     else if(a==='ranking'){ closeModal(); openRanking(); }
     else if(a==='disconnect'){ if(!isSuper()) return; if(confirm('Se borrará la conexión de ESTE dispositivo (tus datos en la nube quedan intactos). ¿Continuar?')){ try{localStorage.removeItem(CFG_KEY);}catch(x){} cfg=null; stopPolling(); render(); } }
     else if(a==='toggle-moneda'){ if(!isSuper()) return; state.moneda=state.moneda==='USD'?'COP':'USD'; render(); scheduleSave(); }
@@ -7266,8 +7275,8 @@ body, button, input, select, textarea{ font-family:var(--font) }
   session=loadSession();
   if(session && !getToken()){ clearSession(); }       // sesiones anteriores sin token: hay que iniciar de nuevo
   var cached=session ? loadCache() : null; if(cached) state=sanitize(cached);
-  if(!cfg){ render(); }
-  else if(!session){
+  if(!cfg){ cfg=DEFAULT_CFG; }
+  if(!session){
     // sin sesión: solo se averigua si ya hay usuarios (para mostrar acceso o creación del primer administrador)
     bootstrapping=true; render();
     (async function(){ await consultarEstadoServidor(); bootstrapping=false; render(); })();
