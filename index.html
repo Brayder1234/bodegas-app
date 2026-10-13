@@ -2410,6 +2410,7 @@ html.pv-open, html.pv-open body{ overflow:hidden }
 .ho-lossnote b{ color:var(--ink) }
 
 .ho-tag.guia{ background:rgba(10,132,255,.14); color:#6cb4ff }
+.var-stock{ width:84px !important; flex:0 0 84px; text-align:center }
 </style>
 </head>
 <body>
@@ -2496,7 +2497,11 @@ html.pv-open, html.pv-open body{ overflow:hidden }
   function validCostos(p){ return (p.costos||[]).filter(function(c){ return c.bodega && typeof c.costo==='number' && c.costo>0; }); }
   // Stock por tamaño: si alguna variación con precio tiene stock numérico, el stock del producto es la suma
   function varStockOn(p){ return !!(p && Array.isArray(p.variaciones) && p.variaciones.some(function(v){ return typeof v.stock==='number'; })); }
-  function syncStock(p){ if(varStockOn(p)) p.stock = p.variaciones.reduce(function(a,v){ return a + (typeof v.stock==='number' ? v.stock : 0); },0); }
+  function colorStockOn(p){ return !!(p && Array.isArray(p.variacionesColor) && p.variacionesColor.some(function(v){ return typeof v.stock==='number'; })); }
+  function syncStock(p){
+    if(varStockOn(p)) p.stock = p.variaciones.reduce(function(a,v){ return a + (typeof v.stock==='number' ? v.stock : 0); },0);
+    else if(colorStockOn(p)) p.stock = p.variacionesColor.reduce(function(a,v){ return a + (typeof v.stock==='number' ? v.stock : 0); },0);
+  }
   function valorMercancia(p){
     var b=best(p), base=b?b.costo:0;
     if(varStockOn(p)){
@@ -2991,6 +2996,10 @@ html.pv-open, html.pv-open body{ overflow:hidden }
       } else if(varStockOn(p) && it.variacionId){
         var v = p.variaciones.find(function(x){ return x.id === it.variacionId; });
         if(v){ v.stock = Math.max(0, (typeof v.stock==='number' ? v.stock : 0) + (sign * cant)); syncStock(p); }
+        else p.stock = Math.max(0, p.stock + (sign * cant));
+      } else if(colorStockOn(p) && it.variacionColorId){
+        var vc = p.variacionesColor.find(function(x){ return x.id === it.variacionColorId; });
+        if(vc){ vc.stock = Math.max(0, (typeof vc.stock==='number' ? vc.stock : 0) + (sign * cant)); syncStock(p); }
         else p.stock = Math.max(0, p.stock + (sign * cant));
       } else {
         p.stock = Math.max(0, p.stock + (sign * cant));
@@ -3610,7 +3619,8 @@ html.pv-open, html.pv-open body{ overflow:hidden }
           ? '<img src="'+esc(v.imagen)+'" alt="'+esc(v.nombre)+'" loading="lazy">'
           : '<div class="var-ph">🎨</div>';
         var dlb = v.imagen ? '<button class="var-dl" data-act="dl-varc" data-pid="'+esc(p.id)+'" data-vid="'+esc(v.id)+'" title="Descargar">⬇</button>' : '';
-        return '<div class="var-thumb">'+thumb+dlb+'<div class="var-nm">'+esc(v.nombre||'')+'</div></div>';
+        var stT = (typeof v.stock==='number') ? '<div class="var-price" style="'+(v.stock>0?'':'color:var(--bad)')+'">'+(v.stock>0?v.stock+' disp.':'Agotado')+'</div>' : '';
+        return '<div class="var-thumb">'+thumb+dlb+'<div class="var-nm">'+esc(v.nombre||'')+'</div>'+stT+'</div>';
       }).join('') + '</div>';
     }
     // Videos
@@ -5129,6 +5139,7 @@ html.pv-open, html.pv-open body{ overflow:hidden }
               '<div class="var-mini-img" data-role="var-img-color" data-vi="'+i+'">'+(v.imagen?'<img src="'+esc(v.imagen)+'" alt="">':'<span class="ph">📷</span>')+'</div>'+
               '<div class="var-fields">'+
                 '<input type="text" data-role="vname-color" placeholder="Nombre (ej: Rojo, Negro, M, L)" value="'+esc(v.nombre||'')+'">'+
+                '<input type="number" inputmode="numeric" min="0" data-role="vstock-color" class="var-stock" placeholder="Stock" title="Unidades disponibles (vacío = sin control)" value="'+(typeof v.stock==='number'?v.stock:'')+'">'+
                 '<input type="file" accept="image/*" data-role="vfile-color" style="display:none">'+
               '</div>'+
               '<button type="button" class="var-rm" data-role="vrm-color">✕</button>'+
@@ -5350,6 +5361,7 @@ html.pv-open, html.pv-open body{ overflow:hidden }
         '<div class="var-mini-img" data-role="var-img-color" data-vi="'+idx+'">'+(v.imagen?'<img src="'+esc(v.imagen)+'" alt="">':'<span class="ph">📷</span>')+'</div>'+
         '<div class="var-fields">'+
           '<input type="text" data-role="vname-color" placeholder="Nombre (ej: Rojo, Negro, M, L)" value="'+esc(v.nombre||'')+'">'+
+          '<input type="number" inputmode="numeric" min="0" data-role="vstock-color" class="var-stock" placeholder="Stock" title="Unidades disponibles (vacío = sin control)" value="'+(typeof v.stock==='number'?v.stock:'')+'">'+
           '<input type="file" accept="image/*" data-role="vfile-color" style="display:none">'+
         '</div>'+
         '<button type="button" class="var-rm" data-role="vrm-color">✕</button>'+
@@ -5551,13 +5563,19 @@ html.pv-open, html.pv-open body{ overflow:hidden }
       syncStock(p);
 
       // Recoger variaciones visuales (color/talla)
+      var teniaStockColor = colorStockOn(prod||{});
       varRowsColor.querySelectorAll('.var-row').forEach(function(r, idx){
         var nameInp = r.querySelector('[data-role="vname-color"]');
+        var stInp = r.querySelector('[data-role="vstock-color"]');
         if(!p.variacionesColor[idx]) return;
         if(nameInp) p.variacionesColor[idx].nombre = nameInp.value.trim();
+        if(stInp){ var sv=parseInt(stInp.value,10); if(stInp.value!=='' && !isNaN(sv) && sv>=0) p.variacionesColor[idx].stock=sv; else delete p.variacionesColor[idx].stock; }
       });
       p.variacionesColor = p.variacionesColor.filter(function(v){ return v.nombre || v.imagen; });
       if(!p.variacionesColor.length) p.tipoVariacionColor = '';
+      if(colorStockOn(p) && !varStockOn(p)) syncStock(p);
+      else if(teniaStockColor && !varStockOn(p)) p.stock = null;     // quitó el control por talla: vuelve a "sin límite"
+
       if(!p.variaciones.length) p.tipoVariacion = '';
       if(!p.nombre){ modal.querySelector('[data-f="nombre"]').focus(); return; }
       if(p.tipo==='combo' && !comps.length){ showToast('El combo necesita al menos un producto', false); return; }
@@ -6839,11 +6857,13 @@ html.pv-open, html.pv-open body{ overflow:hidden }
             }
             var isSel = picked && picked.id===v.id;
             var nombreDisplay = kind==='p' ? (v.nombre+(tipo?tipo:'')) : v.nombre;
-            return '<button type="button" class="vp-card'+(isSel?' selected':'')+'" data-role="pick-'+kind+'" data-vid="'+esc(v.id)+'">'+
+            var sinStock = (kind==='c' && colorStockOn(p) && !(v.stock>0));
+            return '<button type="button" class="vp-card'+(isSel?' selected':'')+'"'+(sinStock?' disabled style="opacity:.45;cursor:not-allowed"':'')+' data-role="pick-'+kind+'" data-vid="'+esc(v.id)+'">'+
               '<div class="vp-img">'+thumb+'</div>'+
               '<div class="vp-nm">'+esc(nombreDisplay||'(sin nombre)')+'</div>'+
               priceInfo+
               ((kind==='p' && varStockOn(p) && !(v.stock>0)) ? '<div class="vp-mayo" style="color:var(--bad);font-weight:700">Agotado</div>' : '')+
+              ((kind==='c' && colorStockOn(p)) ? (v.stock>0 ? '<div class="vp-mayo">'+v.stock+' disp.</div>' : '<div class="vp-mayo" style="color:var(--bad);font-weight:700">Agotado</div>') : '')+
             '</button>';
           }).join('')+
         '</div>'+
