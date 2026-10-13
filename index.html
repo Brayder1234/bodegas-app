@@ -2408,6 +2408,8 @@ html.pv-open, html.pv-open body{ overflow:hidden }
 .ho-done.dev{ color:#ff6b61 }
 .ho-lossnote{ padding:10px 14px; border-radius:12px; background:rgba(255,69,58,.08); border:1px solid rgba(255,69,58,.25); color:var(--muted); font-size:13px }
 .ho-lossnote b{ color:var(--ink) }
+
+.ho-tag.guia{ background:rgba(10,132,255,.14); color:#6cb4ff }
 </style>
 </head>
 <body>
@@ -6294,6 +6296,7 @@ html.pv-open, html.pv-open body{ overflow:hidden }
       var hi=e.target.closest('.hist-item'); if(!hi) return;
       var oid=hi.getAttribute('data-oid');
       var o=state.pedidos.find(function(x){return x.id===oid;}); if(!o) return;
+      if(a==='est-envio' && !o.estado.envio && !pedidoLocal(o)){ openGuia(oid,'hist'); return; }
       toggleEtapa(o, a==='est-envio'?'envio':'venta');
       openHistory();
     }
@@ -6304,6 +6307,7 @@ html.pv-open, html.pv-open body{ overflow:hidden }
       var oid2=host.querySelector('.modal')?host.querySelector('.modal').getAttribute('data-oid'):null;
       if(!oid2) return;
       var oo=state.pedidos.find(function(x){return x.id===oid2;}); if(!oo) return;
+      if(a==='est-envio-on' && !oo.estado.envio && !pedidoLocal(oo)){ openGuia(oid2,'det'); return; }
       toggleEtapa(oo, (a.indexOf('venta')>=0)?'venta':'envio');
       historyDetail(oid2);
     }
@@ -7522,6 +7526,45 @@ html.pv-open, html.pv-open body{ overflow:hidden }
     scheduleSave(); render(); showToast('Pedido reactivado', false); openHistory();
   }
 
+
+  /* ---------- guía de envío (solo fuera de Barranquilla y Soledad) ---------- */
+  function normCiudad(t){ return String(t||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z ]/g,' ').replace(/\s+/g,' ').trim(); }
+  function pedidoLocal(o){ var c=normCiudad((o.cliente||{}).ciudad); return /\bbarranquilla\b|\bsoledad\b/.test(c); }
+  function guiaDe(o){ var g=o&&o.estado&&o.estado.envio&&o.estado.envio.guia; return (g&&g.numero)?g:null; }
+  var TRANSPORTADORAS=['Coordinadora','Interrapidísimo','Servientrega','Envía','TCC','Deprisa','Otra'];
+  function waAviso(o){
+    var c=o.cliente||{}, base=histWa(c.tel); if(!base) return '';
+    var g=guiaDe(o), nom=String(c.nombre||'').split(' ')[0];
+    var t='Hola'+(nom?' '+nom:'')+' 👋 Tu pedido de KORVEN ya va en camino.';
+    if(g) t+='\n\n📦 Transportadora: '+g.transportadora+'\n🔢 Número de guía: '+g.numero+'\n\nCon ese número puedes seguir tu envío en la página de la transportadora.';
+    else t+='\n\nLo recibirás en tu domicilio y pagas al recibir. ¡Gracias por tu compra!';
+    return base+'?text='+encodeURIComponent(t);
+  }
+  function openGuia(oid, volver){
+    if(!isAdmin()) return;
+    var o=(state.pedidos||[]).find(function(x){return x.id===oid;}); if(!o) return;
+    ensureEstado(o);
+    var yaEnv=!!o.estado.envio, g=guiaDe(o)||{transportadora:'Coordinadora',numero:''}, c=o.cliente||{};
+    function volverA(){ if(volver==='det') historyDetail(oid); else openHistory(); }
+    host.innerHTML='<div class="scrim" data-role="scrim"><div class="modal" role="dialog" aria-modal="true" style="width:min(480px,100%)">'+
+      '<div class="modal-hd"><h2>'+(yaEnv?'Guía de envío':'Marcar como enviado')+'</h2><button class="mini" data-role="close">×</button></div>'+
+      '<div class="modal-bd">'+
+        '<p class="hint" style="margin:0 0 4px"><b>'+esc(c.nombre||'(sin cliente)')+'</b>'+(c.ciudad?' · '+esc(c.ciudad):'')+' · envío por transportadora</p>'+
+        '<div class="field"><label>Transportadora</label><select id="gu-tr">'+TRANSPORTADORAS.map(function(t){ return '<option'+(t===g.transportadora?' selected':'')+'>'+esc(t)+'</option>'; }).join('')+'</select></div>'+
+        '<div class="field"><label>Número de guía</label><input type="text" id="gu-num" maxlength="40" placeholder="Ej: 7001234567" value="'+esc(g.numero)+'" autocomplete="off"><span class="help">Se le envía al cliente por WhatsApp para que siga su pedido. Puedes dejarlo vacío y añadirlo después.</span></div>'+
+      '</div>'+
+      '<div class="modal-ft"><button class="btn ghost" data-role="close">Volver</button><button class="btn primary" id="gu-ok">'+(yaEnv?'Guardar guía':'Confirmar envío')+'</button></div>'+
+    '</div></div>';
+    host.querySelectorAll('[data-role="close"]').forEach(function(b){ b.addEventListener('click',volverA); });
+    var inp=document.getElementById('gu-num'); if(inp) setTimeout(function(){ inp.focus(); },50);
+    document.getElementById('gu-ok').addEventListener('click',function(){
+      var num=(inp.value||'').replace(/[^A-Za-z0-9\-]/g,'').slice(0,40), tr=document.getElementById('gu-tr').value;
+      if(!yaEnv) toggleEtapa(o,'envio');
+      if(o.estado.envio){ if(num) o.estado.envio.guia={transportadora:tr, numero:num}; else delete o.estado.envio.guia; }
+      scheduleSave(); render(); showToast(num?'Guía guardada':'Envío confirmado',false); volverA();
+    });
+  }
+
   function openHistory(){
     var admin=isAdmin();
     var secPeds = pedidosDeSeccion();
@@ -7605,7 +7648,7 @@ html.pv-open, html.pv-open body{ overflow:hidden }
         var main='';
         if(admin){
           if(et==='pend') main='<button class="btn primary ho-go" data-act="est-envio">Marcar como enviado</button>';
-          else if(et==='camino') main='<button class="btn primary ho-go" data-act="est-venta">Confirmar pago</button><button class="btn ghost" data-dev="1">↩ Devuelto</button>';
+          else if(et==='camino') main='<button class="btn primary ho-go" data-act="est-venta">Confirmar pago</button>'+(!pedidoLocal(o)?'<button class="btn ghost" data-guia="1">'+(guiaDe(o)?'Editar guía':'Añadir guía')+'</button>':'')+'<button class="btn ghost" data-dev="1">↩ Devuelto</button>';
           else if(et==='dev') main='<span class="ho-done dev">↩ '+esc(dv.motivo||'Devuelto')+(dv.flete>0?' · flete '+fmt(dv.flete):'')+'</span><button class="btn ghost" data-react="1">Reactivar</button>';
           else main='<span class="ho-done">✓ Pedido completado</span>';
         } else {
@@ -7616,10 +7659,10 @@ html.pv-open, html.pv-open body{ overflow:hidden }
           '<div class="ho-main"><div class="ho-cli"><b>'+esc(c.nombre||'(sin cliente)')+'</b><span>'+[c.ciudad,c.tel].filter(Boolean).map(esc).join(' · ')+'</span>'+(c.direccion?'<span class="ho-dir">'+esc(c.direccion)+'</span>':'')+'</div>'+
             '<div class="ho-tot">'+fmt(o.ventaTotal||0)+'<small>'+(o.unidades||0)+' unidad'+(o.unidades===1?'':'es')+'</small></div></div>'+
           '<div class="ho-items">'+items+'</div>'+
-          '<div class="ho-tags">'+seller+web+cod+envio+'</div>'+
+          '<div class="ho-tags">'+seller+web+cod+envio+(guiaDe(o)?'<span class="ho-tag guia">📦 '+esc(guiaDe(o).transportadora)+' · '+esc(guiaDe(o).numero)+'</span>':'')+'</div>'+
           '<div class="ho-acts">'+main+
             '<button class="btn ghost" data-act="hist-view">Ver detalle</button>'+
-            (wa?'<a class="btn ghost ho-wa" href="'+wa+'" target="_blank" rel="noopener">WhatsApp</a>':'')+
+            (wa?'<a class="btn ghost ho-wa" href="'+(et==='camino'?waAviso(o):wa)+'" target="_blank" rel="noopener">'+(et==='camino'?'Avisar al cliente':'WhatsApp')+'</a>':'')+
             '<span class="ho-sp"></span>'+
             (admin&&et==='pend'?'<button class="ho-link" data-dev="1">Cancelar pedido</button>':'')+
             '<button class="ho-link" data-act="hist-reopen">Reabrir</button>'+
@@ -7629,6 +7672,7 @@ html.pv-open, html.pv-open body{ overflow:hidden }
       });
       box.innerHTML=html;
       box.querySelectorAll('[data-dev]').forEach(function(b){ b.addEventListener('click',function(){ openDevolucion(b.closest('.hist-item').getAttribute('data-oid')); }); });
+      box.querySelectorAll('[data-guia]').forEach(function(b){ b.addEventListener('click',function(){ openGuia(b.closest('.hist-item').getAttribute('data-oid'),'hist'); }); });
       box.querySelectorAll('[data-react]').forEach(function(b){ b.addEventListener('click',function(){ reactivarPedido(b.closest('.hist-item').getAttribute('data-oid')); }); });
     }
     drawList();
@@ -7664,6 +7708,7 @@ html.pv-open, html.pv-open body{ overflow:hidden }
       (cli.ciudad?' · '+esc(cli.ciudad):'')+
       (cli.tel?'<br>📱 '+esc(cli.tel):'')+
       (cli.notas?'<br>📝 '+esc(cli.notas):'')+
+      (guiaDe(o)?'<br>📦 Guía <b>'+esc(guiaDe(o).transportadora)+' '+esc(guiaDe(o).numero)+'</b>':'')+
     '</div>';
     // Timeline de estado
     ensureEstado(o);
