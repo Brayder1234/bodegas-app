@@ -2384,6 +2384,16 @@ html.pv-open, html.pv-open body{ overflow:hidden }
 .co-kpis3{ grid-template-columns:repeat(3,1fr) }
 @media (max-width:640px){ .co-kpis3{ grid-template-columns:1fr } .co-kpis3 .ho-kpi{ flex-direction:row; justify-content:space-between; align-items:center } }
 .scrim.pv .modal::before, .scrim.pv .modal::after{ display:none !important }
+
+/* ---------- ranking: flyer del premio ---------- */
+.rk-wrap{ max-width:760px; margin-left:auto; margin-right:auto; width:100% }
+.rk-flyer{ margin:0 0 16px; border-radius:20px; overflow:hidden; border:1px solid var(--border); background:#0a0a0a }
+.rk-flyer img{ display:block; width:100%; height:auto }
+.rk-flyer figcaption{ padding:10px 14px; font-size:12.5px; color:var(--muted); display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:space-between; background:var(--surface) }
+.rk-tyc-btn{ background:none; border:none; color:var(--accent-ink); font:600 12.5px var(--font); text-decoration:underline; text-underline-offset:3px; cursor:pointer; padding:2px 0 }
+.rk-tyc{ margin:-4px 0 16px; padding:14px 16px; border-radius:16px; background:var(--fill); border:1px solid var(--border) }
+.rk-tyc h3{ margin:0 0 8px; font:700 14px var(--font) } .rk-tyc p{ margin:0; font-size:13.5px; line-height:1.55; color:var(--muted) }
+.rank-premio textarea{ width:100%; margin-top:8px; padding:12px 14px; border-radius:12px; border:1px solid var(--border); background:var(--surface); color:var(--ink); font:400 14px/1.5 var(--font); resize:vertical }
 </style>
 </head>
 <body>
@@ -2735,6 +2745,7 @@ html.pv-open, html.pv-open body{ overflow:hidden }
         });
       })(),
       premioVendedor: (typeof d.premioVendedor==='number' && d.premioVendedor>=0) ? d.premioVendedor : 0,
+      premioTyC: (typeof d.premioTyC==='string') ? d.premioTyC.slice(0,3000) : '',   // términos y condiciones del premio (los escribe el admin)
       notifEmail:{
         enabled: ne.enabled!==false,
         accessKey: ne.accessKey || '',
@@ -5654,10 +5665,21 @@ html.pv-open, html.pv-open body{ overflow:hidden }
           '<button class="btn primary" id="rank-premio-save" style="padding:6px 14px">Guardar</button>'+
         '</div>'+
       '</div>':'';
-    var premioShow=premio>0?'<div class="rank-premio-banner">🎁 Premio: <b>'+fmt(premio)+'</b> para el mayor vendedor del mes</div>':'';
+    // si el monto configurado no es el del flyer ($500.000) se muestra además el aviso con el monto real
+    var premioShow=(premio>0 && premio!==500000)?'<div class="rank-premio-banner">🎁 Premio: <b>'+fmt(premio)+'</b> para el mayor vendedor del mes</div>':'';
+    var tycTxt=(state.premioTyC||'').trim();
+    var flyer='<figure class="rk-flyer"><img src="img/premio-500k.webp" alt="Premio de $500.000 para el mayor vendedor del mes" loading="lazy">'+
+      '<figcaption><span>*Aplican términos y condiciones.</span> <button type="button" class="rk-tyc-btn" id="rk-tyc-btn" aria-expanded="false">Ver términos y condiciones</button></figcaption></figure>'+
+      '<div class="rk-tyc" id="rk-tyc" hidden><h3>Términos y condiciones del premio</h3>'+
+        (tycTxt?'<p>'+esc(tycTxt).replace(/\n/g,'<br>')+'</p>':'<p>Los términos y condiciones de este premio los define y explica el administrador. Consúltalos en el grupo de WhatsApp antes de participar.</p>')+
+      '</div>';
+    var tycEditor=admin?'<div class="rank-premio"><label>📄 Términos y condiciones del premio</label>'+
+      '<textarea id="rank-tyc" rows="5" maxlength="3000" placeholder="Ej: Participan todos los vendedores registrados. Gana quien tenga más pedidos pagados entre el 1 y el último día del mes. Solo cuentan pedidos con pago confirmado. En caso de empate gana quien tenga mayor valor vendido…">'+esc(state.premioTyC||'')+'</textarea>'+
+      '<div style="display:flex;justify-content:flex-end;margin-top:8px"><button class="btn primary" id="rank-tyc-save" style="padding:6px 14px">Guardar términos</button></div></div>':'';
     host.innerHTML='<div class="scrim" data-role="scrim"><div class="modal" role="dialog" aria-modal="true" style="width:min(500px,100%)">'+
       '<div class="modal-hd"><h2>Ranking · '+esc(mesNombre)+'</h2><button class="mini" data-role="close">×</button></div>'+
-      '<div class="modal-bd'+(admin?' rank-admin':'')+'">'+
+      '<div class="modal-bd rk-wrap'+(admin?' rank-admin':'')+'">'+
+        flyer+
         premioShow+
         '<div class="rank-header">'+
           '<span class="rank-pos"></span>'+
@@ -5666,9 +5688,19 @@ html.pv-open, html.pv-open body{ overflow:hidden }
           (admin?'<span class="rank-total" style="font-weight:600;font-size:12px;text-transform:uppercase;color:var(--muted)">Total</span>':'')+
         '</div>'+
         rows+
-        premioHTML+
+        premioHTML+tycEditor+
       '</div></div></div>';
     host.querySelectorAll('[data-role="close"]').forEach(function(b){b.addEventListener('click',closeModal);});
+    var tb=document.getElementById('rk-tyc-btn');
+    if(tb) tb.addEventListener('click',function(){
+      var t=document.getElementById('rk-tyc'), abierto=!t.hidden;
+      t.hidden=abierto; tb.setAttribute('aria-expanded', String(!abierto)); tb.textContent=abierto?'Ver términos y condiciones':'Ocultar términos y condiciones';
+    });
+    var tycSave=document.getElementById('rank-tyc-save');
+    if(tycSave) tycSave.addEventListener('click',function(){
+      state.premioTyC=(document.getElementById('rank-tyc').value||'').trim().slice(0,3000);
+      scheduleSave(); showToast('Términos y condiciones guardados',false); openRanking();
+    });
     host.querySelector('[data-role="scrim"]').addEventListener('mousedown',function(e){if(e.target===e.currentTarget)closeModal();});
     var saveBtn=document.getElementById('rank-premio-save');
     if(saveBtn) saveBtn.addEventListener('click',function(){
