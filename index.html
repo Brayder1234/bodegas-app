@@ -2411,6 +2411,7 @@ html.pv-open, html.pv-open body{ overflow:hidden }
 
 .ho-tag.guia{ background:rgba(10,132,255,.14); color:#6cb4ff }
 .var-stock{ width:84px !important; flex:0 0 84px; text-align:center }
+.var-badge.gen{ background:rgba(191,90,242,.14); color:#d29bff }
 </style>
 </head>
 <body>
@@ -2437,7 +2438,7 @@ html.pv-open, html.pv-open body{ overflow:hidden }
   var session=null; // {usuarioId, usuarioNombre, role}
   var cfg=null;              // {url,key}
   var GROUPS_KEY='bm-collapsed';
-  var ui={q:'', sort:'marca', expanded:{}, collapsed:{}, selectMode:false, selected:{}};
+  var ui={q:'', gen:'', sort:'marca', expanded:{}, collapsed:{}, selectMode:false, selected:{}};
   try{ var _c=JSON.parse(localStorage.getItem(GROUPS_KEY)); if(_c && typeof _c==='object') ui.collapsed=_c; }catch(e){}
   var conn='off';            // off | connecting | ok | saving | err
   var lastServerStamp=null;  // updated_at conocido del servidor
@@ -3212,6 +3213,7 @@ html.pv-open, html.pv-open body{ overflow:hidden }
         '<div class="toolbar">'+
           '<div class="search"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/></svg>'+
             '<input type="search" id="q" placeholder="Buscar producto, SKU o bodega…" value="'+esc(ui.q)+'"></div>'+
+          (productosDeSeccion().some(function(p){ return generoDe(p); })?'<select class="sort" id="gen"><option value="">Mujer y hombre</option><option value="Mujer"'+(ui.gen==='Mujer'?' selected':'')+'>Solo mujer</option><option value="Hombre"'+(ui.gen==='Hombre'?' selected':'')+'>Solo hombre</option></select>':'')+
           '<select class="sort" id="sort">'+opt('marca','Agrupado por marca')+opt('nombre','Ordenar: Nombre A→Z')+ (admin?(opt('margen','Ordenar: Mejor margen')+opt('costo','Ordenar: Menor costo')):'') +opt('precio','Ordenar: Mayor precio')+'</select>'+
           (admin?'<button class="btn ghost tb-icon" data-act="bodegas" title="Bodegas" aria-label="Bodegas">'+sf('building')+'<span class="lbl">Bodegas</span></button>':'')+
           (admin?'<button class="btn ghost tb-icon'+(ui.selectMode?' on':'')+'" data-act="toggle-select" title="'+(ui.selectMode?'Salir de selección':'Seleccionar')+'" aria-label="'+(ui.selectMode?'Salir de selección':'Seleccionar')+'">'+(ui.selectMode?sf('xmark')+'<span class="lbl">Salir</span>':sf('checkcircle')+'<span class="lbl">Seleccionar</span>')+'</button>':'')+
@@ -3334,6 +3336,13 @@ html.pv-open, html.pv-open body{ overflow:hidden }
     '</div>'+ statsHTML;
   }
   function stat(k,v){ return '<div class="stat"><div class="rail"></div><div class="k">'+esc(k)+'</div><div class="v num">'+esc(v)+'</div></div>'; }
+  /* género del producto: el que se eligió, o se deduce de las tallas (36–39 mujer, 40–44 hombre) */
+  function generoDe(p){
+    if(p && (p.genero==='Mujer'||p.genero==='Hombre'||p.genero==='Unisex')) return p.genero;
+    var n=((p&&p.variacionesColor)||[]).filter(function(v){ return /^\d{2}$/.test(String(v.nombre||'').trim()); }).map(function(v){ return parseInt(v.nombre,10); });
+    if(!n.length || n.length!==(p.variacionesColor||[]).length) return '';
+    return Math.max.apply(null,n)<=39?'Mujer':(Math.min.apply(null,n)>=40?'Hombre':'Unisex');
+  }
   function opt(v,label){ return '<option value="'+v+'"'+(ui.sort===v?' selected':'')+'>'+esc(label)+'</option>'; }
 
   function productosDeSeccion(){
@@ -3377,6 +3386,7 @@ html.pv-open, html.pv-open body{ overflow:hidden }
   function filtered(){
     var q=ui.q.trim().toLowerCase();
     var base = productosDeSeccion();
+    if(ui.gen) base=base.filter(function(p){ var g=generoDe(p); return g===ui.gen || (g==='Unisex'); });
     var list=base.filter(function(p){ if(!q) return true;
       var hay=(p.nombre||'')+' '+(p.sku||'')+' '+(p.marca||'')+' '+(p.costos||[]).map(function(c){return c.bodega;}).join(' ');
       return hay.toLowerCase().indexOf(q)>=0; });
@@ -3546,7 +3556,7 @@ html.pv-open, html.pv-open body{ overflow:hidden }
       '</div>'+
       '<div class="pcard-body">'+
         '<div class="pcard-name" data-act="tg-row">'+esc(p.nombre||'(sin nombre)')+ (p.sku?'<small>'+esc(p.sku)+'</small>':'') +'</div>'+
-        ((p.variaciones&&p.variaciones.length)||(p.variacionesColor&&p.variacionesColor.length)||(p.videos&&p.videos.length) ? '<div class="pcard-badges">'+(p.variaciones&&p.variaciones.length?'<span class="var-badge">💰 '+p.variaciones.length+' '+(p.tipoVariacion||'')+'</span>':'')+(p.variacionesColor&&p.variacionesColor.length?'<span class="var-badge">🎨 '+p.variacionesColor.length+' '+(p.tipoVariacionColor||'')+'</span>':'')+(p.videos&&p.videos.length?'<span class="var-badge">🎬 '+p.videos.length+' video'+(p.videos.length===1?'':'s')+'</span>':'')+'</div>':'')+
+        ((generoDe(p))||(p.variaciones&&p.variaciones.length)||(p.variacionesColor&&p.variacionesColor.length)||(p.videos&&p.videos.length) ? '<div class="pcard-badges">'+(generoDe(p)?'<span class="var-badge gen">'+(generoDe(p)==='Mujer'?'♀ Mujer':generoDe(p)==='Hombre'?'♂ Hombre':'⚥ Unisex')+'</span>':'')+(p.variaciones&&p.variaciones.length?'<span class="var-badge">💰 '+p.variaciones.length+' '+(p.tipoVariacion||'')+'</span>':'')+(p.variacionesColor&&p.variacionesColor.length?'<span class="var-badge">🎨 '+p.variacionesColor.length+' '+(p.tipoVariacionColor||'')+'</span>':'')+(p.videos&&p.videos.length?'<span class="var-badge">🎬 '+p.videos.length+' video'+(p.videos.length===1?'':'s')+'</span>':'')+'</div>':'')+
         '<div class="pcard-prices">'+pricesHTML+'</div>'+
         '<div class="pcard-actions">'+stockBtn+addBtn+'</div>'+
       '</div>'+
@@ -5160,6 +5170,9 @@ html.pv-open, html.pv-open body{ overflow:hidden }
           '<div class="vid-dz-hd">Arrastra un video aquí</div>'+
           '<div class="vid-dz-sb">o toca para elegir · máx 8MB c/u</div>'+
         '</label>'+
+        '<div class="field" style="margin-top:14px"><label>¿Para quién es?</label><select data-f="genero" class="bod-select">'+
+          [['','— Según las tallas —'],['Mujer','Mujer'],['Hombre','Hombre'],['Unisex','Unisex (mujer y hombre)']].map(function(t){ return '<option value="'+t[0]+'"'+((p.genero||'')===t[0]?' selected':'')+'>'+t[1]+'</option>'; }).join('')+
+        '</select><span class="help">Aparece en la tarjeta y en la tienda web. Sin elegir, se deduce de las tallas: 36–39 mujer, 40–44 hombre.</span></div>'+
         '<div class="sub" style="margin-top:14px">🏆 Premio del mes</div>'+
         '<label style="display:flex;align-items:flex-start;gap:8px;margin:8px 0;font-size:14px;cursor:pointer"><input type="checkbox" data-role="propia" style="margin-top:3px"'+(p.propia===false?'':' checked')+'> <span>Referencia propia <span style="color:var(--muted)">(mercancía de Korven). Si es de otra bodega, desmárcala: sus ventas no cuentan para el premio.</span></span></label>'+
         '<div class="sub" style="margin-top:14px">🌐 Tienda web <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--faint)">(lo que ven tus clientes en la página)</span></div>'+
@@ -5581,7 +5594,7 @@ html.pv-open, html.pv-open body{ overflow:hidden }
       if(p.tipo==='combo' && !comps.length){ showToast('El combo necesita al menos un producto', false); return; }
       var wv=modal.querySelector('[data-role="webvis"]'); p.webVisible = wv ? wv.checked : true;
       var pr=modal.querySelector('[data-role="propia"]'); p.propia = pr ? pr.checked : true;
-      p.webColor=g('webColor').trim(); p.webEtiqueta=g('webEtiqueta').trim(); p.webDesc=g('webDesc').trim();
+      p.genero=g('genero'); if(!p.genero) delete p.genero; p.webColor=g('webColor').trim(); p.webEtiqueta=g('webEtiqueta').trim(); p.webDesc=g('webDesc').trim();
       if(isNew) state.productos.push(p); else { var i=state.productos.findIndex(function(x){return x.id===p.id;}); if(i>=0) state.productos[i]=p; else state.productos.push(p); }
       closeModal(); render(); scheduleSave();
     });
@@ -6387,6 +6400,7 @@ html.pv-open, html.pv-open body{ overflow:hidden }
       }
     }
     if(e.target.id==='sort'){ ui.sort=e.target.value; refreshProds(); }
+    else if(e.target.id==='gen'){ ui.gen=e.target.value; refreshProds(); }
     else if(e.target.matches('[data-act="setbod"]')){
       var line=e.target.closest('.line'); if(!line) return;
       setLineBodega(line.getAttribute('data-pid'), e.target.value, line.getAttribute('data-vid')||'', line.getAttribute('data-vcid')||'');
