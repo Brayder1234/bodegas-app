@@ -2822,6 +2822,13 @@ body, button, input, select, textarea{ font-family:var(--font) }
     var vari = variacionDe(p, it && it.variacionId);
     return ventaOf(p, vari);
   }
+  // Regla de precio para vendedores: no menos que el mayorista ni más de 3 veces el sugerido
+  function rangoPrecio(it, p){
+    var vari=variacionDe(p, it && it.variacionId);
+    var min=mayoristaOf(p, vari), sug=ventaOf(p, vari);
+    var max= sug>0 ? sug*3 : Infinity;
+    return {min:min, max:max, sug:(sug>=min?sug:min)};
+  }
   function itemMayorista(it, p){
     var vari = variacionDe(p, it && it.variacionId);
     return mayoristaOf(p, vari);
@@ -6166,6 +6173,20 @@ body, button, input, select, textarea{ font-family:var(--font) }
     }
   });
   document.addEventListener('change',function(e){
+    // al terminar de escribir el precio: si está fuera del rango permitido se corrige y se avisa
+    if(e.target.matches && e.target.matches('[data-act="setprecio"]') && !isAdmin()){
+      var ln=e.target.closest('.line'); if(ln){
+        var itx=findCartLine(ln.getAttribute('data-pid'), ln.getAttribute('data-vid')||'', ln.getAttribute('data-vcid')||'');
+        var px=itx && state.productos.find(function(x){return x.id===itx.productId;});
+        if(itx && px && itx.precioVendido){
+          var r=rangoPrecio(itx, px);
+          if(itx.precioVendido<r.min || itx.precioVendido>r.max){
+            showToast('El precio debe estar entre '+fmt(r.min)+' (mayorista) y '+(r.max===Infinity?'sin tope':fmt(r.max))+'. Se dejó el sugerido.', false);
+            delete itx.precioVendido; e.target.value=''; updateCartTotalsUI(); scheduleSave();
+          }
+        }
+      }
+    }
     if(e.target.id==='sort'){ ui.sort=e.target.value; refreshProds(); }
     else if(e.target.matches('[data-act="setbod"]')){
       var line=e.target.closest('.line'); if(!line) return;
@@ -7002,6 +7023,15 @@ body, button, input, select, textarea{ font-family:var(--font) }
         openMiPerfil();
         return;
       }
+    }
+    if(!isAdmin()){
+      var malPrecio=null;
+      currentCart().items.forEach(function(it){
+        var pp=state.productos.find(function(x){return x.id===it.productId;}); if(!pp||!it.precioVendido||malPrecio) return;
+        var rg=rangoPrecio(it, pp);
+        if(it.precioVendido<rg.min || it.precioVendido>rg.max) malPrecio={n:pp.nombre, r:rg};
+      });
+      if(malPrecio){ showToast('Revisa el precio de "'+malPrecio.n+'": debe estar entre '+fmt(malPrecio.r.min)+' y '+(malPrecio.r.max===Infinity?'sin tope':fmt(malPrecio.r.max)), false); return; }
     }
     var c=currentCart().cliente;
     var nom=(c.nombre||'').trim(), tel=(c.tel||'').trim(), dir=(c.direccion||'').trim(), ciu=(c.ciudad||'').trim(), notas=(c.notas||'').trim();
