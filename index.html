@@ -2384,6 +2384,7 @@ html.pv-open, html.pv-open body{ overflow:hidden }
 .co-kpis3{ grid-template-columns:repeat(3,1fr) }
 @media (max-width:640px){ .co-kpis3{ grid-template-columns:1fr } .co-kpis3 .ho-kpi{ flex-direction:row; justify-content:space-between; align-items:center } }
 .scrim.pv .modal::before, .scrim.pv .modal::after{ display:none !important }
+.scrim.pv .modal-hd::before{ display:none !important }
 
 /* ---------- ranking: flyer del premio ---------- */
 .rk-wrap{ max-width:760px; margin-left:auto; margin-right:auto; width:100% }
@@ -2394,6 +2395,13 @@ html.pv-open, html.pv-open body{ overflow:hidden }
 .rk-tyc{ margin:-4px 0 16px; padding:14px 16px; border-radius:16px; background:var(--fill); border:1px solid var(--border) }
 .rk-tyc h3{ margin:0 0 8px; font:700 14px var(--font) } .rk-tyc p{ margin:0; font-size:13.5px; line-height:1.55; color:var(--muted) }
 .rank-premio textarea{ width:100%; margin-top:8px; padding:12px 14px; border-radius:12px; border:1px solid var(--border); background:var(--surface); color:var(--ink); font:400 14px/1.5 var(--font); resize:vertical }
+
+.rk-meta{ margin:0 0 16px; padding:16px 18px; border-radius:18px; background:var(--surface); border:1px solid var(--border) }
+.rk-meta.ok{ border-color:rgba(46,229,157,.45); background:rgba(46,229,157,.08) }
+.rk-meta-hd{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:10px }
+.rk-meta-hd b{ font:700 15px var(--font) } .rk-meta-hd span{ font:800 22px var(--font); letter-spacing:-.03em }
+.rk-meta-ft{ display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-top:10px; font-size:13.5px; color:var(--muted) } .rk-meta-ft b{ color:var(--ink) }
+.rk-meta-n{ margin:10px 0 0; font-size:12.5px; line-height:1.5; color:var(--muted) }
 </style>
 </head>
 <body>
@@ -2745,6 +2753,8 @@ html.pv-open, html.pv-open body{ overflow:hidden }
         });
       })(),
       premioVendedor: (typeof d.premioVendedor==='number' && d.premioVendedor>=0) ? d.premioVendedor : 0,
+      premioMetaGrupal: (typeof d.premioMetaGrupal==='number' && d.premioMetaGrupal>=0) ? d.premioMetaGrupal : 15000000,   // meta grupal del mes para que haya premio
+      premioResumen: (d.premioResumen && typeof d.premioResumen==='object') ? d.premioResumen : null,   // lo calcula el servidor (solo referencias propias)
       premioTyC: (typeof d.premioTyC==='string') ? d.premioTyC.slice(0,3000) : '',   // términos y condiciones del premio (los escribe el admin)
       notifEmail:{
         enabled: ne.enabled!==false,
@@ -3458,7 +3468,8 @@ html.pv-open, html.pv-open body{ overflow:hidden }
     var venta=ventaOf(p);
     var mg=b?marginPct(venta,b.costo):null;
     var badge = p.tipo==='combo' ? '<span class="pcard-badge combo">🎁 COMBO</span>' :
-                p.tipo==='extra' ? '<span class="pcard-badge extra">📦 EXTRA</span>' : '';
+                p.tipo==='extra' ? '<span class="pcard-badge extra">📦 EXTRA</span>' :
+                (p.propia===false && admin) ? '<span class="pcard-badge extra">🏷 OTRA BODEGA</span>' : '';
     var stock = (typeof p.stock==='number') ? p.stock : null;
     var soldOut = stock===0;
     var stockChip = '';
@@ -5127,6 +5138,8 @@ html.pv-open, html.pv-open body{ overflow:hidden }
           '<div class="vid-dz-hd">Arrastra un video aquí</div>'+
           '<div class="vid-dz-sb">o toca para elegir · máx 8MB c/u</div>'+
         '</label>'+
+        '<div class="sub" style="margin-top:14px">🏆 Premio del mes</div>'+
+        '<label style="display:flex;align-items:flex-start;gap:8px;margin:8px 0;font-size:14px;cursor:pointer"><input type="checkbox" data-role="propia" style="margin-top:3px"'+(p.propia===false?'':' checked')+'> <span>Referencia propia <span style="color:var(--muted)">(mercancía de Korven). Si es de otra bodega, desmárcala: sus ventas no cuentan para el premio.</span></span></label>'+
         '<div class="sub" style="margin-top:14px">🌐 Tienda web <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--faint)">(lo que ven tus clientes en la página)</span></div>'+
         '<label style="display:flex;align-items:center;gap:8px;margin:8px 0;font-size:14px;cursor:pointer"><input type="checkbox" data-role="webvis"'+(p.webVisible===false?'':' checked')+'> Mostrar este producto en la tienda web</label>'+
         '<div class="f2"><div class="field"><label>Color o versión</label><input type="text" data-f="webColor" value="'+esc(p.webColor||'')+'" placeholder="Ej: Triple White"></div>'+
@@ -5538,6 +5551,7 @@ html.pv-open, html.pv-open body{ overflow:hidden }
       if(!p.nombre){ modal.querySelector('[data-f="nombre"]').focus(); return; }
       if(p.tipo==='combo' && !comps.length){ showToast('El combo necesita al menos un producto', false); return; }
       var wv=modal.querySelector('[data-role="webvis"]'); p.webVisible = wv ? wv.checked : true;
+      var pr=modal.querySelector('[data-role="propia"]'); p.propia = pr ? pr.checked : true;
       p.webColor=g('webColor').trim(); p.webEtiqueta=g('webEtiqueta').trim(); p.webDesc=g('webDesc').trim();
       if(isNew) state.productos.push(p); else { var i=state.productos.findIndex(function(x){return x.id===p.id;}); if(i>=0) state.productos[i]=p; else state.productos.push(p); }
       closeModal(); render(); scheduleSave();
@@ -5631,18 +5645,29 @@ html.pv-open, html.pv-open body{ overflow:hidden }
     var admin=isAdmin();
     var mesKey=new Date().toISOString().slice(0,7);
     var mesNombre=new Date().toLocaleDateString('es-CO',{month:'long',year:'numeric'});
-    var peds=pedidosDeSeccion().filter(function(o){ return (o.fecha||'').slice(0,7)===mesKey; });
+    var secR=activeSection||'maquillaje';
+    var res=state.premioResumen && state.premioResumen.secciones ? (state.premioResumen.secciones[secR]||{vendido:0,pagado:0,n:0,vendedores:{}}) : null;
     var vendedores={};
-    trabajadoresSoloDe(activeSection||'maquillaje').forEach(function(u){
+    trabajadoresSoloDe(secR).forEach(function(u){
       vendedores[u.id]={uid:u.id, nombre:u.nombre, ventas:0, total:0};
     });
-    peds.forEach(function(o){
-      if(!vendedores[o.usuarioId]) vendedores[o.usuarioId]={uid:o.usuarioId, nombre:o.usuarioNombre||'(sin nombre)', ventas:0, total:0};
-      vendedores[o.usuarioId].ventas++;
-      vendedores[o.usuarioId].total+=(o.ventaTotal||0);
-    });
+    if(res){
+      // solo ventas de referencias propias (calculado por el servidor)
+      Object.keys(res.vendedores||{}).forEach(function(uid){
+        var uu=userById(uid);
+        if(!vendedores[uid]) vendedores[uid]={uid:uid, nombre:(uu&&uu.nombre)||'(sin nombre)', ventas:0, total:0};
+        vendedores[uid].ventas=res.vendedores[uid].n||0; vendedores[uid].total=res.vendedores[uid].monto||0;
+      });
+    } else {
+      var peds=pedidosDeSeccion().filter(function(o){ return (o.fecha||'').slice(0,7)===mesKey; });
+      peds.forEach(function(o){
+        if(!vendedores[o.usuarioId]) vendedores[o.usuarioId]={uid:o.usuarioId, nombre:o.usuarioNombre||'(sin nombre)', ventas:0, total:0};
+        vendedores[o.usuarioId].ventas++;
+        vendedores[o.usuarioId].total+=(o.ventaTotal||0);
+      });
+    }
     var arr=Object.keys(vendedores).map(function(k){return vendedores[k];});
-    arr.sort(function(a,b){return b.ventas-a.ventas;});
+    arr.sort(function(a,b){return (b.ventas-a.ventas) || (b.total-a.total);});
     var premio=state.premioVendedor||0;
     var medals=['🥇','🥈','🥉'];
     var rows=arr.map(function(v,i){
@@ -5667,12 +5692,23 @@ html.pv-open, html.pv-open body{ overflow:hidden }
       '</div>':'';
     // si el monto configurado no es el del flyer ($500.000) se muestra además el aviso con el monto real
     var premioShow=(premio>0 && premio!==500000)?'<div class="rank-premio-banner">🎁 Premio: <b>'+fmt(premio)+'</b> para el mayor vendedor del mes</div>':'';
+    var meta=(typeof state.premioMetaGrupal==='number')?state.premioMetaGrupal:15000000;
+    var vend=res?res.vendido:0, pag=res?res.pagado:0;
+    var pctMeta=meta>0?Math.min(100,Math.round(vend/meta*100)):0, lograda=meta>0 && vend>=meta;
+    var metaCard=(meta>0&&res)?('<div class="rk-meta'+(lograda?' ok':'')+'">'+
+      '<div class="rk-meta-hd"><b>'+(lograda?'🎉 ¡Meta grupal alcanzada!':'Meta grupal del mes')+'</b><span>'+pctMeta+'%</span></div>'+
+      '<div class="meta-bar"><div class="fill'+(lograda?' done':'')+'" style="width:'+pctMeta+'%"></div></div>'+
+      '<div class="rk-meta-ft"><span>Vendido: <b>'+fmt(vend)+'</b> de <b>'+fmt(meta)+'</b></span>'+(lograda?'':'<span>Faltan <b>'+fmt(meta-vend)+'</b></span>')+'</div>'+
+      '<p class="rk-meta-n">Para que haya premio, entre todos deben vender más de '+fmt(meta)+' en el mes. Solo cuentan las ventas de referencias propias.'+(admin?' Ya pagadas por los clientes: '+fmt(pag)+'.':'')+'</p></div>'):'';
     var tycTxt=(state.premioTyC||'').trim();
     var flyer='<figure class="rk-flyer"><img src="img/premio-500k.webp" alt="Premio de $500.000 para el mayor vendedor del mes" loading="lazy">'+
       '<figcaption><span>*Aplican términos y condiciones.</span> <button type="button" class="rk-tyc-btn" id="rk-tyc-btn" aria-expanded="false">Ver términos y condiciones</button></figcaption></figure>'+
       '<div class="rk-tyc" id="rk-tyc" hidden><h3>Términos y condiciones del premio</h3>'+
         (tycTxt?'<p>'+esc(tycTxt).replace(/\n/g,'<br>')+'</p>':'<p>Los términos y condiciones de este premio los define y explica el administrador. Consúltalos en el grupo de WhatsApp antes de participar.</p>')+
       '</div>';
+    var metaEditor=admin?'<div class="rank-premio"><label>🎯 Meta grupal para que haya premio (venta total del mes entre todos)</label>'+
+      '<div style="display:flex;gap:8px;align-items:center"><input type="number" inputmode="numeric" id="rank-meta" value="'+(meta||'')+'" placeholder="15000000" style="flex:1"><span>'+state.moneda+'</span>'+
+      '<button class="btn primary" id="rank-meta-save" style="padding:6px 14px">Guardar</button></div></div>':'';
     var tycEditor=admin?'<div class="rank-premio"><label>📄 Términos y condiciones del premio</label>'+
       '<textarea id="rank-tyc" rows="5" maxlength="3000" placeholder="Ej: Participan todos los vendedores registrados. Gana quien tenga más pedidos pagados entre el 1 y el último día del mes. Solo cuentan pedidos con pago confirmado. En caso de empate gana quien tenga mayor valor vendido…">'+esc(state.premioTyC||'')+'</textarea>'+
       '<div style="display:flex;justify-content:flex-end;margin-top:8px"><button class="btn primary" id="rank-tyc-save" style="padding:6px 14px">Guardar términos</button></div></div>':'';
@@ -5680,6 +5716,7 @@ html.pv-open, html.pv-open body{ overflow:hidden }
       '<div class="modal-hd"><h2>Ranking · '+esc(mesNombre)+'</h2><button class="mini" data-role="close">×</button></div>'+
       '<div class="modal-bd rk-wrap'+(admin?' rank-admin':'')+'">'+
         flyer+
+        metaCard+
         premioShow+
         '<div class="rank-header">'+
           '<span class="rank-pos"></span>'+
@@ -5688,13 +5725,19 @@ html.pv-open, html.pv-open body{ overflow:hidden }
           (admin?'<span class="rank-total" style="font-weight:600;font-size:12px;text-transform:uppercase;color:var(--muted)">Total</span>':'')+
         '</div>'+
         rows+
-        premioHTML+tycEditor+
+        premioHTML+metaEditor+tycEditor+
       '</div></div></div>';
     host.querySelectorAll('[data-role="close"]').forEach(function(b){b.addEventListener('click',closeModal);});
     var tb=document.getElementById('rk-tyc-btn');
     if(tb) tb.addEventListener('click',function(){
       var t=document.getElementById('rk-tyc'), abierto=!t.hidden;
       t.hidden=abierto; tb.setAttribute('aria-expanded', String(!abierto)); tb.textContent=abierto?'Ver términos y condiciones':'Ocultar términos y condiciones';
+    });
+    var metaSave=document.getElementById('rank-meta-save');
+    if(metaSave) metaSave.addEventListener('click',function(){
+      var v=parseFloat(document.getElementById('rank-meta').value);
+      state.premioMetaGrupal=isNaN(v)||v<0?0:Math.round(v);
+      scheduleSave(); showToast('Meta grupal: '+fmt(state.premioMetaGrupal),false); openRanking();
     });
     var tycSave=document.getElementById('rank-tyc-save');
     if(tycSave) tycSave.addEventListener('click',function(){
