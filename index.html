@@ -2402,6 +2402,12 @@ html.pv-open, html.pv-open body{ overflow:hidden }
 .rk-meta-hd b{ font:700 15px var(--font) } .rk-meta-hd span{ font:800 22px var(--font); letter-spacing:-.03em }
 .rk-meta-ft{ display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-top:10px; font-size:13.5px; color:var(--muted) } .rk-meta-ft b{ color:var(--ink) }
 .rk-meta-n{ margin:10px 0 0; font-size:12.5px; line-height:1.5; color:var(--muted) }
+
+/* ---------- devueltos ---------- */
+.ho-st.dev{ background:rgba(255,69,58,.14); color:#ff6b61 } .ho-st.dev::before{ background:#ff453a }
+.ho-done.dev{ color:#ff6b61 }
+.ho-lossnote{ padding:10px 14px; border-radius:12px; background:rgba(255,69,58,.08); border:1px solid rgba(255,69,58,.25); color:var(--muted); font-size:13px }
+.ho-lossnote b{ color:var(--ink) }
 </style>
 </head>
 <body>
@@ -3000,6 +3006,9 @@ html.pv-open, html.pv-open body{ overflow:hidden }
     if(o.estado.venta===undefined) o.estado.venta=null;
     return o.estado;
   }
+  // un pedido devuelto/cancelado no cuenta como venta (ni meta, ni comisión, ni ranking)
+  function pedidoValido(o){ return !(o && o.estado && o.estado.devuelto); }
+  function pedidosValidosDeSeccion(){ return pedidosDeSeccion().filter(pedidoValido); }
   function estadoStage(o){
     // Devuelve 0..2: 0=solo realizado, 1=envio, 2=venta (todo hecho)
     ensureEstado(o);
@@ -3061,7 +3070,7 @@ html.pv-open, html.pv-open body{ overflow:hidden }
     var equipo = puedeEditarMeta();
     var meta = equipo ? metaEquipoSec() : metaPersonalDe(userById(session.usuarioId));
     var mesKey = new Date().toISOString().slice(0,7);
-    var mesPed = pedidosDeSeccion().filter(function(o){
+    var mesPed = pedidosValidosDeSeccion().filter(function(o){
       if((o.fecha||'').slice(0,7)!==mesKey) return false;
       return equipo ? true : o.usuarioId===session.usuarioId;
     });
@@ -3117,10 +3126,10 @@ html.pv-open, html.pv-open body{ overflow:hidden }
   function gananciaAdminAll(list){ return list.reduce(function(a,o){return a+gananciaAdminDe(o);},0); }
   // Solo cuentan las ventas con pago confirmado
   function gananciaAdminConfirmada(list){
-    return list.reduce(function(a,o){ ensureEstado(o); return a + (o.estado.venta ? gananciaAdminDe(o) : 0); },0);
+    return list.reduce(function(a,o){ ensureEstado(o); return a + (o.estado.venta && pedidoValido(o) ? gananciaAdminDe(o) : 0); },0);
   }
   function gananciaAdminPendiente(list){
-    return list.reduce(function(a,o){ ensureEstado(o); return a + (o.estado.venta ? 0 : gananciaAdminDe(o)); },0);
+    return list.reduce(function(a,o){ ensureEstado(o); return a + (o.estado.venta || !pedidoValido(o) ? 0 : gananciaAdminDe(o)); },0);
   }
 
   /* ---------- resumen ---------- */
@@ -3258,7 +3267,7 @@ html.pv-open, html.pv-open body{ overflow:hidden }
     var statsHTML;
     if(admin){
       var mes=new Date().toISOString().slice(0,7);
-      var pedsSec=pedidosDeSeccion();
+      var pedsSec=pedidosValidosDeSeccion();
       var pedMes=pedsSec.filter(function(o){return (o.fecha||'').slice(0,7)===mes;});
       var gTot=gananciaAdminConfirmada(pedsSec);
       var gPend=gananciaAdminPendiente(pedsSec);
@@ -3284,7 +3293,7 @@ html.pv-open, html.pv-open body{ overflow:hidden }
       '</div>';
     }else{
       // trabajador: productos, pedidos este mes, ganancia este mes (solo de esta sección)
-      var mine=pedidosDeSeccion().filter(function(o){return o.usuarioId===session.usuarioId;});
+      var mine=pedidosValidosDeSeccion().filter(function(o){return o.usuarioId===session.usuarioId;});
       var mes=new Date().toISOString().slice(0,7);
       var mineMes=mine.filter(function(o){return (o.fecha||'').slice(0,7)===mes;});
       function gTrabDe(o){ if(o.gananciaTrabajador!=null) return o.gananciaTrabajador; return (o.ventaTotal||0)-(o.mayoristaTotal||0); }
@@ -6305,7 +6314,7 @@ html.pv-open, html.pv-open body{ overflow:hidden }
       else if(a==='hist-del'){
         if(confirm('¿Eliminar esta '+tPed('sg')+' del historial? Se devolverá el stock al inventario.')){
           var oDel=state.pedidos.find(function(x){return x.id===oid;});
-          if(oDel) ajustarStockPorPedido(oDel, +1);
+          if(oDel && !(oDel.estado && oDel.estado.devuelto && oDel.estado.devuelto.repuso)) ajustarStockPorPedido(oDel, +1);
           state.pedidos=state.pedidos.filter(function(x){return x.id!==oid;});
           openHistory(); scheduleSave();
         }
@@ -7279,7 +7288,7 @@ html.pv-open, html.pv-open body{ overflow:hidden }
     var lbl = k===hoy?'Hoy':(k===ayer?'Ayer':d.toLocaleDateString('es-CO',Object.assign({weekday:'short',day:'numeric',month:'short'},tz)));
     return {key:k, dia:lbl, hora:hora};
   }
-  function histEtapa(o){ ensureEstado(o); return o.estado.venta?'listo':(o.estado.envio?'camino':'pend'); }
+  function histEtapa(o){ ensureEstado(o); return o.estado.devuelto?'dev':(o.estado.venta?'listo':(o.estado.envio?'camino':'pend')); }
   function histWa(tel){ var t=String(tel||'').replace(/\D/g,''); if(!t) return ''; if(t.length===10 && t.charAt(0)==='3') t='57'+t; return 'https://wa.me/'+t; }
 
   /* ---------- comisiones de vendedores: liquidación ---------- */
@@ -7287,7 +7296,7 @@ html.pv-open, html.pv-open body{ overflow:hidden }
   function diaBogota(iso){ try{ return new Date(iso||Date.now()).toLocaleDateString('en-CA',{timeZone:'America/Bogota'}); }catch(e){ return String(iso||'').slice(0,10); } }
   function comisionDe(o){ return (o.gananciaTrabajador!=null)?o.gananciaTrabajador:((o.ventaTotal||0)-(o.mayoristaTotal||0)); }
   // se le debe al vendedor cuando el admin confirmó que el cliente pagó y aún no se le ha pagado su comisión
-  function esComisionable(o){ ensureEstado(o); return !!o.usuarioId && !!o.estado.venta && !o.comisionPagada && comisionDe(o)>0; }
+  function esComisionable(o){ ensureEstado(o); return !!o.usuarioId && !!o.estado.venta && !o.estado.devuelto && !o.comisionPagada && comisionDe(o)>0; }
   function fechaConfirmacion(o){ return (o.estado && o.estado.venta && o.estado.venta.at) || o.fecha || ''; }
   function comisionesPorPagar(sec, hasta, soloUid){
     var map={};
@@ -7321,7 +7330,7 @@ html.pv-open, html.pv-open body{ overflow:hidden }
     var grupos=comisionesPorPagar(sec, comHasta);
     var total=sumaComisiones(grupos), nPed=grupos.reduce(function(a,g){return a+g.pedidos.length;},0);
     var porConf=0;
-    (state.pedidos||[]).forEach(function(o){ if((o.seccion||'maquillaje')===sec && o.usuarioId){ ensureEstado(o); if(o.estado.envio && !o.estado.venta) porConf+=Math.max(0,comisionDe(o)); } });
+    (state.pedidos||[]).forEach(function(o){ if((o.seccion||'maquillaje')===sec && o.usuarioId){ ensureEstado(o); if(o.estado.envio && !o.estado.venta && !o.estado.devuelto) porConf+=Math.max(0,comisionDe(o)); } });
     var liqs=(state.liquidaciones||[]).filter(function(l){return (l.seccion||'maquillaje')===sec;}).sort(function(a,b){return String(b.fecha).localeCompare(String(a.fecha));});
     var mes=hoy.slice(0,7), pagMes=0, pagTot=0;
     liqs.forEach(function(l){ pagTot+=l.monto||0; if(diaBogota(l.fecha).slice(0,7)===mes) pagMes+=l.monto||0; });
@@ -7449,7 +7458,7 @@ html.pv-open, html.pv-open body{ overflow:hidden }
     var pend=comisionesPorPagar('', '', uid), porCobrar=sumaComisiones(pend);
     var lista=pend.length?pend[0].pedidos.slice().sort(function(a,b){return String(fechaConfirmacion(b)).localeCompare(String(fechaConfirmacion(a)));}):[];
     var enCamino=0;
-    (state.pedidos||[]).forEach(function(o){ if(o.usuarioId===uid){ ensureEstado(o); if(o.estado.envio && !o.estado.venta) enCamino+=Math.max(0,comisionDe(o)); } });
+    (state.pedidos||[]).forEach(function(o){ if(o.usuarioId===uid){ ensureEstado(o); if(o.estado.envio && !o.estado.venta && !o.estado.devuelto) enCamino+=Math.max(0,comisionDe(o)); } });
     var liqs=(state.liquidaciones||[]).filter(function(l){return l.uid===uid;}).sort(function(a,b){return String(b.fecha).localeCompare(String(a.fecha));});
     var pagado=liqs.reduce(function(a,l){return a+(l.monto||0);},0);
     var kpis='<div class="ho-kpis co-kpis3">'+
@@ -7470,6 +7479,49 @@ html.pv-open, html.pv-open body{ overflow:hidden }
     '</div></div>';
   }
 
+
+  /* ---------- devoluciones y cancelaciones (contraentrega) ---------- */
+  function openDevolucion(oid){
+    if(!isAdmin()) return;
+    var o=(state.pedidos||[]).find(function(x){return x.id===oid;}); if(!o) return;
+    ensureEstado(o);
+    if(o.comisionPagada){ showToast('A este pedido ya se le pagó la comisión: primero deshaz ese pago en Comisiones.', false); return; }
+    var enviado=!!o.estado.envio;
+    var motivos= enviado
+      ? ['El cliente rechazó el pedido','No contestó / no estaba','Dirección incorrecta','Producto dañado o equivocado','Otro']
+      : ['Cancelado por el cliente','Sin stock','El cliente no responde','Otro'];
+    var c=o.cliente||{};
+    host.innerHTML='<div class="scrim" data-role="scrim"><div class="modal" role="dialog" aria-modal="true" style="width:min(520px,100%)">'+
+      '<div class="modal-hd"><h2>'+(enviado?'Marcar como devuelto':'Cancelar pedido')+'</h2><button class="mini" data-role="close">×</button></div>'+
+      '<div class="modal-bd">'+
+        '<p class="hint" style="margin:0 0 4px"><b>'+esc(c.nombre||'(sin cliente)')+'</b>'+(c.ciudad?' · '+esc(c.ciudad):'')+' · '+fmt(o.ventaTotal||0)+'</p>'+
+        '<div class="field"><label>Motivo</label><select id="dv-motivo">'+motivos.map(function(m){ return '<option>'+esc(m)+'</option>'; }).join('')+'</select></div>'+
+        (enviado?'<div class="field"><label>Costo del flete perdido (opcional)</label><input type="number" inputmode="numeric" id="dv-flete" min="0" placeholder="Ej: 17000"><span class="help">Lo que pagaste de ida y vuelta a la transportadora. Se suma a tus pérdidas por devoluciones.</span></div>':'')+
+        '<label style="display:flex;gap:8px;align-items:flex-start;margin:6px 0;font-size:14px;cursor:pointer"><input type="checkbox" id="dv-repone" checked style="margin-top:3px"> <span>Devolver los productos al inventario</span></label>'+
+        '<div class="field"><label>Nota (opcional)</label><input type="text" id="dv-nota" maxlength="120" placeholder="Ej: lo devolvió la transportadora el martes"></div>'+
+        '<p class="hint" style="margin:6px 0 0">Un pedido devuelto no cuenta como venta, ni para la comisión del vendedor, ni para la meta o el ranking del premio.</p>'+
+      '</div>'+
+      '<div class="modal-ft"><button class="btn ghost" data-role="close">Volver</button><button class="btn primary" id="dv-ok">'+(enviado?'Marcar como devuelto':'Cancelar pedido')+'</button></div>'+
+    '</div></div>';
+    host.querySelectorAll('[data-role="close"]').forEach(function(b){ b.addEventListener('click',function(){ openHistory(); }); });
+    document.getElementById('dv-ok').addEventListener('click',function(){
+      var repone=document.getElementById('dv-repone').checked;
+      var f=enviado?(parseFloat(document.getElementById('dv-flete').value)||0):0;
+      o.estado.devuelto={ at:new Date().toISOString(), by:(session&&session.usuarioNombre)||'', motivo:document.getElementById('dv-motivo').value,
+        nota:(document.getElementById('dv-nota').value||'').trim(), flete:Math.max(0,Math.round(f)), repuso:repone, estabaEnviado:enviado };
+      if(repone) ajustarStockPorPedido(o,+1);
+      scheduleSave(); render(); showToast(enviado?'Pedido marcado como devuelto':'Pedido cancelado', false); openHistory();
+    });
+  }
+  function reactivarPedido(oid){
+    if(!isAdmin()) return;
+    var o=(state.pedidos||[]).find(function(x){return x.id===oid;}); if(!o||!o.estado||!o.estado.devuelto) return;
+    if(!confirm('¿Reactivar este pedido? Volverá a contar como venta'+(o.estado.devuelto.repuso?' y se descontará otra vez del inventario.':'.'))) return;
+    if(o.estado.devuelto.repuso) ajustarStockPorPedido(o,-1);
+    delete o.estado.devuelto;
+    scheduleSave(); render(); showToast('Pedido reactivado', false); openHistory();
+  }
+
   function openHistory(){
     var admin=isAdmin();
     var secPeds = pedidosDeSeccion();
@@ -7484,7 +7536,9 @@ html.pv-open, html.pv-open body{ overflow:hidden }
       base=base.filter(function(o){ return histFechaTxt(o.fecha).key>=lim; });
     }
     base.sort(function(a,b){ return String(b.fecha||'').localeCompare(String(a.fecha||'')); });
-    var counts={pend:0,camino:0,listo:0}; base.forEach(function(o){ counts[histEtapa(o)]++; });
+    var counts={pend:0,camino:0,listo:0,dev:0}; base.forEach(function(o){ counts[histEtapa(o)]++; });
+    var baseOk=base.filter(pedidoValido);
+    var fletes=base.reduce(function(a,o){ return a+((o.estado&&o.estado.devuelto&&o.estado.devuelto.flete)||0); },0);
     if(!histTab) histTab = counts.pend ? 'pend' : 'todos';
     function sumV(a){return a.reduce(function(x,o){return x+(o.ventaTotal||0);},0);}
     function sumG(a){return a.reduce(function(x,o){
@@ -7510,11 +7564,12 @@ html.pv-open, html.pv-open body{ overflow:hidden }
     filtros+='</div>';
     var kpis='<div class="ho-kpis">'+
       '<div class="ho-kpi warn"><span>'+L.pend+'</span><b>'+counts.pend+'</b></div>'+
-      '<div class="ho-kpi"><span>'+(admin?'Pedidos':'Mis pedidos')+'</span><b>'+base.length+'</b></div>'+
-      '<div class="ho-kpi"><span>'+(admin?'Ventas':'Mis ventas')+'</span><b>'+fmt(sumV(base))+'</b></div>'+
-      '<div class="ho-kpi good"><span>'+(admin?'Ganancia':'Mi ganancia')+'</span><b>'+fmt(sumG(base))+'</b></div>'+
+      '<div class="ho-kpi"><span>'+(admin?'Pedidos':'Mis pedidos')+'</span><b>'+baseOk.length+'</b></div>'+
+      '<div class="ho-kpi"><span>'+(admin?'Ventas':'Mis ventas')+'</span><b>'+fmt(sumV(baseOk))+'</b></div>'+
+      '<div class="ho-kpi good"><span>'+(admin?'Ganancia':'Mi ganancia')+'</span><b>'+fmt(sumG(baseOk))+'</b></div>'+
     '</div>';
-    var tabs='<div class="ho-tabs">'+seg('pend',L.pend,counts.pend)+seg('camino',L.camino,counts.camino)+seg('listo',L.listo,counts.listo)+seg('todos','Todos',base.length)+'</div>';
+    var tabs='<div class="ho-tabs">'+seg('pend',L.pend,counts.pend)+seg('camino',L.camino,counts.camino)+seg('listo',L.listo,counts.listo)+(counts.dev?seg('dev','Devueltos',counts.dev):'')+seg('todos','Todos',base.length)+'</div>'+
+      (counts.dev?'<div class="ho-lossnote">↩ '+counts.dev+' pedido'+(counts.dev===1?'':'s')+' devuelto'+(counts.dev===1?'':'s')+' o cancelado'+(counts.dev===1?'':'s')+' (no cuentan como venta ni comisión)'+(admin&&fletes>0?' · fletes perdidos <b>'+fmt(fletes)+'</b>':'')+'</div>':'');
     host.innerHTML='<div class="scrim" data-role="scrim"><div class="modal ho-modal" role="dialog" aria-modal="true">'+
       '<div class="modal-hd"><h2>'+(admin?'Pedidos de la sección':'Mis pedidos')+'</h2><button class="mini" data-role="close">×</button></div>'+
       '<div class="modal-bd ho-bd">'+kpis+filtros+tabs+'<div id="hist-list" class="ho-list"></div></div>'+
@@ -7534,9 +7589,10 @@ html.pv-open, html.pv-open body{ overflow:hidden }
       list.forEach(function(o){
         var f=histFechaTxt(o.fecha), et=histEtapa(o), c=o.cliente||{};
         if(f.key!==lastDay){ lastDay=f.key; var dl=list.filter(function(x){return histFechaTxt(x.fecha).key===f.key;});
-          html+='<div class="ho-day"><span>'+esc(f.dia)+'</span><em>'+dl.length+' · '+fmt(sumV(dl))+'</em></div>'; }
+          var dlOk=dl.filter(pedidoValido); html+='<div class="ho-day"><span>'+esc(f.dia)+'</span><em>'+dlOk.length+' · '+fmt(sumV(dlOk))+'</em></div>'; }
         var num = o.numeroWeb ? '#'+esc(o.numeroWeb) : '#'+esc(String(o.id||'').slice(-5).toUpperCase());
-        var stTxt = {pend:L.pend.replace(' · por cobrar',''), camino:admin?'Por cobrar':'Enviado', listo:admin?'Pagado':'Pagado'}[et];
+        var stTxt = {pend:L.pend.replace(' · por cobrar',''), camino:admin?'Por cobrar':'Enviado', listo:admin?'Pagado':'Pagado', dev:'Devuelto'}[et];
+        var dv=(o.estado&&o.estado.devuelto)||null;
         var seller = o.usuarioId ? '<span class="ho-tag seller">👤 '+esc(o.usuarioNombre||'Vendedor')+'</span>' : '';
         var web = o.origen==='web' ? '<span class="ho-tag web">🌐 Tienda web'+(o.usuarioId?'':' · directa')+'</span>' : '';
         var cod = o.codigoVendedor ? '<span class="ho-tag">Código '+esc(o.codigoVendedor)+'</span>' : '';
@@ -7549,10 +7605,11 @@ html.pv-open, html.pv-open body{ overflow:hidden }
         var main='';
         if(admin){
           if(et==='pend') main='<button class="btn primary ho-go" data-act="est-envio">Marcar como enviado</button>';
-          else if(et==='camino') main='<button class="btn primary ho-go" data-act="est-venta">Confirmar pago</button>';
+          else if(et==='camino') main='<button class="btn primary ho-go" data-act="est-venta">Confirmar pago</button><button class="btn ghost" data-dev="1">↩ Devuelto</button>';
+          else if(et==='dev') main='<span class="ho-done dev">↩ '+esc(dv.motivo||'Devuelto')+(dv.flete>0?' · flete '+fmt(dv.flete):'')+'</span><button class="btn ghost" data-react="1">Reactivar</button>';
           else main='<span class="ho-done">✓ Pedido completado</span>';
         } else {
-          main='<span class="ho-done '+et+'">'+(et==='listo'?'✓ Pagado':(et==='camino'?'🚚 En camino':'⏳ Esperando despacho'))+'</span>';
+          main='<span class="ho-done '+et+'">'+(et==='dev'?'↩ Devuelto':(et==='listo'?'✓ Pagado':(et==='camino'?'🚚 En camino':'⏳ Esperando despacho')))+'</span>';
         }
         html+='<div class="hist-item ho" data-oid="'+esc(o.id)+'">'+
           '<div class="ho-top"><span class="ho-num">'+num+'</span><span class="ho-time">'+esc(f.hora)+'</span><span class="ho-st '+et+'">'+stTxt+'</span></div>'+
@@ -7564,12 +7621,15 @@ html.pv-open, html.pv-open body{ overflow:hidden }
             '<button class="btn ghost" data-act="hist-view">Ver detalle</button>'+
             (wa?'<a class="btn ghost ho-wa" href="'+wa+'" target="_blank" rel="noopener">WhatsApp</a>':'')+
             '<span class="ho-sp"></span>'+
+            (admin&&et==='pend'?'<button class="ho-link" data-dev="1">Cancelar pedido</button>':'')+
             '<button class="ho-link" data-act="hist-reopen">Reabrir</button>'+
             (admin||(session&&o.usuarioId===session.usuarioId)?'<button class="ho-link bad" data-act="hist-del">Eliminar</button>':'')+
           '</div>'+
         '</div>';
       });
       box.innerHTML=html;
+      box.querySelectorAll('[data-dev]').forEach(function(b){ b.addEventListener('click',function(){ openDevolucion(b.closest('.hist-item').getAttribute('data-oid')); }); });
+      box.querySelectorAll('[data-react]').forEach(function(b){ b.addEventListener('click',function(){ reactivarPedido(b.closest('.hist-item').getAttribute('data-oid')); }); });
     }
     drawList();
     host.querySelectorAll('[data-htab]').forEach(function(b){ b.addEventListener('click',function(){ histTab=b.getAttribute('data-htab'); openHistory(); }); });
