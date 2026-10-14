@@ -2452,6 +2452,13 @@ html.pv-open, html.pv-open body{ overflow:hidden }
 .al-banner{ display:flex; align-items:center; gap:12px; width:100%; margin:0 0 10px; padding:12px 14px; border-radius:14px; border:1px solid rgba(255,159,10,.4); background:rgba(255,159,10,.10); color:var(--ink); font:inherit; text-align:left; cursor:pointer }
 .al-banner b{ display:block; font-size:14.5px } .al-banner small{ display:block; font-size:12.5px; color:var(--muted) }
 .al-ic{ font-size:20px } .al-go{ margin-left:auto; color:var(--muted); font-size:13px; font-weight:600 }
+
+.iv-row{ border:1px solid var(--border); border-radius:12px; padding:10px 12px; background:var(--surface) }
+.iv-hd{ display:flex; align-items:center; gap:10px } .iv-hd .pr-nm{ flex:1 }
+.iv-tot{ font-size:12.5px; color:var(--muted); white-space:nowrap } .iv-fill{ padding:6px 10px; font-size:12.5px }
+.iv-sizes{ display:grid; grid-template-columns:repeat(auto-fill,minmax(74px,1fr)); gap:8px; margin-top:10px }
+.iv-sizes label{ display:flex; flex-direction:column; gap:3px; font-size:11.5px; color:var(--muted) }
+.iv-sizes input{ width:100%; padding:7px 8px; border-radius:8px; border:1px solid var(--border); background:var(--surface-2); color:var(--ink); font-size:14px; text-align:center }
 </style>
 </head>
 <body>
@@ -5035,7 +5042,7 @@ html.pv-open, html.pv-open body{ overflow:hidden }
      Las pantallas grandes (Pedidos, Comisiones, Trabajadores, perfil, productos…) ocupan toda la pantalla,
      con botón "Volver" y compatibles con el botón atrás del navegador. Los avisos y selectores pequeños siguen siendo ventanas. */
   (function(){
-    var PAGINAS=/^\s*(Trabajadores|Mi panel|Precios rápidos|Reportes|Clientes|Alertas|Editar datos|Marcas de|Bodegas de|Ranking|Notificaciones|Comisiones|Pagar comisión|Mis pagos|Pedidos de la sección|Mis pedidos|Nuevo producto|Editar producto|Pedido\s*$|Venta\s*$)/;
+    var PAGINAS=/^\s*(Trabajadores|Mi panel|Inventario rápido|Precios rápidos|Reportes|Clientes|Alertas|Editar datos|Marcas de|Bodegas de|Ranking|Notificaciones|Comisiones|Pagar comisión|Mis pagos|Pedidos de la sección|Mis pedidos|Nuevo producto|Editar producto|Pedido\s*$|Venta\s*$)/;
     var activa=false, ignorar=false;
     function aplicar(){
       var scrim=host.querySelector('.scrim'), h2=scrim&&scrim.querySelector('.modal-hd h2');
@@ -5916,6 +5923,7 @@ html.pv-open, html.pv-open body{ overflow:hidden }
       item('people', '#34c759', 'Trabajadores', 'users', '<span class="sb-badge">'+(isScopedAdmin()?trabajadoresSoloDe(activeSection||'maquillaje').length:state.usuarios.length)+'</span>')+
       item('tag', '#ff2d55', 'Marcas', 'marcas-visibles')+
       item('list', '#30b0c7', 'Precios rápidos', 'precios')+
+      item('box', '#34c759', 'Inventario rápido', 'inventario')+
       item('chart', '#5856d6', 'Reportes', 'reportes')+
       item('people', '#ff9500', 'Clientes', 'clientes')+
       (sup?item('bell', '#ff3b30', 'Notificaciones', 'notifs', notifStatus):'')+
@@ -6028,6 +6036,7 @@ html.pv-open, html.pv-open body{ overflow:hidden }
     else if(a==='ranking'){ closeModal(); openRanking(); }
     else if(a==='mi-panel'){ closeModal(); openMiPanel(); }
     else if(a==='precios'){ closeModal(); openPrecios(); }
+    else if(a==='inventario'){ closeModal(); openInventario(); }
     else if(a==='reportes'){ closeModal(); openReportes(); }
     else if(a==='clientes'){ closeModal(); openClientes(); }
     else if(a==='alertas'){ closeModal(); openAlertas(); }
@@ -7891,6 +7900,100 @@ html.pv-open, html.pv-open body{ overflow:hidden }
       '<div class="modal-ft"><span class="ho-foot">Los productos sin cantidad cargada no generan alerta de stock.</span><button class="btn ghost" data-role="close">Cerrar</button></div>'+
     '</div></div>';
     host.querySelectorAll('[data-role="close"]').forEach(function(b){ b.addEventListener('click',closeModal); });
+  }
+
+
+  /* ---------- inventario rápido: cantidades por talla de muchos productos a la vez ---------- */
+  var invFiltro='sin', invQ='';
+  function openInventario(){
+    if(!isAdmin()) return;
+    var lista=productosDeSeccion().filter(function(p){ return p.tipo!=='combo' && p.tipo!=='extra'; });
+    var conTallas=function(p){ return Array.isArray(p.variacionesColor) && p.variacionesColor.length>0 && !varStockOn(p); };
+    var cargado=function(p){ return conTallas(p) ? colorStockOn(p) : (varStockOn(p) || typeof p.stock==='number'); };
+    var nSin=lista.filter(function(p){ return !cargado(p); }).length;
+    var tot=lista.reduce(function(a,p){ return a+((typeof p.stock==='number')?p.stock:0); },0);
+    function filas(){
+      var q=invQ.trim().toLowerCase();
+      return lista.filter(function(p){
+        if(invFiltro==='sin' && cargado(p)) return false;
+        if(q && ((p.marca||'')+' '+(p.nombre||'')+' '+(p.webColor||'')).toLowerCase().indexOf(q)<0) return false;
+        return true;
+      });
+    }
+    function filaHTML(p){
+      var th=p.imagen?'<img src="'+esc(p.imagen)+'" alt="" loading="lazy">':'<span>📦</span>';
+      var cuerpo;
+      if(varStockOn(p)) cuerpo='<p class="hint" style="margin:6px 0 0">Este producto controla el stock por cantidad ('+esc(p.tipoVariacion||'')+'). Edítalo desde el producto.</p>';
+      else if(conTallas(p)) cuerpo='<div class="iv-sizes">'+p.variacionesColor.map(function(v,i){
+        return '<label><span>'+esc(nomVarColor(v))+'</span><input type="number" inputmode="numeric" min="0" data-i="'+i+'" value="'+(typeof v.stock==='number'?v.stock:'')+'" placeholder="–"></label>';
+      }).join('')+'</div>';
+      else cuerpo='<div class="iv-sizes"><label><span>Stock</span><input type="number" inputmode="numeric" min="0" data-solo="1" value="'+(typeof p.stock==='number'?p.stock:'')+'" placeholder="–"></label></div>';
+      return '<div class="iv-row" data-pid="'+esc(p.id)+'">'+
+        '<div class="iv-hd"><div class="pr-th">'+th+'</div><div class="pr-nm"><b>'+esc(p.nombre||'')+'</b><small>'+esc([p.marca,p.webColor].filter(Boolean).join(' · '))+'</small></div>'+
+        '<div class="iv-tot" data-tot></div>'+
+        (varStockOn(p)?'':'<button type="button" class="btn ghost iv-fill" data-fill="1" title="Poner la misma cantidad en todas las tallas">Llenar todas</button>')+'</div>'+cuerpo+'</div>';
+    }
+    function totalFila(r){
+      var t=0, any=false;
+      r.querySelectorAll('input').forEach(function(i){ if(i.value!==''){ any=true; t+=parseInt(i.value,10)||0; } });
+      var el=r.querySelector('[data-tot]'); if(el) el.textContent=any?(t+' ud'):'sin control';
+    }
+    function pintar(){
+      var f=filas();
+      document.getElementById('iv-list').innerHTML=f.length?f.map(filaHTML).join(''):'<div class="ho-empty"><div class="em">✅</div><b>No hay productos para mostrar</b><p>'+(invFiltro==='sin'?'Todos tienen cantidades cargadas.':'Prueba con otra búsqueda.')+'</p></div>';
+      document.getElementById('iv-count').textContent=f.length+' producto'+(f.length===1?'':'s');
+      host.querySelectorAll('.iv-row').forEach(totalFila);
+    }
+    host.innerHTML='<div class="scrim" data-role="scrim"><div class="modal ho-modal" role="dialog" aria-modal="true">'+
+      '<div class="modal-hd"><h2>Inventario rápido</h2><button class="mini" data-role="close">×</button></div>'+
+      '<div class="modal-bd ho-bd">'+
+        '<div class="ho-tabs"><button class="ho-tab'+(invFiltro==='sin'?' on':'')+'" data-f="sin">Sin cargar <span>'+nSin+'</span></button><button class="ho-tab'+(invFiltro==='todos'?' on':'')+'" data-f="todos">Todos <span>'+lista.length+'</span></button></div>'+
+        '<div class="search" style="margin:8px 0"><input type="search" id="iv-q" placeholder="Buscar producto o marca…" value="'+esc(invQ)+'"></div>'+
+        '<div class="hint" style="margin:0 2px 6px">Escribe las unidades que tienes de cada talla. <b>Vacío</b> = sin control (siempre disponible). <b>0</b> = agotada: en la tienda no se puede pedir.</div>'+
+        '<div class="ho-day"><span>Cantidades por talla</span><em id="iv-count"></em></div>'+
+        '<div id="iv-list" class="pr-list"></div>'+
+      '</div>'+
+      '<div class="modal-ft"><span class="ho-foot">Unidades en la sección: '+tot+'</span><button class="btn ghost" data-role="close">Cerrar</button><button class="btn primary" id="iv-save">Guardar inventario</button></div>'+
+    '</div></div>';
+    var cambios={};
+    pintar();
+    host.querySelectorAll('[data-role="close"]').forEach(function(b){ b.addEventListener('click',closeModal); });
+    function aplicar(){
+      var n=0;
+      Object.keys(cambios).forEach(function(pid){
+        var r=cambios[pid]; var p=state.productos.find(function(x){return x.id===pid;}); if(!p||!document.body.contains(r)) return;
+        var hadColor=colorStockOn(p);
+        if(r.querySelector('[data-solo]')){
+          var v=r.querySelector('[data-solo]').value;
+          p.stock=(v===''||isNaN(parseInt(v,10)))?null:Math.max(0,parseInt(v,10));
+        } else {
+          r.querySelectorAll('input[data-i]').forEach(function(inp){
+            var v=p.variacionesColor[parseInt(inp.getAttribute('data-i'),10)]; if(!v) return;
+            var q=parseInt(inp.value,10);
+            if(inp.value!=='' && !isNaN(q) && q>=0) v.stock=q; else delete v.stock;
+          });
+          if(colorStockOn(p)) syncStock(p); else if(hadColor) p.stock=null;
+        }
+        n++;
+      });
+      cambios={};
+      if(n){ scheduleSave(); render(); }
+      return n;
+    }
+    host.querySelectorAll('[data-f]').forEach(function(b){ b.addEventListener('click',function(){ invFiltro=b.getAttribute('data-f'); aplicar(); openInventario(); }); });
+    document.getElementById('iv-q').addEventListener('input',function(e){ invQ=e.target.value; aplicar(); pintar(); });
+    var lst=document.getElementById('iv-list');
+    lst.addEventListener('input',function(e){ var r=e.target.closest('.iv-row'); if(!r) return; cambios[r.getAttribute('data-pid')]=r; totalFila(r); });
+    lst.addEventListener('click',function(e){
+      var b=e.target.closest('[data-fill]'); if(!b) return;
+      var r=b.closest('.iv-row'); var n=prompt('¿Cuántas unidades poner en cada talla de este producto?','2');
+      if(n===null) return; var q=parseInt(n,10); if(isNaN(q)||q<0) return;
+      r.querySelectorAll('input').forEach(function(i){ i.value=q; });
+      cambios[r.getAttribute('data-pid')]=r; totalFila(r);
+    });
+    document.getElementById('iv-save').addEventListener('click',function(){
+      var n=aplicar(); showToast(n?('Inventario guardado ('+n+' producto'+(n===1?'':'s')+')'):'No hay cambios', false); openInventario();
+    });
   }
 
   /* ---------- panel del vendedor ---------- */
