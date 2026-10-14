@@ -2490,6 +2490,9 @@ html.pv-open, html.pv-open body{ overflow:hidden }
 .vt-table .add-cost{ margin-top:10px }
 .vt-sum{ margin-top:8px; font-size:13px; color:var(--muted) } .vt-sum b{ color:var(--ink) } .vt-sum .bad{ color:#ff6b61 }
 @media (max-width:560px){ .vt-table{ --c:minmax(0,1fr) 84px 30px } .vt-table.ge-on{ --c:minmax(0,1fr) 92px 84px 30px } .vt-table:not(.is-talla){ --c:40px minmax(0,1fr) 84px 30px } .vt-table:not(.is-talla).ge-on{ --c:40px minmax(0,1fr) 92px 84px 30px } }
+
+.modal.is-extra .pf-n{ display:none !important }
+.modal.is-extra .pf-adv{ display:none }
 </style>
 </head>
 <body>
@@ -5167,18 +5170,18 @@ html.pv-open, html.pv-open body{ overflow:hidden }
           '<span class="help">La imagen se comprime automáticamente. Los trabajadores podrán descargarla.</span>'+
         '</div>'+
         '<div class="field"><label>Nombre del producto</label><input type="text" data-f="nombre" value="'+esc(p.nombre)+'" placeholder="Ej: Reloj inteligente D20"></div>'+
-        '<div class="field"><label>Marca</label>'+
+        '<div class="field pf-n"><label>Marca</label>'+
           '<select data-f="marca" class="bod-select">'+
             '<option value="">— Sin marca —</option>'+
             marcasDeSeccion().map(function(m){ return '<option value="'+esc(m)+'"'+(marcaUpper(m)===marcaUpper(p.marca)?' selected':'')+'>'+esc(m)+'</option>'; }).join('')+
             '<option value="__new__">➕ Nueva marca…</option>'+
           '</select>'+
         '</div>'+
-        '<div class="field" style="margin-top:14px"><label>¿Para quién es?</label><select data-f="genero" class="bod-select">'+
+        '<div class="field pf-n" style="margin-top:14px"><label>¿Para quién es?</label><select data-f="genero" class="bod-select">'+
           [['','— Según las tallas —'],['Mujer','Mujer'],['Hombre','Hombre'],['Ambos','Mujer y hombre (tallas separadas)'],['Unisex','Unisex (mismas tallas)']].map(function(t){ return '<option value="'+t[0]+'"'+((p.genero||'')===t[0]?' selected':'')+'>'+t[1]+'</option>'; }).join('')+
         '</select><span class="help">Aparece en la tarjeta y en la tienda web. Sin elegir, se deduce de las tallas: 36–39 mujer, 40–44 hombre.</span></div>'+
         '<div class="pf-step"><span>2</span><b>Precios y costo</b><small>lo que cobras y lo que te cuesta</small></div>'+
-        '<div class="f2"><div class="field"><label>Precio mayorista ('+state.moneda+')</label><input type="number" inputmode="numeric" data-f="precioMayorista" value="'+esc(p.precioMayorista||"")+'" placeholder="Trabajador"><span class="help">Precio al que los trabajadores lo venden</span></div>'+
+        '<div class="f2"><div class="field pf-n"><label>Precio mayorista ('+state.moneda+')</label><input type="number" inputmode="numeric" data-f="precioMayorista" value="'+esc(p.precioMayorista||"")+'" placeholder="Trabajador"><span class="help">Precio al que los trabajadores lo venden</span></div>'+
           '<div class="field"><label>Precio venta al cliente ('+state.moneda+')</label><input type="number" inputmode="numeric" data-f="precioVenta" value="'+esc(p.precioVenta)+'" placeholder="Cliente"><span class="help">Precio al público final</span></div></div>'+
         '<div data-role="wrap-bodegas"'+(p.tipo!=='normal'?' style="display:none"':'')+'>'+
           '<div class="sub">Bodegas y su costo</div>'+
@@ -5191,8 +5194,10 @@ html.pv-open, html.pv-open body{ overflow:hidden }
           '<button type="button" class="add-cost" data-role="addcomp">＋ Agregar producto al combo</button>'+
         '</div>'+
         '<div data-role="wrap-extra"'+(p.tipo!=='extra'?' style="display:none"':'')+'>'+
-          '<div class="note">📦 Los extras (cajas, decoración, empaques…) no llevan bodega. Solo se cobran al cliente y se pueden añadir a cualquier pedido.</div>'+
+          '<div class="note">📦 <b>Extra:</b> algo adicional que el cliente puede pedir (caja de regalo, empaque, decoración…). Se suma al pedido con su precio y no lleva tallas ni sale en la tienda web.</div>'+
+          '<div class="field" style="margin-top:12px"><label>Lo que te cuesta a ti ('+state.moneda+')</label><input type="number" inputmode="numeric" min="0" data-role="extra-costo" value="'+(p.tipo==='extra'&&p.costos&&p.costos[0]&&p.costos[0].costo>0?esc(p.costos[0].costo):'')+'" placeholder="Ej: 3000"><span class="help">Sirve para calcular tu ganancia. El vendedor no gana comisión sobre los extras.</span></div>'+
         '</div>'+
+        '<div class="pf-n">'+
         '<div class="pf-step"><span>3</span><b>Tallas y cantidades</b><small>opcional</small></div>'+
         '<div class="sub" style="margin-top:14px">🎨 Tallas o colores <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--faint)">(cada una con su cantidad)</span></div>'+
         '<div class="field"><label>Tipo</label>'+
@@ -5282,6 +5287,7 @@ html.pv-open, html.pv-open body{ overflow:hidden }
         '<label style="display:flex;align-items:flex-start;gap:8px;margin:8px 0;font-size:14px;cursor:pointer"><input type="checkbox" data-role="propia" style="margin-top:3px"'+(p.propia===false?'':' checked')+'> <span>Referencia propia <span style="color:var(--muted)">(mercancía de Korven). Si es de otra bodega, desmárcala: sus ventas no cuentan para el premio.</span></span></label>'+
         '<div class="field"><label>Notas (opcional)</label><textarea data-f="notas" placeholder="Proveedor, tiempos de entrega, observaciones…">'+esc(p.notas||'')+'</textarea></div>'+
         '</div></details>'+
+        '</div>'+
       '</div>'+
       '<div class="modal-ft"><button class="btn ghost" data-role="close">Cancelar</button><button class="btn primary" data-role="save">'+(isNew?'Agregar producto':'Guardar cambios')+'</button></div>'+
     '</div></div>';
@@ -5371,11 +5377,13 @@ html.pv-open, html.pv-open body{ overflow:hidden }
       wrapBod.style.display = tipo==='normal' ? '' : 'none';
       wrapComps.style.display = tipo==='combo' ? '' : 'none';
       wrapExtra.style.display = tipo==='extra' ? '' : 'none';
+      modal.classList.toggle('is-extra', tipo==='extra');
       Array.prototype.forEach.call(modal.querySelectorAll('.tipo-opt'), function(el){
         var inp = el.querySelector('input');
         el.classList.toggle('on', inp && inp.value===tipo);
       });
     }
+    refreshTipoUI(p.tipo);
     modal.querySelectorAll('input[name="tipo"]').forEach(function(r){
       r.addEventListener('change', function(){
         p.tipo = r.value;
@@ -5711,6 +5719,11 @@ html.pv-open, html.pv-open body{ overflow:hidden }
       var costos=[];
       if(p.tipo==='normal'){
         rowsEl.querySelectorAll('.cost-row').forEach(function(r){ var bEl=r.querySelector('[data-role="bod"]'); var bod=bEl?(bEl.value==='__new__'?'':bEl.value.trim()):''; var costo=parseFloat(r.querySelector('[data-role="costo"]').value); if(bod){ costos.push({bodega:bod,costo:isNaN(costo)?0:costo}); ensureBodegaEnSeccion(bod); } });
+      }
+      if(p.tipo==='extra'){
+        var ec=modal.querySelector('[data-role="extra-costo"]'); var ecv=ec?parseFloat(ec.value):0;
+        if(ecv>0) costos=[{bodega:'Extras', costo:Math.round(ecv)}];
+        p.precioMayorista=0; p.stock=null; p.marca=''; p.genero=undefined; delete p.genero;
       }
       p.costos=costos;
       var comps=[];
