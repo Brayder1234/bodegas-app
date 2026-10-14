@@ -2413,6 +2413,13 @@ html.pv-open, html.pv-open body{ overflow:hidden }
 .var-stock{ width:84px !important; flex:0 0 84px; text-align:center }
 .var-badge.gen{ background:rgba(191,90,242,.14); color:#d29bff }
 .var-gen{ width:92px !important; flex:0 0 92px }
+
+.mp-hero{ padding:16px 16px; border-radius:16px; background:linear-gradient(135deg,rgba(175,82,222,.22),rgba(10,132,255,.14)); border:1px solid var(--border) }
+.mp-hero span{ font-size:12px; text-transform:capitalize; color:var(--muted) }
+.mp-hero b{ display:block; font-size:22px; letter-spacing:-.02em; margin:2px 0 4px }
+.mp-hero p{ margin:0; font-size:13px; color:var(--muted) }
+.mp-st{ font-size:12px; font-weight:600; padding:3px 9px; border-radius:999px; background:var(--surface-2); color:var(--muted); white-space:nowrap }
+.mp-st.listo{ background:rgba(48,209,88,.15); color:#30d158 } .mp-st.camino{ background:rgba(10,132,255,.15); color:#6cb4ff } .mp-st.dev{ background:rgba(255,69,58,.14); color:#ff6b61 }
 </style>
 </head>
 <body>
@@ -4990,7 +4997,7 @@ html.pv-open, html.pv-open body{ overflow:hidden }
      Las pantallas grandes (Pedidos, Comisiones, Trabajadores, perfil, productos…) ocupan toda la pantalla,
      con botón "Volver" y compatibles con el botón atrás del navegador. Los avisos y selectores pequeños siguen siendo ventanas. */
   (function(){
-    var PAGINAS=/^\s*(Trabajadores|Editar datos|Marcas de|Bodegas de|Ranking|Notificaciones|Comisiones|Pagar comisión|Mis pagos|Pedidos de la sección|Mis pedidos|Nuevo producto|Editar producto|Pedido\s*$|Venta\s*$)/;
+    var PAGINAS=/^\s*(Trabajadores|Mi panel|Editar datos|Marcas de|Bodegas de|Ranking|Notificaciones|Comisiones|Pagar comisión|Mis pagos|Pedidos de la sección|Mis pedidos|Nuevo producto|Editar producto|Pedido\s*$|Venta\s*$)/;
     var activa=false, ignorar=false;
     function aplicar(){
       var scrim=host.querySelector('.scrim'), h2=scrim&&scrim.querySelector('.modal-hd h2');
@@ -5851,6 +5858,7 @@ html.pv-open, html.pv-open body{ overflow:hidden }
       return '<div class="sidebar-group"><div class="sidebar-group-title">'+esc(title)+'</div>'+items+'</div>';
     }
     var ventas = group('Ventas',
+      (!admin?item('trophy', '#af52de', 'Mi panel', 'mi-panel'):'')+
       item('list', '#007aff', pedLabel, 'history', '<span class="sb-badge">'+pedCount+'</span>')+
       item('bag', '#34c759', admin?'Comisiones':'Mis pagos', admin?'comisiones':'mis-pagos', comisionesBadge())+
       item('trophy', '#ff9500', 'Ranking de vendedores', 'ranking')
@@ -5973,6 +5981,7 @@ html.pv-open, html.pv-open body{ overflow:hidden }
       })();
     }
     else if(a==='ranking'){ closeModal(); openRanking(); }
+    else if(a==='mi-panel'){ closeModal(); openMiPanel(); }
     else if(a==='disconnect'){ if(!isSuper()) return; if(confirm('Se borrará la conexión de ESTE dispositivo (tus datos en la nube quedan intactos). ¿Continuar?')){ try{localStorage.removeItem(CFG_KEY);}catch(x){} cfg=null; stopPolling(); render(); } }
     else if(a==='toggle-moneda'){ if(!isSuper()) return; state.moneda=state.moneda==='USD'?'COP':'USD'; render(); scheduleSave(); }
     else if(a==='toggle-theme') toggleTheme();
@@ -7527,6 +7536,72 @@ html.pv-open, html.pv-open body{ overflow:hidden }
   }
 
   // vista del vendedor: lo que se le debe y lo que ya se le pagó
+
+  /* ---------- panel del vendedor ---------- */
+  function openMiPanel(){
+    if(!session) return;
+    var uid=session.usuarioId, u=userById(uid)||{}, sec=activeSection||'maquillaje';
+    var mesKey=new Date().toISOString().slice(0,7);
+    var mesNombre=new Date().toLocaleDateString('es-CO',{month:'long',year:'numeric'});
+    var res=state.premioResumen && state.premioResumen.secciones ? state.premioResumen.secciones[sec] : null;
+    var mias=pedidosDeSeccion().filter(function(o){ return o.usuarioId===uid; });
+    var delMes=mias.filter(function(o){ return (o.fecha||'').slice(0,7)===mesKey && pedidoValido(o); });
+    var nVentas=res&&res.vendedores&&res.vendedores[uid]?res.vendedores[uid].n:delMes.length;
+    var monto=res&&res.vendedores&&res.vendedores[uid]?res.vendedores[uid].monto:delMes.reduce(function(a,o){return a+(o.ventaTotal||0);},0);
+    // posición entre los vendedores de la sección (por ventas, luego por monto)
+    var tabla=[];
+    if(res&&res.vendedores) Object.keys(res.vendedores).forEach(function(k){ tabla.push({uid:k,n:res.vendedores[k].n||0,monto:res.vendedores[k].monto||0}); });
+    if(!tabla.some(function(x){return x.uid===uid;})) tabla.push({uid:uid,n:nVentas,monto:monto});
+    tabla.sort(function(a,b){ return (b.n-a.n)||(b.monto-a.monto); });
+    var pos=tabla.findIndex(function(x){return x.uid===uid;})+1;
+    var lider=tabla[0], faltan=(lider&&lider.uid!==uid)?Math.max(1,lider.n-nVentas+1):0;
+    var posTxt= nVentas===0 ? 'Aún no tienes ventas este mes'
+      : pos===1 ? '🥇 Vas de primero'
+      : 'Vas en el puesto '+pos+' de '+tabla.length;
+    var subPos= nVentas===0 ? 'Cierra tu primera venta y entras al ranking.'
+      : pos===1 ? 'Mantén la ventaja: el premio es para el mayor vendedor del mes.'
+      : 'Te faltan '+faltan+' venta'+(faltan===1?'':'s')+' para pasar al primero.';
+    var pend=comisionesPorPagar('', '', uid), porCobrar=sumaComisiones(pend);
+    var enCamino=0, porDespachar=0;
+    mias.forEach(function(o){ ensureEstado(o); if(o.estado.devuelto) return;
+      if(o.estado.envio && !o.estado.venta) enCamino+=Math.max(0,comisionDe(o));
+      if(!o.estado.envio) porDespachar++; });
+    var meta=(typeof state.premioMetaGrupal==='number')?state.premioMetaGrupal:15000000;
+    var vend=res?res.vendido:0, pct=meta>0?Math.min(100,Math.round(vend/meta*100)):0;
+    var metaHTML=(meta>0&&res)?'<div class="rk-meta'+(vend>=meta?' ok':'')+'"><div class="rk-meta-hd"><b>'+(vend>=meta?'🎉 ¡Meta grupal alcanzada!':'Meta del grupo')+'</b><span>'+pct+'%</span></div>'+
+      '<div class="meta-bar"><div class="fill'+(vend>=meta?' done':'')+'" style="width:'+pct+'%"></div></div>'+
+      '<div class="rk-meta-ft"><span>Vendido: <b>'+fmt(vend)+'</b> de <b>'+fmt(meta)+'</b></span>'+(vend>=meta?'':'<span>Faltan <b>'+fmt(meta-vend)+'</b></span>')+'</div></div>':'';
+    var links=enlacesVendedor(u);
+    var waShare=(u.codigo && SITIOS[sec])?'https://wa.me/?text='+encodeURIComponent('Mira los modelos que tengo disponibles 👟 Pide aquí y pagas al recibir: '+SITIOS[sec]+'/?v='+u.codigo):'';
+    var etiq=function(o){ ensureEstado(o); var e=histEtapa(o); return {pend:'Por despachar',camino:'En camino',listo:'Pagado',dev:'Devuelto'}[e]||''; };
+    var recientes=mias.slice().sort(function(a,b){return String(b.fecha).localeCompare(String(a.fecha));}).slice(0,5).map(function(o){
+      var c=o.cliente||{}, e=histEtapa(o);
+      return '<div class="co-ped"><span>'+esc(c.nombre||'(sin cliente)')+(c.ciudad?' · '+esc(c.ciudad):'')+'<small>'+esc(fechaCorta(o.fecha))+' · '+(o.unidades||0)+' ud · '+fmt(o.ventaTotal||0)+'</small></span><b class="mp-st '+e+'">'+etiq(o)+'</b></div>';
+    }).join('');
+    host.innerHTML='<div class="scrim" data-role="scrim"><div class="modal ho-modal" role="dialog" aria-modal="true">'+
+      '<div class="modal-hd"><h2>Mi panel</h2><button class="mini" data-role="close">×</button></div>'+
+      '<div class="modal-bd ho-bd">'+
+        '<div class="mp-hero"><span>'+esc(mesNombre)+'</span><b>'+esc(posTxt)+'</b><p>'+esc(subPos)+'</p></div>'+
+        '<div class="ho-kpis co-kpis3">'+
+          '<div class="ho-kpi"><span>Mis ventas</span><b>'+nVentas+'</b></div>'+
+          '<div class="ho-kpi"><span>Vendido</span><b>'+fmt(monto)+'</b></div>'+
+          '<div class="ho-kpi warn"><span>Te deben</span><b>'+fmt(porCobrar)+'</b></div></div>'+
+        (enCamino>0||porDespachar>0?'<p class="hint" style="margin:2px 2px 0">'+(porDespachar?'⏳ '+porDespachar+' pedido'+(porDespachar===1?'':'s')+' esperando despacho. ':'')+(enCamino>0?'🚚 '+fmt(enCamino)+' de comisión en camino.':'')+'</p>':'')+
+        metaHTML+
+        (links?'<div class="ho-day"><span>Tu enlace para vender</span><em></em></div><div style="display:flex;flex-direction:column;gap:6px">'+
+          (u.codigo?'<div class="codelink"><span>Tu código: <b>'+esc(u.codigo)+'</b></span><button type="button" class="btn ghost" data-copy="'+esc(u.codigo)+'">Copiar código</button></div>':'')+links+
+          (waShare?'<a class="btn primary" href="'+waShare+'" target="_blank" rel="noopener" style="text-align:center">Compartir por WhatsApp</a>':'')+
+          '<p class="hint" style="margin:2px 0 0">Las ventas solo cuentan cuando el cliente entra por tu enlace.</p></div>':'')+
+        '<div class="ho-day"><span>Últimos pedidos</span><em>'+mias.length+'</em></div>'+
+        (recientes?'<div class="co-peds">'+recientes+'</div>':'<div class="ho-empty"><div class="em">🛍️</div><b>Aún no tienes pedidos</b><p>Comparte tu enlace o arma un pedido desde el catálogo.</p></div>')+
+        '<div class="ho-acts" style="margin-top:10px"><button class="btn ghost" data-act="history">Ver todos mis pedidos</button><button class="btn ghost" data-act="mis-pagos">Mis pagos</button><button class="btn ghost" data-act="ranking">Ranking y premio</button></div>'+
+      '</div>'+
+      '<div class="modal-ft"><span class="ho-foot">El premio es para el mayor vendedor del mes (aplican términos y condiciones).</span><button class="btn ghost" data-role="close">Cerrar</button></div>'+
+    '</div></div>';
+    host.querySelectorAll('[data-copy]').forEach(function(b){ b.addEventListener('click',function(){ copiarTexto(b.getAttribute('data-copy')); }); });
+    host.querySelectorAll('[data-role="close"]').forEach(function(b){ b.addEventListener('click',closeModal); });
+  }
+
   function openMisPagos(){
     if(!session) return;
     var uid=session.usuarioId;
