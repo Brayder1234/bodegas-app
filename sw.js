@@ -1,5 +1,5 @@
 // Billon: app instalable, avisos push y carga instantánea (la página guardada se muestra al instante y se actualiza detrás)
-const CACHE = 'billon-shell-v3';
+const CACHE = 'billon-shell-v4';
 const SHELL = '/index.html';
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', e => e.waitUntil((async () => {
@@ -10,24 +10,27 @@ async function avisarCambio() {
   for (const c of await self.clients.matchAll({ type: 'window' })) c.postMessage({ type: 'update' });
 }
 async function pagina(req) {
-  // red primero (siempre el código más nuevo); si tarda más de 3 s o no hay conexión, se usa la copia guardada
-  const cache = await caches.open(CACHE);
-  const guardada = await cache.match(SHELL);
-  const red = fetch(new Request(req.url, { cache: 'no-cache', credentials: 'same-origin' })).then(async r => {
-    if (r && r.ok) await cache.put(SHELL, r.clone());
+  // red primero, con la misma petición del navegador (así las redirecciones billon.world -> www funcionan);
+  // la copia guardada solo se usa si no hay conexión
+  try {
+    const r = await fetch(req);
+    if (r && r.ok && r.type === 'basic' && !r.redirected) {
+      const cache = await caches.open(CACHE);
+      cache.put(SHELL, r.clone()).catch(() => {});
+    }
     return r;
-  }).catch(() => null);
-  if (!guardada) return (await red) || new Response('Sin conexión. Vuelve a intentarlo.', { status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
-  const limite = new Promise(res => setTimeout(() => res(null), 3000));
-  const r = await Promise.race([red, limite]);
-  return r || guardada;
+  } catch (err) {
+    const cache = await caches.open(CACHE);
+    const guardada = await cache.match(SHELL);
+    return guardada || new Response('Sin conexión. Vuelve a intentarlo.', { status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
+  }
 }
 self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
-  if (req.mode === 'navigate' || url.pathname === '/' || url.pathname === SHELL) { e.respondWith(pagina(req)); e.waitUntil(Promise.resolve()); return; }
+  if (req.mode === 'navigate') { e.respondWith(pagina(req)); return; }
 });
 self.addEventListener('push', e => {
   let d = {}; try { d = e.data ? e.data.json() : {}; } catch (_) {}
