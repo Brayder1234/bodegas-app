@@ -1,5 +1,5 @@
 // Billon: app instalable, avisos push y carga instantánea (la página guardada se muestra al instante y se actualiza detrás)
-const CACHE = 'billon-shell-v1';
+const CACHE = 'billon-shell-v2';
 const SHELL = '/index.html';
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', e => e.waitUntil((async () => {
@@ -10,19 +10,17 @@ async function avisarCambio() {
   for (const c of await self.clients.matchAll({ type: 'window' })) c.postMessage({ type: 'update' });
 }
 async function pagina(req) {
+  // red primero (siempre el código más nuevo); si tarda más de 3 s o no hay conexión, se usa la copia guardada
   const cache = await caches.open(CACHE);
   const guardada = await cache.match(SHELL);
-  const red = fetch(req).then(async r => {
-    if (r && r.ok) {
-      const nuevoTag = r.headers.get('etag') || r.headers.get('last-modified') || '';
-      const viejoTag = guardada ? (guardada.headers.get('etag') || guardada.headers.get('last-modified') || '') : '';
-      await cache.put(SHELL, r.clone());
-      if (guardada && nuevoTag && nuevoTag !== viejoTag) avisarCambio();
-    }
+  const red = fetch(req, { cache: 'no-cache' }).then(async r => {
+    if (r && r.ok) await cache.put(SHELL, r.clone());
     return r;
   }).catch(() => null);
-  if (guardada) return guardada;
-  return (await red) || new Response('Sin conexión. Vuelve a intentarlo.', { status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
+  if (!guardada) return (await red) || new Response('Sin conexión. Vuelve a intentarlo.', { status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
+  const limite = new Promise(res => setTimeout(() => res(null), 3000));
+  const r = await Promise.race([red, limite]);
+  return r || guardada;
 }
 self.addEventListener('fetch', e => {
   const req = e.request;
