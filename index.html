@@ -2412,6 +2412,7 @@ html.pv-open, html.pv-open body{ overflow:hidden }
 .ho-tag.guia{ background:rgba(10,132,255,.14); color:#6cb4ff }
 .var-stock{ width:84px !important; flex:0 0 84px; text-align:center }
 .var-badge.gen{ background:rgba(191,90,242,.14); color:#d29bff }
+.var-gen{ width:92px !important; flex:0 0 92px }
 </style>
 </head>
 <body>
@@ -3337,8 +3338,9 @@ html.pv-open, html.pv-open body{ overflow:hidden }
   }
   function stat(k,v){ return '<div class="stat"><div class="rail"></div><div class="k">'+esc(k)+'</div><div class="v num">'+esc(v)+'</div></div>'; }
   /* género del producto: el que se eligió, o se deduce de las tallas (36–39 mujer, 40–44 hombre) */
+  function nomVarColor(v){ return v ? ((v.genero?v.genero+' · ':'')+(v.nombre||'')) : ''; }
   function generoDe(p){
-    if(p && (p.genero==='Mujer'||p.genero==='Hombre'||p.genero==='Unisex')) return p.genero;
+    if(p && (p.genero==='Mujer'||p.genero==='Hombre'||p.genero==='Unisex'||p.genero==='Ambos')) return p.genero;
     var n=((p&&p.variacionesColor)||[]).filter(function(v){ return /^\d{2}$/.test(String(v.nombre||'').trim()); }).map(function(v){ return parseInt(v.nombre,10); });
     if(!n.length || n.length!==(p.variacionesColor||[]).length) return '';
     return Math.max.apply(null,n)<=39?'Mujer':(Math.min.apply(null,n)>=40?'Hombre':'Unisex');
@@ -3386,7 +3388,7 @@ html.pv-open, html.pv-open body{ overflow:hidden }
   function filtered(){
     var q=ui.q.trim().toLowerCase();
     var base = productosDeSeccion();
-    if(ui.gen) base=base.filter(function(p){ var g=generoDe(p); return g===ui.gen || (g==='Unisex'); });
+    if(ui.gen) base=base.filter(function(p){ var g=generoDe(p); return g===ui.gen || g==='Unisex' || g==='Ambos'; });
     var list=base.filter(function(p){ if(!q) return true;
       var hay=(p.nombre||'')+' '+(p.sku||'')+' '+(p.marca||'')+' '+(p.costos||[]).map(function(c){return c.bodega;}).join(' ');
       return hay.toLowerCase().indexOf(q)>=0; });
@@ -3556,7 +3558,7 @@ html.pv-open, html.pv-open body{ overflow:hidden }
       '</div>'+
       '<div class="pcard-body">'+
         '<div class="pcard-name" data-act="tg-row">'+esc(p.nombre||'(sin nombre)')+ (p.sku?'<small>'+esc(p.sku)+'</small>':'') +'</div>'+
-        ((generoDe(p))||(p.variaciones&&p.variaciones.length)||(p.variacionesColor&&p.variacionesColor.length)||(p.videos&&p.videos.length) ? '<div class="pcard-badges">'+(generoDe(p)?'<span class="var-badge gen">'+(generoDe(p)==='Mujer'?'♀ Mujer':generoDe(p)==='Hombre'?'♂ Hombre':'⚥ Unisex')+'</span>':'')+(p.variaciones&&p.variaciones.length?'<span class="var-badge">💰 '+p.variaciones.length+' '+(p.tipoVariacion||'')+'</span>':'')+(p.variacionesColor&&p.variacionesColor.length?'<span class="var-badge">🎨 '+p.variacionesColor.length+' '+(p.tipoVariacionColor||'')+'</span>':'')+(p.videos&&p.videos.length?'<span class="var-badge">🎬 '+p.videos.length+' video'+(p.videos.length===1?'':'s')+'</span>':'')+'</div>':'')+
+        ((generoDe(p))||(p.variaciones&&p.variaciones.length)||(p.variacionesColor&&p.variacionesColor.length)||(p.videos&&p.videos.length) ? '<div class="pcard-badges">'+(generoDe(p)?'<span class="var-badge gen">'+(generoDe(p)==='Mujer'?'♀ Mujer':generoDe(p)==='Hombre'?'♂ Hombre':generoDe(p)==='Ambos'?'♀♂ Mujer y hombre':'⚥ Unisex')+'</span>':'')+(p.variaciones&&p.variaciones.length?'<span class="var-badge">💰 '+p.variaciones.length+' '+(p.tipoVariacion||'')+'</span>':'')+(p.variacionesColor&&p.variacionesColor.length?'<span class="var-badge">🎨 '+p.variacionesColor.length+' '+(p.tipoVariacionColor||'')+'</span>':'')+(p.videos&&p.videos.length?'<span class="var-badge">🎬 '+p.videos.length+' video'+(p.videos.length===1?'':'s')+'</span>':'')+'</div>':'')+
         '<div class="pcard-prices">'+pricesHTML+'</div>'+
         '<div class="pcard-actions">'+stockBtn+addBtn+'</div>'+
       '</div>'+
@@ -3630,7 +3632,7 @@ html.pv-open, html.pv-open body{ overflow:hidden }
           : '<div class="var-ph">🎨</div>';
         var dlb = v.imagen ? '<button class="var-dl" data-act="dl-varc" data-pid="'+esc(p.id)+'" data-vid="'+esc(v.id)+'" title="Descargar">⬇</button>' : '';
         var stT = (typeof v.stock==='number') ? '<div class="var-price" style="'+(v.stock>0?'':'color:var(--bad)')+'">'+(v.stock>0?v.stock+' disp.':'Agotado')+'</div>' : '';
-        return '<div class="var-thumb">'+thumb+dlb+'<div class="var-nm">'+esc(v.nombre||'')+'</div>'+stT+'</div>';
+        return '<div class="var-thumb">'+thumb+dlb+'<div class="var-nm">'+esc(nomVarColor(v))+'</div>'+stT+'</div>';
       }).join('') + '</div>';
     }
     // Videos
@@ -5143,12 +5145,14 @@ html.pv-open, html.pv-open body{ overflow:hidden }
             '<button type="button" class="tipo-var-chip'+(!p.tipoVariacionColor?' on':'')+'" data-tv="__none__">Ninguna</button>'+
           '</div>'+
         '</div>'+
+        '<div style="margin:2px 0 8px"><button type="button" class="add-cost" data-role="preset-camisa">👕 Cargar tallas de camisa (mujer S–XL · hombre S–2XL)</button></div>'+
         '<div data-role="var-rows-color"'+(p.tipoVariacionColor?'':' style="display:none"')+'>'+
           (p.variacionesColor||[]).map(function(v,i){
             return '<div class="var-row" data-vi="'+i+'">'+
               '<div class="var-mini-img" data-role="var-img-color" data-vi="'+i+'">'+(v.imagen?'<img src="'+esc(v.imagen)+'" alt="">':'<span class="ph">📷</span>')+'</div>'+
               '<div class="var-fields">'+
                 '<input type="text" data-role="vname-color" placeholder="Nombre (ej: Rojo, Negro, M, L)" value="'+esc(v.nombre||'')+'">'+
+                '<select data-role="vgen-color" class="var-gen" title="¿Para quién es esta talla?"><option value="">—</option><option value="Mujer"'+(v.genero==='Mujer'?' selected':'')+'>Mujer</option><option value="Hombre"'+(v.genero==='Hombre'?' selected':'')+'>Hombre</option></select>'+
                 '<input type="number" inputmode="numeric" min="0" data-role="vstock-color" class="var-stock" placeholder="Stock" title="Unidades disponibles (vacío = sin control)" value="'+(typeof v.stock==='number'?v.stock:'')+'">'+
                 '<input type="file" accept="image/*" data-role="vfile-color" style="display:none">'+
               '</div>'+
@@ -5171,7 +5175,7 @@ html.pv-open, html.pv-open body{ overflow:hidden }
           '<div class="vid-dz-sb">o toca para elegir · máx 8MB c/u</div>'+
         '</label>'+
         '<div class="field" style="margin-top:14px"><label>¿Para quién es?</label><select data-f="genero" class="bod-select">'+
-          [['','— Según las tallas —'],['Mujer','Mujer'],['Hombre','Hombre'],['Unisex','Unisex (mujer y hombre)']].map(function(t){ return '<option value="'+t[0]+'"'+((p.genero||'')===t[0]?' selected':'')+'>'+t[1]+'</option>'; }).join('')+
+          [['','— Según las tallas —'],['Mujer','Mujer'],['Hombre','Hombre'],['Ambos','Mujer y hombre (tallas separadas)'],['Unisex','Unisex (mismas tallas)']].map(function(t){ return '<option value="'+t[0]+'"'+((p.genero||'')===t[0]?' selected':'')+'>'+t[1]+'</option>'; }).join('')+
         '</select><span class="help">Aparece en la tarjeta y en la tienda web. Sin elegir, se deduce de las tallas: 36–39 mujer, 40–44 hombre.</span></div>'+
         '<div class="sub" style="margin-top:14px">🏆 Premio del mes</div>'+
         '<label style="display:flex;align-items:flex-start;gap:8px;margin:8px 0;font-size:14px;cursor:pointer"><input type="checkbox" data-role="propia" style="margin-top:3px"'+(p.propia===false?'':' checked')+'> <span>Referencia propia <span style="color:var(--muted)">(mercancía de Korven). Si es de otra bodega, desmárcala: sus ventas no cuentan para el premio.</span></span></label>'+
@@ -5369,11 +5373,42 @@ html.pv-open, html.pv-open body{ overflow:hidden }
       }
     });
 
+    // pasa lo escrito en las filas al producto (nombre, stock y género de cada talla)
+    function leerFilasColor(){
+      varRowsColor.querySelectorAll('.var-row').forEach(function(r, idx){
+        var v=p.variacionesColor[idx]; if(!v) return;
+        var n=r.querySelector('[data-role="vname-color"]'), st=r.querySelector('[data-role="vstock-color"]'), gn=r.querySelector('[data-role="vgen-color"]');
+        if(n) v.nombre=n.value.trim();
+        if(st){ var q=parseInt(st.value,10); if(st.value!=='' && !isNaN(q) && q>=0) v.stock=q; else delete v.stock; }
+        if(gn){ if(gn.value) v.genero=gn.value; else delete v.genero; }
+      });
+    }
+    var btnCamisa = host.querySelector('[data-role="preset-camisa"]');
+    if(btnCamisa) btnCamisa.addEventListener('click', function(){
+      leerFilasColor();
+      var PRE={Mujer:['S','M','L','XL'], Hombre:['S','M','L','XL','2XL']};
+      p.tipoVariacionColor='Talla';
+      Object.keys(PRE).forEach(function(gn){
+        PRE[gn].forEach(function(t){
+          if(!p.variacionesColor.some(function(v){ return v.genero===gn && String(v.nombre).toUpperCase()===t; })) p.variacionesColor.push({id:uid(), nombre:t, imagen:'', genero:gn});
+        });
+      });
+      p.variacionesColor=p.variacionesColor.filter(function(v){ return v.nombre; });
+      p.variacionesColor.sort(function(a,b){ var o={Mujer:0,Hombre:1}; return ((o[a.genero]!=null?o[a.genero]:2)-(o[b.genero]!=null?o[b.genero]:2)); });
+      varRowsColor.querySelectorAll('.var-row').forEach(function(r){ r.remove(); });
+      var addB=varRowsColor.querySelector('[data-role="addvar-color"]');
+      p.variacionesColor.forEach(function(v,i){ addB.insertAdjacentHTML('beforebegin', varRowHTMLColor(v,i)); });
+      varRowsColor.style.display='';
+      tvPickerColor.querySelectorAll('.tipo-var-chip').forEach(function(c){ c.classList.toggle('on', c.getAttribute('data-tv')==='Talla'); });
+      var gs=host.querySelector('[data-f="genero"]'); if(gs) gs.value='Ambos';
+      showToast('Tallas cargadas: ahora pon el stock de cada una', false);
+    });
     function varRowHTMLColor(v, idx){
       return '<div class="var-row" data-vi="'+idx+'">'+
         '<div class="var-mini-img" data-role="var-img-color" data-vi="'+idx+'">'+(v.imagen?'<img src="'+esc(v.imagen)+'" alt="">':'<span class="ph">📷</span>')+'</div>'+
         '<div class="var-fields">'+
           '<input type="text" data-role="vname-color" placeholder="Nombre (ej: Rojo, Negro, M, L)" value="'+esc(v.nombre||'')+'">'+
+          '<select data-role="vgen-color" class="var-gen" title="¿Para quién es esta talla?"><option value="">—</option><option value="Mujer"'+(v.genero==='Mujer'?' selected':'')+'>Mujer</option><option value="Hombre"'+(v.genero==='Hombre'?' selected':'')+'>Hombre</option></select>'+
           '<input type="number" inputmode="numeric" min="0" data-role="vstock-color" class="var-stock" placeholder="Stock" title="Unidades disponibles (vacío = sin control)" value="'+(typeof v.stock==='number'?v.stock:'')+'">'+
           '<input type="file" accept="image/*" data-role="vfile-color" style="display:none">'+
         '</div>'+
@@ -5583,6 +5618,8 @@ html.pv-open, html.pv-open body{ overflow:hidden }
         if(!p.variacionesColor[idx]) return;
         if(nameInp) p.variacionesColor[idx].nombre = nameInp.value.trim();
         if(stInp){ var sv=parseInt(stInp.value,10); if(stInp.value!=='' && !isNaN(sv) && sv>=0) p.variacionesColor[idx].stock=sv; else delete p.variacionesColor[idx].stock; }
+        var gnInp = r.querySelector('[data-role="vgen-color"]');
+        if(gnInp){ if(gnInp.value) p.variacionesColor[idx].genero=gnInp.value; else delete p.variacionesColor[idx].genero; }
       });
       p.variacionesColor = p.variacionesColor.filter(function(v){ return v.nombre || v.imagen; });
       if(!p.variacionesColor.length) p.tipoVariacionColor = '';
@@ -6799,7 +6836,7 @@ html.pv-open, html.pv-open body{ overflow:hidden }
     var varId = variacion ? variacion.id : '';
     var varNm = variacion ? variacion.nombre : '';
     var vcId = variacionColor ? variacionColor.id : '';
-    var vcNm = variacionColor ? variacionColor.nombre : '';
+    var vcNm = variacionColor ? nomVarColor(variacionColor) : '';
     var it=currentCart().items.find(function(x){
       return x.productId===pid && (x.variacionId||'')===varId && (x.variacionColorId||'')===vcId;
     });
@@ -6870,7 +6907,7 @@ html.pv-open, html.pv-open body{ overflow:hidden }
               }
             }
             var isSel = picked && picked.id===v.id;
-            var nombreDisplay = kind==='p' ? (v.nombre+(tipo?tipo:'')) : v.nombre;
+            var nombreDisplay = kind==='p' ? (v.nombre+(tipo?tipo:'')) : nomVarColor(v);
             var sinStock = (kind==='c' && colorStockOn(p) && !(v.stock>0));
             return '<button type="button" class="vp-card'+(isSel?' selected':'')+'"'+(sinStock?' disabled style="opacity:.45;cursor:not-allowed"':'')+' data-role="pick-'+kind+'" data-vid="'+esc(v.id)+'">'+
               '<div class="vp-img">'+thumb+'</div>'+
