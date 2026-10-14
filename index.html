@@ -2987,6 +2987,7 @@ html.pv-open, html.pv-open body{ overflow:hidden }
   }
   // Precio real de venta en una línea del carrito: usa el editado por el trabajador, si no el de la variación, si no el del producto
   function itemVenta(it, p){
+    if(p && p.tipo==='extra') return ventaOf(p, null);   // los extras van a precio fijo: no dejan ganancia al vendedor
     var v=parseFloat(it && it.precioVendido);
     if(!isNaN(v) && v>0) return v;
     var vari = variacionDe(p, it && it.variacionId);
