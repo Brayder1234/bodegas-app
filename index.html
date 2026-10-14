@@ -18,6 +18,11 @@ try{ document.documentElement.setAttribute('data-theme', localStorage.getItem('b
 <link rel="icon" type="image/png" sizes="64x64" href="favicon.png?v=2">
 <link rel="icon" href="favicon.ico?v=2" sizes="any">
 <link rel="apple-touch-icon" href="apple-touch-icon.png?v=2">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#000000">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Billon">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700&family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -2482,6 +2487,7 @@ html.pv-open, html.pv-open body{ overflow:hidden }
     logout:'<path d="M13.5 4.5H7.3a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h6.2"/><path d="M10.5 12h10M17.3 8.5 20.8 12l-3.5 3.5"/>',
     people:'<circle cx="9" cy="8.6" r="3.2"/><path d="M3 19.6c.6-3.2 3-5 6-5s5.4 1.8 6 5"/><path d="M15.4 5.5a3.1 3.1 0 0 1 0 6.1M17.4 14.8c1.9.6 3.2 2.2 3.6 4.8"/>',
     tag:'<path d="M3.5 12.3V5a1.5 1.5 0 0 1 1.5-1.5h7.3l8.2 8.2a1.5 1.5 0 0 1 0 2.1l-7.2 7.2a1.5 1.5 0 0 1-2.1 0z"/><circle cx="8.1" cy="8.1" r="1.4" fill="currentColor" stroke="none"/>',
+    phone:'<rect x="7" y="2.5" width="10" height="19" rx="2.4"/><path d="M11 18.6h2"/>',
     bell:'<path d="M6 16.8V11a6 6 0 0 1 12 0v5.8l1.6 1.6H4.4z"/><path d="M9.8 20.6a2.4 2.4 0 0 0 4.4 0"/>',
     target:'<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.8"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/>',
     docdown:'<path d="M13.5 3.5H7.5A1.5 1.5 0 0 0 6 5v14a1.5 1.5 0 0 0 1.5 1.5h9A1.5 1.5 0 0 0 18 19V8z"/><path d="M13.5 3.5V8H18M12 10.8v6.2M9.4 14.4 12 17l2.6-2.6"/>',
@@ -5866,7 +5872,11 @@ html.pv-open, html.pv-open body{ overflow:hidden }
       item('bag', '#34c759', admin?'Comisiones':'Mis pagos', admin?'comisiones':'mis-pagos', comisionesBadge())+
       item('trophy', '#ff9500', 'Ranking de vendedores', 'ranking')
     );
+    var av = estadoAvisos();
+    var avBadge = av==='on' ? '<span class="sb-badge" style="color:var(--good)">activados</span>' : (av==='denied' ? '<span class="sb-badge" style="color:var(--warn)">bloqueados</span>' : '');
     var cuenta = group('Mi cuenta',
+      item('bell', '#ff3b30', 'Avisos de pedidos', 'avisos', avBadge)+
+      (instalarEvt?item('phone', '#007aff', 'Instalar la app', 'instalar'):'')+
       item('person', '#8e8e93', 'Mi perfil', 'mi-perfil')+
       item('grad', '#af52de', 'Ver tutorial', 'tutorial')+
       (!admin?item('xmark', '#ff9500', 'Salir de este grupo', 'leave-section'):'')+
@@ -5985,6 +5995,8 @@ html.pv-open, html.pv-open body{ overflow:hidden }
     }
     else if(a==='ranking'){ closeModal(); openRanking(); }
     else if(a==='mi-panel'){ closeModal(); openMiPanel(); }
+    else if(a==='avisos'){ alternarAvisos(); }
+    else if(a==='instalar'){ if(instalarEvt){ instalarEvt.prompt(); instalarEvt=null; } }
     else if(a==='disconnect'){ if(!isSuper()) return; if(confirm('Se borrará la conexión de ESTE dispositivo (tus datos en la nube quedan intactos). ¿Continuar?')){ try{localStorage.removeItem(CFG_KEY);}catch(x){} cfg=null; stopPolling(); render(); } }
     else if(a==='toggle-moneda'){ if(!isSuper()) return; state.moneda=state.moneda==='USD'?'COP':'USD'; render(); scheduleSave(); }
     else if(a==='toggle-theme') toggleTheme();
@@ -7544,6 +7556,53 @@ html.pv-open, html.pv-open body{ overflow:hidden }
 
   // vista del vendedor: lo que se le debe y lo que ya se le pagó
 
+
+  /* ---------- app instalable y avisos push ---------- */
+  var instalarEvt=null, swReg=null;
+  window.addEventListener('beforeinstallprompt', function(e){ e.preventDefault(); instalarEvt=e; });
+  window.addEventListener('appinstalled', function(){ instalarEvt=null; });
+  function registrarSW(){
+    if(!('serviceWorker' in navigator) || swReg) return;
+    try{ navigator.serviceWorker.register('sw.js').then(function(r){ swReg=r; }, function(){}); }catch(e){}
+  }
+  function pushSoportado(){ return ('serviceWorker' in navigator) && ('PushManager' in window) && ('Notification' in window); }
+  function estadoAvisos(){
+    if(!pushSoportado()) return 'nosup';
+    if(Notification.permission==='denied') return 'denied';
+    try{ if(localStorage.getItem('bl-avisos')==='1' && Notification.permission==='granted') return 'on'; }catch(e){}
+    return 'off';
+  }
+  function esIOS(){ return /iphone|ipad|ipod/i.test(navigator.userAgent); }
+  async function alternarAvisos(){
+    var st=estadoAvisos();
+    if(st==='nosup'){
+      showToast(esIOS()?'En iPhone: abre Compartir y elige "Añadir a pantalla de inicio"; luego activa los avisos desde la app.':'Este navegador no permite avisos. Prueba con Chrome o instala la app.', false); return;
+    }
+    if(st==='denied'){ showToast('Los avisos están bloqueados: actívalos en los ajustes del navegador para este sitio.', false); return; }
+    try{
+      var reg=swReg || await navigator.serviceWorker.ready;
+      if(st==='on'){
+        var sub=await reg.pushManager.getSubscription();
+        if(sub){ try{ await fetch(TIENDA_URL+'/push/sub',{method:'DELETE',headers:cfHeaders(),body:JSON.stringify({endpoint:sub.endpoint})}); }catch(e){} await sub.unsubscribe(); }
+        try{ localStorage.removeItem('bl-avisos'); }catch(e){}
+        showToast('Avisos desactivados', false); return;
+      }
+      var perm=await Notification.requestPermission();
+      if(perm!=='granted'){ showToast('No se activaron los avisos', false); return; }
+      var k=await (await fetch(TIENDA_URL+'/push/key')).json();
+      if(!k.key) throw new Error('sin llave');
+      var raw=atob(k.key.replace(/-/g,'+').replace(/_/g,'/')+'='.repeat((4-k.key.length%4)%4));
+      var app=Uint8Array.from(raw,function(c){return c.charCodeAt(0);});
+      var sb=await reg.pushManager.getSubscription() || await reg.pushManager.subscribe({userVisibleOnly:true, applicationServerKey:app});
+      var j=sb.toJSON();
+      var r=await fetch(TIENDA_URL+'/push/sub',{method:'POST',headers:cfHeaders(),body:JSON.stringify({endpoint:j.endpoint,keys:j.keys,prueba:true})});
+      if(!r.ok) throw new Error('registro '+r.status);
+      try{ localStorage.setItem('bl-avisos','1'); }catch(e){}
+      showToast('Avisos activados en este dispositivo', false);
+    }catch(e){ showToast('No se pudieron activar los avisos', false); }
+  }
+
+  registrarSW();
   /* ---------- panel del vendedor ---------- */
 
   /* ---------- compartir un producto con el enlace del vendedor ---------- */
