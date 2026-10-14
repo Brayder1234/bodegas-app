@@ -5030,7 +5030,7 @@ html.pv-open, html.pv-open body{ overflow:hidden }
      Las pantallas grandes (Pedidos, Comisiones, Trabajadores, perfil, productos…) ocupan toda la pantalla,
      con botón "Volver" y compatibles con el botón atrás del navegador. Los avisos y selectores pequeños siguen siendo ventanas. */
   (function(){
-    var PAGINAS=/^\s*(Trabajadores|Mi panel|Precios rápidos|Reportes|Editar datos|Marcas de|Bodegas de|Ranking|Notificaciones|Comisiones|Pagar comisión|Mis pagos|Pedidos de la sección|Mis pedidos|Nuevo producto|Editar producto|Pedido\s*$|Venta\s*$)/;
+    var PAGINAS=/^\s*(Trabajadores|Mi panel|Precios rápidos|Reportes|Clientes|Editar datos|Marcas de|Bodegas de|Ranking|Notificaciones|Comisiones|Pagar comisión|Mis pagos|Pedidos de la sección|Mis pedidos|Nuevo producto|Editar producto|Pedido\s*$|Venta\s*$)/;
     var activa=false, ignorar=false;
     function aplicar(){
       var scrim=host.querySelector('.scrim'), h2=scrim&&scrim.querySelector('.modal-hd h2');
@@ -5912,6 +5912,7 @@ html.pv-open, html.pv-open body{ overflow:hidden }
       item('tag', '#ff2d55', 'Marcas', 'marcas-visibles')+
       item('list', '#30b0c7', 'Precios rápidos', 'precios')+
       item('chart', '#5856d6', 'Reportes', 'reportes')+
+      item('people', '#ff9500', 'Clientes', 'clientes')+
       (sup?item('bell', '#ff3b30', 'Notificaciones', 'notifs', notifStatus):'')+
       (puedeEditarMeta()?item('target', '#5856d6', 'Meta del equipo · '+nombreSec(), 'edit-meta', '<span class="sb-badge">'+fmt(metaEquipoSec())+'</span>'):'')+
       (puedeEditarMeta()?item('target', '#af52de', 'Meta personal · '+nombreSec(), 'edit-meta-personal', '<span class="sb-badge">'+fmt(metaPersonalDe(null))+'</span>'):'')+
@@ -6023,6 +6024,7 @@ html.pv-open, html.pv-open body{ overflow:hidden }
     else if(a==='mi-panel'){ closeModal(); openMiPanel(); }
     else if(a==='precios'){ closeModal(); openPrecios(); }
     else if(a==='reportes'){ closeModal(); openReportes(); }
+    else if(a==='clientes'){ closeModal(); openClientes(); }
     else if(a==='avisos'){ alternarAvisos(); }
     else if(a==='instalar'){ if(instalarEvt){ instalarEvt.prompt(); instalarEvt=null; } }
     else if(a==='disconnect'){ if(!isSuper()) return; if(confirm('Se borrará la conexión de ESTE dispositivo (tus datos en la nube quedan intactos). ¿Continuar?')){ try{localStorage.removeItem(CFG_KEY);}catch(x){} cfg=null; stopPolling(); render(); } }
@@ -7781,6 +7783,59 @@ html.pv-open, html.pv-open body{ overflow:hidden }
     '</div></div>';
     host.querySelectorAll('[data-role="close"]').forEach(function(b){ b.addEventListener('click',closeModal); });
     host.querySelectorAll('[data-p]').forEach(function(b){ b.addEventListener('click',function(){ repPeriodo=b.getAttribute('data-p'); openReportes(); }); });
+  }
+
+
+  /* ---------- clientes y recompra ---------- */
+  var cliFiltro='recomprar', cliQ='';
+  function openClientes(){
+    if(!isAdmin()) return;
+    var mapa={};
+    pedidosDeSeccion().forEach(function(o){
+      var c=o.cliente||{}, tel=String(c.tel||'').replace(/\D/g,'').replace(/^57(?=3\d{9}$)/,'');
+      if(!tel) return;
+      var e=mapa[tel]||(mapa[tel]={tel:tel,nombre:'',ciudad:'',n:0,dev:0,total:0,ultima:'',ultimoProd:''});
+      if(!pedidoValido(o)){ e.dev++; return; }
+      e.n++; e.total+=(o.ventaTotal||0);
+      if(!e.ultima || String(o.fecha)>e.ultima){ e.ultima=String(o.fecha); e.nombre=c.nombre||e.nombre; e.ciudad=c.ciudad||e.ciudad; e.ultimoProd=((o.items||[])[0]||{}).nombre||''; }
+    });
+    var ahora=Date.now();
+    var clientes=Object.keys(mapa).map(function(k){ var e=mapa[k]; e.dias=e.ultima?Math.floor((ahora-new Date(e.ultima).getTime())/86400000):9999; return e; }).filter(function(e){return e.n>0;});
+    clientes.sort(function(a,b){ return (a.dias-b.dias); });
+    var recomprar=clientes.filter(function(e){ return e.dias>=30; });
+    var repetidos=clientes.filter(function(e){ return e.n>=2; });
+    function filtrados(){
+      var q=cliQ.trim().toLowerCase();
+      var base=cliFiltro==='recomprar'?recomprar:(cliFiltro==='repetidos'?repetidos:clientes);
+      return base.filter(function(e){ return !q || (e.nombre+' '+e.tel+' '+e.ciudad).toLowerCase().indexOf(q)>=0; });
+    }
+    function msg(e){
+      var n=String(e.nombre||'').trim().split(/\s+/)[0];
+      return 'Hola'+(n?' '+n:'')+' 👋 Te escribimos de KORVEN. ¿Cómo te fue con tus tenis? Tenemos modelos nuevos y queremos que seas de los primeros en verlos. ¿Te muestro?';
+    }
+    function fila(e){
+      var wa='https://wa.me/57'+e.tel+'?text='+encodeURIComponent(msg(e));
+      var cuando=e.dias===0?'hoy':(e.dias===1?'ayer':'hace '+e.dias+' días');
+      return '<div class="co-row"><div class="co-top"><div class="co-who"><b>'+esc(e.nombre||'(sin nombre)')+'</b><span>'+esc([e.ciudad,'📱 '+e.tel].filter(Boolean).join(' · '))+'</span><span>Última compra '+cuando+(e.ultimoProd?' · '+esc(e.ultimoProd):'')+'</span></div>'+
+        '<div class="co-amt">'+fmt(e.total)+'<small style="display:block;font-size:12px;color:var(--muted);font-weight:500">'+e.n+' pedido'+(e.n===1?'':'s')+(e.dev?' · '+e.dev+' dev.':'')+'</small></div></div>'+
+        '<div class="ho-acts"><a class="btn primary" href="'+wa+'" target="_blank" rel="noopener">Escribir por WhatsApp</a></div></div>';
+    }
+    var tab=function(k,t,n){ return '<button class="ho-tab'+(cliFiltro===k?' on':'')+'" data-f="'+k+'">'+t+' <span>'+n+'</span></button>'; };
+    var f=filtrados();
+    host.innerHTML='<div class="scrim" data-role="scrim"><div class="modal ho-modal" role="dialog" aria-modal="true">'+
+      '<div class="modal-hd"><h2>Clientes · '+esc(nombreSec())+'</h2><button class="mini" data-role="close">×</button></div>'+
+      '<div class="modal-bd ho-bd">'+
+        '<div class="ho-kpis co-kpis3"><div class="ho-kpi"><span>Clientes</span><b>'+clientes.length+'</b></div><div class="ho-kpi good"><span>Recompran</span><b>'+repetidos.length+'</b></div><div class="ho-kpi warn"><span>Para escribirles</span><b>'+recomprar.length+'</b></div></div>'+
+        '<div class="ho-tabs">'+tab('recomprar','Para recomprar',recomprar.length)+tab('repetidos','Repetidos',repetidos.length)+tab('todos','Todos',clientes.length)+'</div>'+
+        '<div class="search" style="margin:8px 0"><input type="search" id="cl-q" placeholder="Buscar nombre, teléfono o ciudad…" value="'+esc(cliQ)+'"></div>'+
+        '<div class="ho-list">'+(f.length?f.slice(0,150).map(fila).join(''):'<div class="ho-empty"><div class="em">👥</div><b>No hay clientes en esta lista</b><p>'+(cliFiltro==='recomprar'?'Aparecen cuando pasan 30 días desde su última compra.':'Los clientes salen de tus pedidos.')+'</p></div>')+'</div>'+
+      '</div>'+
+      '<div class="modal-ft"><span class="ho-foot">"Para recomprar": 30 días o más sin comprar. El mensaje sale escrito, tú decides si enviarlo.</span><button class="btn ghost" data-role="close">Cerrar</button></div>'+
+    '</div></div>';
+    host.querySelectorAll('[data-role="close"]').forEach(function(b){ b.addEventListener('click',closeModal); });
+    host.querySelectorAll('[data-f]').forEach(function(b){ b.addEventListener('click',function(){ cliFiltro=b.getAttribute('data-f'); openClientes(); }); });
+    var qi=document.getElementById('cl-q');
+    qi.addEventListener('change',function(){ cliQ=qi.value; openClientes(); });
   }
 
   /* ---------- panel del vendedor ---------- */
