@@ -2425,6 +2425,16 @@ html.pv-open, html.pv-open body{ overflow:hidden }
 .mp-hero p{ margin:0; font-size:13px; color:var(--muted) }
 .mp-st{ font-size:12px; font-weight:600; padding:3px 9px; border-radius:999px; background:var(--surface-2); color:var(--muted); white-space:nowrap }
 .mp-st.listo{ background:rgba(48,209,88,.15); color:#30d158 } .mp-st.camino{ background:rgba(10,132,255,.15); color:#6cb4ff } .mp-st.dev{ background:rgba(255,69,58,.14); color:#ff6b61 }
+
+.pr-list{ display:flex; flex-direction:column; gap:8px }
+.pr-row{ display:grid; grid-template-columns:44px minmax(0,1fr) repeat(3,92px); gap:8px; align-items:center; padding:8px 10px; border:1px solid var(--border); border-radius:12px; background:var(--surface) }
+.pr-th{ width:44px; height:44px; border-radius:8px; overflow:hidden; background:var(--surface-2); display:flex; align-items:center; justify-content:center }
+.pr-th img{ width:100%; height:100%; object-fit:cover }
+.pr-nm{ min-width:0 } .pr-nm b{ display:block; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap } .pr-nm small{ color:var(--muted); font-size:12px }
+.pr-row label{ display:flex; flex-direction:column; gap:2px; font-size:11px; color:var(--muted) }
+.pr-row input{ width:100%; padding:7px 8px; border-radius:8px; border:1px solid var(--border); background:var(--surface-2); color:var(--ink); font-size:14px }
+.pr-mg{ grid-column:2 / -1; font-size:12px; color:var(--muted); min-height:0 } .pr-mg:empty{ display:none } .pr-mg.bad{ color:#ff6b61 }
+@media (max-width:640px){ .pr-row{ grid-template-columns:44px minmax(0,1fr) } .pr-row label{ grid-column:span 1 } .pr-row label:nth-of-type(1){ grid-column:1 / 3 } .pr-row{ row-gap:6px } }
 </style>
 </head>
 <body>
@@ -5006,7 +5016,7 @@ html.pv-open, html.pv-open body{ overflow:hidden }
      Las pantallas grandes (Pedidos, Comisiones, Trabajadores, perfil, productos…) ocupan toda la pantalla,
      con botón "Volver" y compatibles con el botón atrás del navegador. Los avisos y selectores pequeños siguen siendo ventanas. */
   (function(){
-    var PAGINAS=/^\s*(Trabajadores|Mi panel|Editar datos|Marcas de|Bodegas de|Ranking|Notificaciones|Comisiones|Pagar comisión|Mis pagos|Pedidos de la sección|Mis pedidos|Nuevo producto|Editar producto|Pedido\s*$|Venta\s*$)/;
+    var PAGINAS=/^\s*(Trabajadores|Mi panel|Precios rápidos|Editar datos|Marcas de|Bodegas de|Ranking|Notificaciones|Comisiones|Pagar comisión|Mis pagos|Pedidos de la sección|Mis pedidos|Nuevo producto|Editar producto|Pedido\s*$|Venta\s*$)/;
     var activa=false, ignorar=false;
     function aplicar(){
       var scrim=host.querySelector('.scrim'), h2=scrim&&scrim.querySelector('.modal-hd h2');
@@ -5886,6 +5896,7 @@ html.pv-open, html.pv-open body{ overflow:hidden }
     var adminSection = admin ? group('Administración',
       item('people', '#34c759', 'Trabajadores', 'users', '<span class="sb-badge">'+(isScopedAdmin()?trabajadoresSoloDe(activeSection||'maquillaje').length:state.usuarios.length)+'</span>')+
       item('tag', '#ff2d55', 'Marcas', 'marcas-visibles')+
+      item('list', '#30b0c7', 'Precios rápidos', 'precios')+
       (sup?item('bell', '#ff3b30', 'Notificaciones', 'notifs', notifStatus):'')+
       (puedeEditarMeta()?item('target', '#5856d6', 'Meta del equipo · '+nombreSec(), 'edit-meta', '<span class="sb-badge">'+fmt(metaEquipoSec())+'</span>'):'')+
       (puedeEditarMeta()?item('target', '#af52de', 'Meta personal · '+nombreSec(), 'edit-meta-personal', '<span class="sb-badge">'+fmt(metaPersonalDe(null))+'</span>'):'')+
@@ -5995,6 +6006,7 @@ html.pv-open, html.pv-open body{ overflow:hidden }
     }
     else if(a==='ranking'){ closeModal(); openRanking(); }
     else if(a==='mi-panel'){ closeModal(); openMiPanel(); }
+    else if(a==='precios'){ closeModal(); openPrecios(); }
     else if(a==='avisos'){ alternarAvisos(); }
     else if(a==='instalar'){ if(instalarEvt){ instalarEvt.prompt(); instalarEvt=null; } }
     else if(a==='disconnect'){ if(!isSuper()) return; if(confirm('Se borrará la conexión de ESTE dispositivo (tus datos en la nube quedan intactos). ¿Continuar?')){ try{localStorage.removeItem(CFG_KEY);}catch(x){} cfg=null; stopPolling(); render(); } }
@@ -7603,6 +7615,87 @@ html.pv-open, html.pv-open body{ overflow:hidden }
   }
 
   registrarSW();
+
+  /* ---------- precios rápidos: costo, mayorista y venta de muchos productos en una tabla ---------- */
+  var preciosFiltro='sin', preciosQ='';
+  function openPrecios(){
+    if(!isAdmin()) return;
+    var lista=productosDeSeccion().filter(function(p){ return p.tipo!=='combo' && p.tipo!=='extra'; });
+    var sinPrecio=function(p){ return !(parseFloat(p.precioVenta)>0) || !(parseFloat(p.precioMayorista)>0); };
+    var nSin=lista.filter(sinPrecio).length;
+    function filas(){
+      var q=preciosQ.trim().toLowerCase();
+      return lista.filter(function(p){
+        if(preciosFiltro==='sin' && !sinPrecio(p)) return false;
+        if(q && ((p.marca||'')+' '+(p.nombre||'')+' '+(p.sku||'')+' '+(p.webColor||'')).toLowerCase().indexOf(q)<0) return false;
+        return true;
+      });
+    }
+    function filaHTML(p){
+      var c=(p.costos||[])[0]||{};
+      var th=p.imagen?'<img src="'+esc(p.imagen)+'" alt="" loading="lazy">':'<span>📦</span>';
+      return '<div class="pr-row" data-pid="'+esc(p.id)+'">'+
+        '<div class="pr-th">'+th+'</div>'+
+        '<div class="pr-nm"><b>'+esc(p.nombre||'')+'</b><small>'+esc([p.marca,p.webColor].filter(Boolean).join(' · '))+'</small></div>'+
+        '<label><span>Costo</span><input type="number" inputmode="numeric" min="0" data-k="costo" value="'+(c.costo>0?c.costo:'')+'" placeholder="0"></label>'+
+        '<label><span>Mayorista</span><input type="number" inputmode="numeric" min="0" data-k="may" value="'+(p.precioMayorista>0?p.precioMayorista:'')+'" placeholder="0"></label>'+
+        '<label><span>Venta</span><input type="number" inputmode="numeric" min="0" data-k="venta" value="'+(p.precioVenta>0?p.precioVenta:'')+'" placeholder="0"></label>'+
+        '<div class="pr-mg" data-mg></div></div>';
+    }
+    function pintar(){
+      var f=filas();
+      document.getElementById('pr-list').innerHTML=f.length?f.map(filaHTML).join(''):'<div class="ho-empty"><div class="em">✅</div><b>No hay productos para mostrar</b><p>'+(preciosFiltro==='sin'?'Todos tienen precio.':'Prueba con otra búsqueda.')+'</p></div>';
+      document.getElementById('pr-count').textContent=f.length+' producto'+(f.length===1?'':'s');
+      host.querySelectorAll('.pr-row').forEach(margen);
+    }
+    function margen(r){
+      var c=parseFloat(r.querySelector('[data-k="costo"]').value)||0, m=parseFloat(r.querySelector('[data-k="may"]').value)||0, v=parseFloat(r.querySelector('[data-k="venta"]').value)||0;
+      var el=r.querySelector('[data-mg]'), partes=[];
+      if(m>0&&c>0) partes.push('Vendedor gana '+fmt(v>m?v-m:0)+' · Tú '+fmt(m-c));
+      el.textContent=partes.join(''); el.className='pr-mg'+((m>0&&c>0&&m<c)||(v>0&&m>0&&v<m)?' bad':'');
+    }
+    host.innerHTML='<div class="scrim" data-role="scrim"><div class="modal ho-modal" role="dialog" aria-modal="true">'+
+      '<div class="modal-hd"><h2>Precios rápidos</h2><button class="mini" data-role="close">×</button></div>'+
+      '<div class="modal-bd ho-bd">'+
+        '<div class="ho-tabs"><button class="ho-tab'+(preciosFiltro==='sin'?' on':'')+'" data-f="sin">Sin precio <span>'+nSin+'</span></button><button class="ho-tab'+(preciosFiltro==='todos'?' on':'')+'" data-f="todos">Todos <span>'+lista.length+'</span></button></div>'+
+        '<div class="search" style="margin:8px 0"><input type="search" id="pr-q" placeholder="Buscar producto o marca…" value="'+esc(preciosQ)+'"></div>'+
+        '<div class="ho-day"><span>Escribe los valores y guarda una sola vez</span><em id="pr-count"></em></div>'+
+        '<div id="pr-list" class="pr-list"></div>'+
+      '</div>'+
+      '<div class="modal-ft"><span class="ho-foot" id="pr-foot">Costo = lo que pagas · Mayorista = lo que paga el vendedor · Venta = precio sugerido al cliente</span><button class="btn ghost" data-role="close">Cerrar</button><button class="btn primary" id="pr-save">Guardar precios</button></div>'+
+    '</div></div>';
+    var cambios={};
+    function marcar(r){ cambios[r.getAttribute('data-pid')]=r; }
+    pintar();
+    host.querySelectorAll('[data-role="close"]').forEach(function(b){ b.addEventListener('click',closeModal); });
+    host.querySelectorAll('[data-f]').forEach(function(b){ b.addEventListener('click',function(){ preciosFiltro=b.getAttribute('data-f'); guardarCambios(false); openPrecios(); }); });
+    document.getElementById('pr-q').addEventListener('input',function(e){ preciosQ=e.target.value; guardarCambios(false); pintar(); });
+    document.getElementById('pr-list').addEventListener('input',function(e){ var r=e.target.closest('.pr-row'); if(!r) return; marcar(r); margen(r); });
+    function guardarCambios(avisar){
+      var n=0;
+      Object.keys(cambios).forEach(function(pid){
+        var r=cambios[pid]; var p=state.productos.find(function(x){return x.id===pid;}); if(!p||!document.body.contains(r)) return;
+        var num=function(k){ var v=parseFloat(r.querySelector('[data-k="'+k+'"]').value); return (isNaN(v)||v<0)?0:Math.round(v); };
+        var c=num('costo'), m=num('may'), v=num('venta');
+        if(m>0) p.precioMayorista=m; if(v>0) p.precioVenta=v;
+        if(c>0){
+          if(!Array.isArray(p.costos)||!p.costos.length) p.costos=[{bodega:(bodegasDeSeccion()[0]||'Proveedor'), costo:c}];
+          else p.costos[0].costo=c;
+        }
+        n++;
+      });
+      cambios={};
+      if(n){ scheduleSave(); render(); }
+      if(avisar) showToast(n?('Precios guardados ('+n+')'):'No hay cambios', false);
+      return n;
+    }
+    document.getElementById('pr-save').addEventListener('click',function(){
+      var m=host.querySelectorAll('.pr-row .pr-mg.bad').length;
+      if(m && !confirm('Hay '+m+' producto(s) con el mayorista por debajo del costo o la venta por debajo del mayorista. ¿Guardar de todos modos?')) return;
+      guardarCambios(true); openPrecios();
+    });
+  }
+
   /* ---------- panel del vendedor ---------- */
 
   /* ---------- compartir un producto con el enlace del vendedor ---------- */
