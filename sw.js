@@ -1,5 +1,5 @@
 // Billon: app instalable, avisos push y carga instantánea (la página guardada se muestra al instante y se actualiza detrás)
-const CACHE = 'billon-shell-v2';
+const CACHE = 'billon-shell-v3';
 const SHELL = '/index.html';
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', e => e.waitUntil((async () => {
@@ -13,7 +13,7 @@ async function pagina(req) {
   // red primero (siempre el código más nuevo); si tarda más de 3 s o no hay conexión, se usa la copia guardada
   const cache = await caches.open(CACHE);
   const guardada = await cache.match(SHELL);
-  const red = fetch(req, { cache: 'no-cache' }).then(async r => {
+  const red = fetch(new Request(req.url, { cache: 'no-cache', credentials: 'same-origin' })).then(async r => {
     if (r && r.ok) await cache.put(SHELL, r.clone());
     return r;
   }).catch(() => null);
