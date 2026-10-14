@@ -2448,6 +2448,10 @@ html.pv-open, html.pv-open body{ overflow:hidden }
 .rp-li{ margin:8px 2px } .rp-li-t{ display:flex; justify-content:space-between; gap:8px; font-size:14px } .rp-li-t span{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
 .rp-li-b{ height:6px; border-radius:99px; background:var(--surface-2); margin:5px 0 3px; overflow:hidden } .rp-li-b i{ display:block; height:100%; background:var(--accent,#34c759); border-radius:99px }
 .rp-li small{ color:var(--muted); font-size:12px }
+
+.al-banner{ display:flex; align-items:center; gap:12px; width:100%; margin:0 0 10px; padding:12px 14px; border-radius:14px; border:1px solid rgba(255,159,10,.4); background:rgba(255,159,10,.10); color:var(--ink); font:inherit; text-align:left; cursor:pointer }
+.al-banner b{ display:block; font-size:14.5px } .al-banner small{ display:block; font-size:12.5px; color:var(--muted) }
+.al-ic{ font-size:20px } .al-go{ margin-left:auto; color:var(--muted); font-size:13px; font-weight:600 }
 </style>
 </head>
 <body>
@@ -3248,6 +3252,7 @@ html.pv-open, html.pv-open body{ overflow:hidden }
           '</div>';
         })()+
         metaWidgetHTML()+
+        alertasBannerHTML()+
         '<div class="toolbar">'+
           '<div class="search"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/></svg>'+
             '<input type="search" id="q" placeholder="Buscar producto, SKU o bodega…" value="'+esc(ui.q)+'"></div>'+
@@ -5030,7 +5035,7 @@ html.pv-open, html.pv-open body{ overflow:hidden }
      Las pantallas grandes (Pedidos, Comisiones, Trabajadores, perfil, productos…) ocupan toda la pantalla,
      con botón "Volver" y compatibles con el botón atrás del navegador. Los avisos y selectores pequeños siguen siendo ventanas. */
   (function(){
-    var PAGINAS=/^\s*(Trabajadores|Mi panel|Precios rápidos|Reportes|Clientes|Editar datos|Marcas de|Bodegas de|Ranking|Notificaciones|Comisiones|Pagar comisión|Mis pagos|Pedidos de la sección|Mis pedidos|Nuevo producto|Editar producto|Pedido\s*$|Venta\s*$)/;
+    var PAGINAS=/^\s*(Trabajadores|Mi panel|Precios rápidos|Reportes|Clientes|Alertas|Editar datos|Marcas de|Bodegas de|Ranking|Notificaciones|Comisiones|Pagar comisión|Mis pagos|Pedidos de la sección|Mis pedidos|Nuevo producto|Editar producto|Pedido\s*$|Venta\s*$)/;
     var activa=false, ignorar=false;
     function aplicar(){
       var scrim=host.querySelector('.scrim'), h2=scrim&&scrim.querySelector('.modal-hd h2');
@@ -6025,6 +6030,7 @@ html.pv-open, html.pv-open body{ overflow:hidden }
     else if(a==='precios'){ closeModal(); openPrecios(); }
     else if(a==='reportes'){ closeModal(); openReportes(); }
     else if(a==='clientes'){ closeModal(); openClientes(); }
+    else if(a==='alertas'){ closeModal(); openAlertas(); }
     else if(a==='avisos'){ alternarAvisos(); }
     else if(a==='instalar'){ if(instalarEvt){ instalarEvt.prompt(); instalarEvt=null; } }
     else if(a==='disconnect'){ if(!isSuper()) return; if(confirm('Se borrará la conexión de ESTE dispositivo (tus datos en la nube quedan intactos). ¿Continuar?')){ try{localStorage.removeItem(CFG_KEY);}catch(x){} cfg=null; stopPolling(); render(); } }
@@ -7836,6 +7842,55 @@ html.pv-open, html.pv-open body{ overflow:hidden }
     host.querySelectorAll('[data-f]').forEach(function(b){ b.addEventListener('click',function(){ cliFiltro=b.getAttribute('data-f'); openClientes(); }); });
     var qi=document.getElementById('cl-q');
     qi.addEventListener('change',function(){ cliQ=qi.value; openClientes(); });
+  }
+
+
+  /* ---------- alertas: pedidos sin despachar, sin cobrar y stock bajo ---------- */
+  var UMBRAL_STOCK=2, DIAS_DESPACHO=2, DIAS_COBRO=7;
+  function calcularAlertas(){
+    var ahora=Date.now(), dias=function(iso){ return Math.floor((ahora-new Date(iso||ahora).getTime())/86400000); };
+    var sinDespachar=[], sinCobrar=[], stock=[];
+    pedidosDeSeccion().forEach(function(o){
+      if(!pedidoValido(o)) return; ensureEstado(o);
+      if(!o.estado.envio && dias(o.fecha)>=DIAS_DESPACHO) sinDespachar.push({o:o,d:dias(o.fecha)});
+      else if(o.estado.envio && !o.estado.venta && dias(o.estado.envio.at||o.fecha)>=DIAS_COBRO) sinCobrar.push({o:o,d:dias(o.estado.envio.at||o.fecha)});
+    });
+    productosDeSeccion().forEach(function(p){
+      if(p.tipo==='combo') return;
+      if(colorStockOn(p) && !varStockOn(p)){
+        (p.variacionesColor||[]).forEach(function(v){ if(typeof v.stock==='number' && v.stock<=UMBRAL_STOCK) stock.push({p:p,v:nomVarColor(v),n:v.stock}); });
+      } else if(varStockOn(p)){
+        (p.variaciones||[]).forEach(function(v){ if(typeof v.stock==='number' && v.stock<=UMBRAL_STOCK) stock.push({p:p,v:(v.nombre||'')+(p.tipoVariacion||''),n:v.stock}); });
+      } else if(typeof p.stock==='number' && p.stock<=UMBRAL_STOCK) stock.push({p:p,v:'',n:p.stock});
+    });
+    sinDespachar.sort(function(a,b){return b.d-a.d;}); sinCobrar.sort(function(a,b){return b.d-a.d;}); stock.sort(function(a,b){return a.n-b.n;});
+    return {sinDespachar:sinDespachar, sinCobrar:sinCobrar, stock:stock, total:sinDespachar.length+sinCobrar.length+stock.length};
+  }
+  function alertasBannerHTML(){
+    if(!isAdmin()) return '';
+    var a=calcularAlertas(); if(!a.total) return '';
+    var partes=[];
+    if(a.sinDespachar.length) partes.push(a.sinDespachar.length+' sin despachar');
+    if(a.sinCobrar.length) partes.push(a.sinCobrar.length+' sin cobrar');
+    if(a.stock.length) partes.push(a.stock.length+' con poco stock');
+    return '<button type="button" class="al-banner" data-act="alertas"><span class="al-ic">⚠️</span><span><b>'+a.total+' alerta'+(a.total===1?'':'s')+'</b><small>'+esc(partes.join(' · '))+'</small></span><span class="al-go">Ver ›</span></button>';
+  }
+  function openAlertas(){
+    if(!isAdmin()) return;
+    var a=calcularAlertas();
+    function sec(titulo, n, cuerpo, vacio){ return '<div class="ho-day"><span>'+titulo+'</span><em>'+n+'</em></div>'+(n?cuerpo:'<p class="hint" style="margin:2px 4px 8px">'+vacio+'</p>'); }
+    var ped=function(x){ var c=x.o.cliente||{}; return '<div class="co-ped"><span>'+esc(c.nombre||'(sin cliente)')+(c.ciudad?' · '+esc(c.ciudad):'')+'<small>'+fmt(x.o.ventaTotal||0)+' · hace '+x.d+' días'+(x.o.usuarioNombre?' · '+esc(x.o.usuarioNombre):'')+'</small></span><b>'+(c.tel?'<a href="'+histWa(c.tel)+'" target="_blank" rel="noopener" style="color:inherit">WhatsApp</a>':'')+'</b></div>'; };
+    host.innerHTML='<div class="scrim" data-role="scrim"><div class="modal ho-modal" role="dialog" aria-modal="true">'+
+      '<div class="modal-hd"><h2>Alertas · '+esc(nombreSec())+'</h2><button class="mini" data-role="close">×</button></div>'+
+      '<div class="modal-bd ho-bd">'+
+        sec('Pedidos sin despachar ('+DIAS_DESPACHO+'+ días)', a.sinDespachar.length, '<div class="co-peds">'+a.sinDespachar.map(ped).join('')+'</div>', 'Todo está despachado.')+
+        sec('En camino sin cobrar ('+DIAS_COBRO+'+ días)', a.sinCobrar.length, '<div class="co-peds">'+a.sinCobrar.map(ped).join('')+'</div>', 'No hay pedidos esperando cobro hace tiempo.')+
+        sec('Poco stock (quedan '+UMBRAL_STOCK+' o menos)', a.stock.length, '<div class="co-peds">'+a.stock.map(function(x){ return '<div class="co-ped"><span>'+esc([x.p.marca,x.p.nombre].filter(Boolean).join(' '))+(x.v?' · '+esc(x.v):'')+'</span><b style="color:'+(x.n<=0?'#ff6b61':'inherit')+'">'+(x.n<=0?'Agotado':x.n+' disp.')+'</b></div>'; }).join('')+'</div>', 'No hay productos con poco stock. Solo se vigilan los que tienen cantidades cargadas.')+
+        '<div class="ho-acts" style="margin-top:10px"><button class="btn ghost" data-act="history">Ir a pedidos</button></div>'+
+      '</div>'+
+      '<div class="modal-ft"><span class="ho-foot">Los productos sin cantidad cargada no generan alerta de stock.</span><button class="btn ghost" data-role="close">Cerrar</button></div>'+
+    '</div></div>';
+    host.querySelectorAll('[data-role="close"]').forEach(function(b){ b.addEventListener('click',closeModal); });
   }
 
   /* ---------- panel del vendedor ---------- */
