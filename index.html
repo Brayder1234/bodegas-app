@@ -3581,6 +3581,9 @@ html.pv-open, html.pv-open body{ overflow:hidden }
     if(p.imagen){
       body += '<button class="btn ghost pimg-dl" data-act="dl-img" data-pid="'+esc(p.id)+'">⬇ Descargar imagen</button>';
     }
+    if(session && SITIOS[p.seccion||activeSection] && (userById(session.usuarioId)||{}).codigo && p.tipo!=='combo'){
+      body += '<button class="btn primary pimg-dl" data-act="share-prod" data-pid="'+esc(p.id)+'" style="margin-left:6px">📲 Compartir con mi enlace</button>';
+    }
     if(p.tipo==='combo'){
       var comps = Array.isArray(p.componentes)?p.componentes:[];
       if(!comps.length){
@@ -6227,6 +6230,10 @@ html.pv-open, html.pv-open body{ overflow:hidden }
       if(activeSection===sid2) setActiveSection(null);
       render(); scheduleSave();
     }
+    else if(a==='share-prod'){
+      e.stopPropagation();
+      compartirProducto(act.getAttribute('data-pid'));
+    }
     else if(a==='dl-img'){
       e.stopPropagation();
       var pid3=act.getAttribute('data-pid');
@@ -7538,6 +7545,35 @@ html.pv-open, html.pv-open body{ overflow:hidden }
   // vista del vendedor: lo que se le debe y lo que ya se le pagó
 
   /* ---------- panel del vendedor ---------- */
+
+  /* ---------- compartir un producto con el enlace del vendedor ---------- */
+  function textoProducto(p){
+    var u=userById(session.usuarioId)||{}, sec=p.seccion||activeSection||'maquillaje', base=SITIOS[sec];
+    var url=base+'/?v='+encodeURIComponent(u.codigo)+'&p='+encodeURIComponent(p.id);
+    var pv=ventaOf(p), g=generoDe(p);
+    var tallas=(p.variacionesColor||[]).filter(function(v){return v.nombre;});
+    var nums=tallas.filter(function(v){return /^\d{2}$/.test(String(v.nombre));}).map(function(v){return parseInt(v.nombre,10);});
+    var tTxt=nums.length&&nums.length===tallas.length?('Tallas '+Math.min.apply(null,nums)+' a '+Math.max.apply(null,nums)):(tallas.length?'Tallas: '+tallas.map(nomVarColor).join(', '):'');
+    var l=['👟 *'+[p.marca,p.nombre].filter(Boolean).join(' ')+'*'+(p.webColor?' — '+p.webColor:'')];
+    if(g) l.push(g==='Ambos'?'Para mujer y hombre':'Para '+g.toLowerCase());
+    if(pv>0) l.push('💵 '+fmt(pv)+' · pagas al recibir');
+    if(tTxt) l.push(tTxt);
+    l.push('','Míralo y pídelo aquí 👇',url);
+    return {text:l.join('\n'), url:url};
+  }
+  async function compartirProducto(pid){
+    var p=state.productos.find(function(x){return x.id===pid;}); if(!p||!session) return;
+    var t=textoProducto(p);
+    try{
+      if(p.imagen && navigator.canShare && navigator.share){
+        var r=await fetch(p.imagen); var b=await r.blob();
+        var f=new File([b], slugifyName(p.nombre||'producto')+'.webp', {type:b.type||'image/webp'});
+        if(navigator.canShare({files:[f]})){ await navigator.share({files:[f], text:t.text}); return; }
+      }
+    }catch(e){ if(e && e.name==='AbortError') return; }
+    window.open('https://wa.me/?text='+encodeURIComponent(t.text),'_blank','noopener');
+  }
+
   function openMiPanel(){
     if(!session) return;
     var uid=session.usuarioId, u=userById(uid)||{}, sec=activeSection||'maquillaje';
