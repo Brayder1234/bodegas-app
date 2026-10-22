@@ -35,7 +35,7 @@ self.addEventListener('fetch', e => {
 self.addEventListener('push', e => {
   let d = {}; try { d = e.data ? e.data.json() : {}; } catch (_) {}
   e.waitUntil(self.registration.showNotification(d.title || 'Billon', {
-    body: d.body || '', icon: 'icon-192.png', badge: 'favicon.png', tag: d.tag || 'billon', data: { url: d.url || '/' }, renotify: true }));
+    body: d.body || '', icon: 'icon-192.png', badge: 'favicon.png', image: d.image || undefined, tag: d.tag || 'billon', data: { url: d.url || '/' }, renotify: true }));
 });
 self.addEventListener('notificationclick', e => {
   e.notification.close();
